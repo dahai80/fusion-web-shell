@@ -128,8 +128,13 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
     }, []);
 
     // Host bridge lifecycle: create per tab instance, destroy on unmount/src change.
+    // #17: entryOk must gate AND key this effect — the first commit renders no
+    // iframe (preflight pending), the effect early-returns, and without entryOk
+    // in the deps it never re-runs once the iframe mounts: the bridge (message
+    // listener + heartbeat) is never attached and every module bridge call
+    // times out.
     useEffect(() => {
-        if (!tab.src || !iframeRef.current) return;
+        if (!entryOk || !tab.src || !iframeRef.current) return;
         const iframeWindow = iframeRef.current.contentWindow;
         if (!iframeWindow) return;
 
@@ -196,7 +201,7 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
             bridge.destroy();
             bridgeRef.current = null;
         };
-    }, [tab.src, tab.id, onCrash, pushHostState]);
+    }, [entryOk, tab.src, tab.id, onCrash, pushHostState]);
 
     if (!manifest) {
         return (
