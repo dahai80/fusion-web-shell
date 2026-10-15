@@ -8,6 +8,7 @@ export function StreamingMarkdown({ text, className = '' }: { text: string; clas
     const boxRef = useRef<HTMLDivElement>(null);
     const [pinned, setPinned] = useState(true);
 
+    // biome-ignore lint/correctness/useExhaustiveDependencies: text is the intentional trigger (auto-scroll when content streams in)
     useEffect(() => {
         const el = boxRef.current;
         if (el && pinned) el.scrollTop = el.scrollHeight;

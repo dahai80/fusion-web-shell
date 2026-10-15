@@ -57,12 +57,12 @@ export function useAutoRetry<T>(
         [retries, backoffMs, noRetryStatuses]
     );
 
+    // biome-ignore lint/correctness/useExhaustiveDependencies: caller-provided deps intentionally gate the re-run; run is a stable useCallback
     useEffect(() => {
         void run(0);
         return () => {
             runIdRef.current++;
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, deps);
 
     return { data, error, loading, attempt, manualRetry: () => void run(0) };

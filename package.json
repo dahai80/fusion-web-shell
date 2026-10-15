@@ -4,7 +4,7 @@
     "workspaces": ["apps/*", "packages/*"],
     "scripts": {
         "typecheck": "bun run --filter '*' typecheck",
-        "lint": "biome check .",
+        "lint": "biome check --error-on-warnings .",
         "lint:fix": "biome check --write .",
         "test": "bun test",
         "build": "bun run --filter '*' build",

@@ -30,6 +30,9 @@ interface Props {
  */
 export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
     const [loaded, setLoaded] = useState(false);
+    // F-4: gateway HTTP-error docs (401/503 JSON) load "successfully" in an
+    // iframe; preflight the entry and only mount on 2xx.
+    const [entryOk, setEntryOk] = useState(false);
     // Subscribe so t() re-renders on language switch.
     useLang((l) => l.lang);
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -52,6 +55,49 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
         }, LOAD_TIMEOUT_MS);
         return () => {
             if (timerRef.current) clearTimeout(timerRef.current);
+        };
+    }, [tab.src, tab.id, onCrash]);
+
+    // Entry preflight (acceptance F-4 / PRD A4): fetch the module entry with
+    // credentials before mounting. Non-200 -> per-tab crash card instead of
+    // rendering the gateway error document as tab content. Cross-origin dev
+    // entries (FUSION_DEV_MODULES) skip the check — CORS would false-positive.
+    useEffect(() => {
+        if (!tab.src) return;
+        setEntryOk(false);
+        let crossOrigin = false;
+        try {
+            crossOrigin =
+                new URL(tab.src, window.location.origin).origin !== window.location.origin;
+        } catch {
+            crossOrigin = false;
+        }
+        if (crossOrigin) {
+            setEntryOk(true);
+            return;
+        }
+        let cancelled = false;
+        fetch(tab.src, { credentials: 'include' })
+            .then((res) => {
+                if (cancelled) return;
+                if (!res.ok) {
+                    console.warn('[tab-view] entry preflight failed:', tab.id, res.status);
+                    pushToast(
+                        'warning',
+                        t(`模块服务异常 (${res.status})`, `Module service error (${res.status})`)
+                    );
+                    onCrash(tab.id, `entry HTTP ${res.status}`);
+                    return;
+                }
+                setEntryOk(true);
+            })
+            .catch((err) => {
+                if (cancelled) return;
+                console.warn('[tab-view] entry preflight error:', tab.id, err);
+                onCrash(tab.id, 'entry fetch failed');
+            });
+        return () => {
+            cancelled = true;
         };
     }, [tab.src, tab.id, onCrash]);
 
@@ -135,7 +181,7 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
             bridge.destroy();
             bridgeRef.current = null;
         };
-    }, [tab.src, tab.id, onCrash]);
+    }, [tab.src, tab.id, onCrash, pushHostState]);
 
     if (!manifest) {
         return (
@@ -181,7 +227,7 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
                     </button>
                 </div>
             ) : null}
-            {!loaded ? (
+            {!loaded || !entryOk ? (
                 <div
                     className="absolute inset-0 flex items-center justify-center bg-bg text-sm text-text-muted"
                     style={{ zIndex: 1 }}
@@ -189,19 +235,21 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
                     {t('加载中…', 'Loading…')}
                 </div>
             ) : null}
-            <iframe
-                ref={iframeRef}
-                title={tab.title}
-                src={tab.src}
-                onLoad={() => {
-                    setLoaded(true);
-                    if (timerRef.current) clearTimeout(timerRef.current);
-                    pushHostState();
-                    console.log('[tab-view] iframe loaded:', tab.id);
-                }}
-                className="h-full w-full border-0"
-                sandbox="allow-scripts allow-same-origin allow-forms allow-downloads"
-            />
+            {entryOk ? (
+                <iframe
+                    ref={iframeRef}
+                    title={tab.title}
+                    src={tab.src}
+                    onLoad={() => {
+                        setLoaded(true);
+                        if (timerRef.current) clearTimeout(timerRef.current);
+                        pushHostState();
+                        console.log('[tab-view] iframe loaded:', tab.id);
+                    }}
+                    className="h-full w-full border-0"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-downloads"
+                />
+            ) : null}
         </div>
     );
 }

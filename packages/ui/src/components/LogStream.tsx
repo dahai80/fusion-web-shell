@@ -29,6 +29,7 @@ export function LogStream({ lines, maxLines = 2000 }: { lines: LogLine[]; maxLin
     const [pinned, setPinned] = useState(true);
     const visible = lines.slice(-maxLines);
 
+    // biome-ignore lint/correctness/useExhaustiveDependencies: visible.length is the intentional trigger (auto-scroll when lines arrive)
     useEffect(() => {
         const el = boxRef.current;
         if (el && pinned) el.scrollTop = el.scrollHeight;
