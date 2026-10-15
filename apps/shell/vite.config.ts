@@ -18,10 +18,14 @@ export default defineConfig({
                 target: 'http://localhost:11432',
                 changeOrigin: true,
             },
-            // Dev-only /shell passthrough (issue #13 / F-7): relative-entry
-            // modules resolve against this dev server; without the proxy they
-            // recurse into the shell SPA itself. Prod serves both same-origin
-            // from the gateway at :11432.
+            // Dev-only passthroughs (issues #13/#15 / F-7): relative-entry
+            // modules resolve against this dev server; without the proxies
+            // they recurse into the shell SPA itself. Prod serves all routes
+            // same-origin from the gateway at :11432.
+            '/admin': {
+                target: 'http://localhost:11432',
+                changeOrigin: true,
+            },
             '/shell': {
                 target: 'http://localhost:11432',
                 changeOrigin: true,
