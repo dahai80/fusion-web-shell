@@ -11,6 +11,14 @@ export function initDevModules(): Map<string, string> {
     const map = parseDevModules(
         raw ?? (import.meta.env.VITE_FUSION_DEV_MODULES as string | undefined)
     );
-    if (map.size > 0) console.log('[dev-hmr] overrides active:', [...map.entries()]);
+    if (map.size > 0) {
+        console.log('[dev-hmr] overrides active:', [...map.entries()]);
+    } else {
+        // Surface the silent no-op (issue #14): dev shell running without any
+        // module override — every iframe hits the gateway-served build.
+        console.warn(
+            '[dev-hmr] VITE_SHELL_ENV=dev but FUSION_DEV_MODULES is empty — no module HMR overrides active'
+        );
+    }
     return map;
 }
