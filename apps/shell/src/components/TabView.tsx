@@ -101,7 +101,8 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
                 });
                 pushToast(
                     'warning',
-                    env?.message ?? t(`模块服务异常 (${res.status})`, `Module service error (${res.status})`)
+                    env?.message ??
+                        t(`模块服务异常 (${res.status})`, `Module service error (${res.status})`)
                 );
                 onCrash(tab.id, `entry HTTP ${res.status}`);
             })
@@ -216,9 +217,7 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
                 </div>
                 {entryError ? (
                     <div className="max-w-md rounded-md border border-border bg-bg-elevated px-4 py-3 text-xs">
-                        <div className="font-mono text-text-secondary">
-                            code: {entryError.code}
-                        </div>
+                        <div className="font-mono text-text-secondary">code: {entryError.code}</div>
                         {entryError.message ? (
                             <div className="mt-1 text-text-primary">{entryError.message}</div>
                         ) : null}
