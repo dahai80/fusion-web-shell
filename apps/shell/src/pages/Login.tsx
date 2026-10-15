@@ -1,5 +1,5 @@
 import * as api from '@/api/endpoints';
-import { useAuth } from '@/stores/auth';
+import { readToken, useAuth, writeToken } from '@/stores/auth';
 import { t, useLang } from '@/stores/lang';
 import { useState } from 'react';
 
@@ -23,11 +23,14 @@ export function LoginPage({ onAuthed }: { onAuthed(user: api.SessionUser, token:
         try {
             const res = await api.login(username, password);
             if (res.must_change_password) {
+                // Keep the token: changePw() needs it to authenticate
+                // POST /api/v1/password before the session is finished.
+                writeToken(res.token);
                 setMustChange(true);
                 setError(t('首次登录请修改初始密码', 'First login: change the initial password'));
                 return;
             }
-            finish(res);
+            finish(res, res.token);
         } catch (err) {
             setError((err as Error).message);
             console.warn('[login] failed', err);
@@ -50,7 +53,7 @@ export function LoginPage({ onAuthed }: { onAuthed(user: api.SessionUser, token:
         try {
             await api.changePassword(newPassword);
             const me = await api.fetchMe();
-            finish(me, useAuth.getState().token ?? '');
+            finish(me, readToken() ?? '');
         } catch (err) {
             setError((err as Error).message);
         } finally {
