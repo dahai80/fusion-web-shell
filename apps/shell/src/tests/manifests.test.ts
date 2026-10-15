@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { menuGroups } from '../stores/manifests';
+import { menuGroups, moduleTitle } from '../stores/manifests';
 import type { ModuleManifest } from '../types/manifest';
 
 const mk = (
@@ -51,5 +51,20 @@ describe('menuGroups', () => {
                 .flatMap((g) => g.items)
                 .map((i) => i.id)
         ).toEqual(['mlx']);
+    });
+});
+
+describe('i18n (gaps #5/#6)', () => {
+    it('moduleTitle uses title_en in en, zh title otherwise', () => {
+        const m: ModuleManifest = { ...mk('mlx', 'platform', ['desktop']), title_en: 'MLX Engine' };
+        expect(moduleTitle(m, 'en')).toBe('MLX Engine');
+        expect(moduleTitle(m, 'zh')).toBe('mlx');
+        expect(moduleTitle({ ...m, title_en: undefined }, 'en')).toBe('mlx');
+    });
+    it('menuGroups uses English labels in en', () => {
+        const en = mk('mlx', 'platform', ['desktop']);
+        const groups = menuGroups([en], () => true, false, 'en');
+        expect(groups[0]!.label).toBe('Platform');
+        expect(groups[0]!.items[0]!.id).toBe('mlx');
     });
 });

@@ -1,4 +1,5 @@
 import * as api from '@/api/endpoints';
+import type { Lang } from '@/stores/lang';
 import type { DeviceMode, ModuleManifest } from '@/types/manifest';
 import { create } from 'zustand';
 
@@ -12,8 +13,20 @@ const CATEGORY_LABEL: Record<Category, string> = {
     dev: '开发',
 };
 
-export function categoryLabel(c: Category): string {
-    return CATEGORY_LABEL[c] ?? c;
+const CATEGORY_LABEL_EN: Record<Category, string> = {
+    platform: 'Platform',
+    domain: 'Domain',
+    infra: 'Infrastructure',
+    dev: 'Dev',
+};
+
+export function categoryLabel(c: Category, lang: Lang = 'zh'): string {
+    return (lang === 'en' ? CATEGORY_LABEL_EN : CATEGORY_LABEL)[c] ?? c;
+}
+
+/** Spec S9: menu/tab titles follow host language, falling back to zh title. */
+export function moduleTitle(m: ModuleManifest, lang: Lang = 'zh'): string {
+    return lang === 'en' && m.title_en ? m.title_en : m.title;
 }
 
 export const CATEGORY_LABELS = CATEGORY_LABEL;
@@ -55,6 +68,7 @@ export const useManifests = create<ManifestsState>((set, get) => ({
     loaded: false,
     error: null,
     unreachableIds: new Set<string>(),
+    // Throws so callers (useAutoRetry) can drive auto-retry with attempt display.
     async load(force) {
         if (get().loaded && !force) return;
         set({ error: null });
@@ -65,6 +79,7 @@ export const useManifests = create<ManifestsState>((set, get) => ({
         } catch (err) {
             console.error('[manifests] load failed', err);
             set({ error: (err as Error).message });
+            throw err;
         }
     },
     setUpstream(list) {
@@ -86,14 +101,20 @@ export const useManifests = create<ManifestsState>((set, get) => ({
 export function menuGroups(
     manifests: ModuleManifest[],
     canView: (id: string) => boolean,
-    mobile: boolean
+    mobile: boolean,
+    lang: Lang = 'zh'
 ) {
     return CATEGORY_ORDER.map((cat) => ({
         category: cat,
-        label: CATEGORY_LABEL[cat],
+        label: categoryLabel(cat, lang),
         items: manifests
             .filter((m) => m.category === cat && canView(m.id))
             .filter((m) => (mobile ? !m.devices.includes('desktop-only') : true))
-            .sort((a, b) => a.title.localeCompare(b.title, 'zh-CN')),
+            .sort((a, b) =>
+                moduleTitle(a, lang).localeCompare(
+                    moduleTitle(b, lang),
+                    lang === 'en' ? 'en-US' : 'zh-CN'
+                )
+            ),
     })).filter((g) => g.items.length > 0);
 }

@@ -6,7 +6,17 @@ Single entry (`fusion-gateway` :11432), unified login + RBAC, per-tab same-origi
 
 ## Status
 
-Shell host implemented (issues #1-#7). Gateway-side APIs (session, RBAC, manifest registry, static hosting) live in `fusion-gateway` per PRD R-1 and are required for end-to-end runs.
+Shell host implemented (issues #1-#7 plus PRD/UI-spec gap items):
+
+- Host bridge wiring (TabView <-> SDK): http proxy with Bearer, toast/tab events, theme/visibility/lang push, 30s heartbeat (liveness enforced only for SDK modules that answered a ping, so non-SDK modules never false-crash)
+- Refresh restore: persisted tabs rebuild after manifests load; interrupted streaming tasks marked retryable (PRD §6.1)
+- Gateway error envelope `{code,message,module_id,retryable}`: retryable/5xx raises a toast + transient error strip on the active tab (A5)
+- Bilingual chrome (menu/tabs/login) via `t()` with `title_en` support and a language toggle
+- Desktop TabStrip: crashed/interrupted/error badges + close confirmation for tabs with active tasks; mobile drawer tabs are closeable
+- Sidebar "+" opens a second instance of an open module; manifest loads auto-retry with backoff ("retry attempt N"); /admin/users route is lazy-loaded
+- Dev server port 11430 (complies with the repo-wide 11400-11499 rule, registered in `architecture/port-registry.yaml`)
+
+Gateway-side APIs (session, RBAC, manifest registry, static hosting) live in `fusion-gateway` per PRD R-1 and are required for end-to-end runs.
 
 - PRD: `~/fusion/architecture/fusion-union-web-prd-1015.md`
 - UI Spec: `~/fusion/architecture/fusion-web-ui-spec-1015.md`
@@ -17,7 +27,7 @@ Requires Bun >= 1.1.
 
 ```bash
 bun install
-bun run dev         # shell dev server on :5030, /api proxied to gateway :11432
+bun run dev         # shell dev server on :11430, /api proxied to gateway :11432
 bun run build       # typecheck + build all workspaces
 bun run test        # bun test across packages
 bun run lint        # biome check

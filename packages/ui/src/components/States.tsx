@@ -39,14 +39,24 @@ export function ErrorState({
     message,
     retryLabel = '重试',
     onRetry,
-}: { message: string; retryLabel?: string; onRetry?: () => void }) {
+    retrying,
+}: {
+    message: string;
+    retryLabel?: string;
+    onRetry?: () => void;
+    /** Active auto-retry attempt; shows "第 N 次重试中" and hides manual button (spec §6.1). */
+    retrying?: number;
+}) {
     return (
         <div
             className="flex flex-col items-center justify-center gap-2 px-4 py-12 text-center"
             role="alert"
         >
             <div className="text-sm text-error">{message}</div>
-            {onRetry ? (
+            {retrying ? (
+                <div className="text-xs text-text-muted">第 {retrying} 次重试中…</div>
+            ) : null}
+            {onRetry && !retrying ? (
                 <button
                     type="button"
                     onClick={onRetry}

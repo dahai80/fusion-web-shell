@@ -160,6 +160,27 @@ function standaloneSdk(log: BridgeDeps['log']): FusionShellSdk {
                 return () => document.removeEventListener('visibilitychange', fn);
             },
         },
+        i18n: {
+            lang: () =>
+                typeof document !== 'undefined' && document.documentElement.lang.startsWith('en')
+                    ? 'en'
+                    : 'zh',
+            t: (zh: string, en: string) =>
+                typeof document !== 'undefined' && document.documentElement.lang.startsWith('en')
+                    ? en
+                    : zh,
+            subscribe(listener) {
+                if (typeof document === 'undefined') return () => undefined;
+                const obs = new MutationObserver(() =>
+                    listener(document.documentElement.lang.startsWith('en') ? 'en' : 'zh')
+                );
+                obs.observe(document.documentElement, {
+                    attributes: true,
+                    attributeFilter: ['lang'],
+                });
+                return () => obs.disconnect();
+            },
+        },
     };
 }
 
@@ -213,6 +234,27 @@ export function createShellSdk(options?: ShellSdkOptions): FusionShellSdk {
             return;
         }
         bridge.handleMessage(ev.data as BridgeMessage);
+    });
+
+    // Host heartbeat (PRD §7.2): answer pings so host liveness detection stays
+    // accurate. Modules that never answer are treated as not SDK-integrated.
+    let lang: 'zh' | 'en' = document.documentElement.lang.startsWith('en') ? 'en' : 'zh';
+    const langListeners = new Set<(l: 'zh' | 'en') => void>();
+    window.addEventListener('message', (ev: MessageEvent) => {
+        if (ev.origin !== opts.origin || ev.source !== window.parent) return;
+        const msg = ev.data as BridgeMessage;
+        if (msg?.type !== 'request' || (msg as { method?: string }).method !== 'ping') return;
+        window.parent.postMessage(
+            { type: 'response', id: msg.id, ok: true, result: 'pong' },
+            opts.origin
+        );
+    });
+    window.addEventListener('message', (ev: MessageEvent) => {
+        if (ev.origin !== opts.origin || ev.source !== window.parent) return;
+        const msg = ev.data as BridgeMessage;
+        if (msg?.type !== 'event' || (msg as { event?: string }).event !== 'lang') return;
+        lang = (msg as { payload?: string }).payload === 'en' ? 'en' : 'zh';
+        langListeners.forEach((fn) => fn(lang));
     });
 
     const http = {
@@ -278,6 +320,14 @@ export function createShellSdk(options?: ShellSdkOptions): FusionShellSdk {
             subscribe(listener) {
                 visListeners.add(listener);
                 return () => visListeners.delete(listener);
+            },
+        },
+        i18n: {
+            lang: () => lang,
+            t: (zh: string, en: string) => (lang === 'en' ? en : zh),
+            subscribe(listener) {
+                langListeners.add(listener);
+                return () => langListeners.delete(listener);
             },
         },
     };

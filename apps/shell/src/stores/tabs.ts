@@ -14,6 +14,10 @@ export interface ShellTab {
     src: string | null;
     hasActiveTask: boolean;
     crashedAt?: number;
+    /** Refresh-restored tab whose streaming task was interrupted (PRD §6.1). */
+    interrupted?: boolean;
+    /** Last gateway error envelope hint (A5 tab status strip). */
+    transientError?: string | null;
 }
 
 export interface TabsState {
@@ -22,6 +26,9 @@ export interface TabsState {
     openTab(manifest: ModuleManifest, opts?: { multi?: boolean }): string | null;
     activateTab(id: string): void;
     closeTab(id: string): boolean;
+    /** Close ignoring the active-task guard (used after user confirmation). */
+    forceCloseTab(id: string): void;
+    setTransientError(id: string, message: string | null): void;
     markCrashed(id: string, reason: string): void;
     releaseIframe(id: string): void;
     restoreIframe(manifest: ModuleManifest): string | null;
@@ -35,6 +42,7 @@ interface PersistedTab {
     manifestId: string;
     title: string;
     seq: number;
+    hasActiveTask?: boolean;
 }
 
 function persist(tabs: ShellTab[]): void {
@@ -44,6 +52,7 @@ function persist(tabs: ShellTab[]): void {
             manifestId: t.manifestId,
             title: t.title,
             seq: t.seq,
+            hasActiveTask: t.hasActiveTask,
         }));
         localStorage.setItem(STORAGE_KEY, JSON.stringify(slim));
     } catch (err) {
@@ -101,13 +110,14 @@ export function newTab(
 
 let devModules: Map<string, string> = new Map();
 
+/** Dev-mode iframe src overrides (set once from main.tsx). */
+export function getDevModules(): Map<string, string> {
+    return devModules;
+}
+
 export function setDevModules(map: Map<string, string>): void {
     devModules = map;
     console.log('[tabs] dev module overrides:', [...map.keys()]);
-}
-
-function getDevModules(): Map<string, string> {
-    return devModules;
 }
 
 export const useTabs = create<TabsState>((set, get) => ({
@@ -150,6 +160,17 @@ export const useTabs = create<TabsState>((set, get) => ({
         persist(get().tabs);
         return true;
     },
+    forceCloseTab(id) {
+        set((s) => ({
+            tabs: s.tabs.map((t) => (t.id === id ? { ...t, hasActiveTask: false } : t)),
+        }));
+        get().closeTab(id);
+    },
+    setTransientError(id, message) {
+        set((s) => ({
+            tabs: s.tabs.map((t) => (t.id === id ? { ...t, transientError: message } : t)),
+        }));
+    },
     markCrashed(id, reason) {
         console.warn('[tabs] tab crashed:', id, reason);
         set((s) => ({
@@ -187,3 +208,41 @@ export const useTabs = create<TabsState>((set, get) => ({
         set((s) => ({ tabs: s.tabs.map((t) => (t.id === id ? { ...t, hasActiveTask: has } : t)) }));
     },
 }));
+
+/**
+ * Refresh restore (PRD §6.1): rebuild tab skeletons from localStorage against
+ * known manifests. Tabs that had active tasks are marked interrupted-retryable.
+ */
+export function restorePersistedTabs(
+    manifests: ModuleManifest[],
+    devModules: Map<string, string>
+): number {
+    const persisted = loadPersistedTabs();
+    if (persisted.length === 0) return 0;
+    const byId = new Map(manifests.map((m) => [m.id, m]));
+    const restored: ShellTab[] = [];
+    for (const p of persisted) {
+        const manifest = byId.get(p.manifestId);
+        if (!manifest) {
+            console.warn('[tabs] skip restore, manifest missing:', p.manifestId);
+            continue;
+        }
+        restored.push({
+            id: p.id,
+            manifestId: p.manifestId,
+            title: p.title,
+            status: 'active',
+            seq: p.seq,
+            src: entryFor(manifest, devModules),
+            hasActiveTask: false,
+            interrupted: p.hasActiveTask === true,
+        });
+    }
+    if (restored.length === 0) return 0;
+    const state = useTabs.getState();
+    const known = new Set(state.tabs.map((t) => t.id));
+    const merged = [...state.tabs, ...restored.filter((t) => !known.has(t.id))].slice(0, MAX_TABS);
+    useTabs.setState({ tabs: merged, activeTabId: state.activeTabId ?? merged[0]?.id ?? null });
+    console.log('[tabs] restored', merged.length, 'tabs from localStorage');
+    return restored.length;
+}

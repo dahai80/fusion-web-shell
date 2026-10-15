@@ -22,8 +22,15 @@ export interface HostBridgeHandle {
     destroy(): void;
     notifyTheme(mode: ThemeMode): void;
     notifyVisibility(visible: boolean): void;
-    /** Probe whether the module has the SDK alive (responds to a theme event round-trip). */
-    ping(timeoutMs?: number): Promise<boolean>;
+    notifyLang(lang: string): void;
+    /** True when the module answered at least one heartbeat (SDK integrated). */
+    readonly sdkAlive: boolean;
+    startHeartbeat(
+        onLivenessChange: (alive: boolean) => void,
+        intervalMs?: number,
+        timeoutMs?: number
+    ): void;
+    stopHeartbeat(): void;
 }
 
 /**
@@ -39,7 +46,51 @@ export function createHostBridge(
     const disposers: Array<() => void> = [];
     let currentIframeWindow = iframeWindow;
 
-    const pendingPings = new Set<(v: boolean) => void>();
+    const pendingPings = new Set<(msgId: string) => void>();
+    let sdkAlive = false;
+    let pingSeq = 0;
+    let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
+    /**
+     * Heartbeat (PRD 7.2): host pings; module SDK auto-answers. Enforcement
+     * (crash) only after first pong, so non-SDK modules never false-crash.
+     */
+    function startHeartbeat(
+        onLivenessChange: (alive: boolean) => void,
+        intervalMs = 30000,
+        timeoutMs = 10000
+    ): void {
+        stopHeartbeat();
+        heartbeatTimer = setInterval(() => {
+            if (!currentIframeWindow || !sdkAlive) return;
+            const id = `ping-${tabId}-${++pingSeq}`;
+            let answered = false;
+            pendingPings.add((msgId: string) => {
+                if (msgId === id) {
+                    answered = true;
+                }
+            });
+            currentIframeWindow.postMessage(
+                { type: 'request', id, method: 'ping', payload: null },
+                origin
+            );
+            setTimeout(() => {
+                if (!answered && sdkAlive) {
+                    console.warn('[host-bridge] heartbeat missed for', tabId);
+                    onLivenessChange(false);
+                } else if (answered) {
+                    onLivenessChange(true);
+                }
+            }, timeoutMs);
+        }, intervalMs);
+    }
+
+    function stopHeartbeat(): void {
+        if (heartbeatTimer !== null) {
+            clearInterval(heartbeatTimer);
+            heartbeatTimer = null;
+        }
+    }
 
     async function handleRequest(msg: ModuleRequest): Promise<unknown> {
         switch (msg.method) {
@@ -98,9 +149,16 @@ export function createHostBridge(
 
     function onMessage(ev: MessageEvent): void {
         if (ev.source !== currentIframeWindow || ev.origin !== origin) return;
+        const raw = ev.data as { type?: string; id?: string };
+        if (raw.type === 'response') {
+            // Module answering a host-initiated request (heartbeat pong).
+            sdkAlive = true;
+            if (typeof raw.id === 'string') pendingPings.forEach((fn) => fn(raw.id as string));
+            return;
+        }
         const msg = ev.data as ModuleRequest;
-        if (!msg || msg.type !== 'request') return;
-        if (typeof msg.id !== 'string' || typeof msg.method !== 'string') return;
+        if (!raw || raw.type !== 'request') return;
+        if (typeof raw.id !== 'string' || typeof msg.method !== 'string') return;
         void handleRequest(msg).then(
             (result) => {
                 if ('__httpError' in (result as object)) {
@@ -148,6 +206,7 @@ export function createHostBridge(
         },
         destroy() {
             disposers.forEach((d) => d());
+            stopHeartbeat();
             currentIframeWindow = null;
         },
         notifyTheme(mode: ThemeMode) {
@@ -156,26 +215,13 @@ export function createHostBridge(
         notifyVisibility(visible: boolean) {
             notify({ type: 'event', event: 'visibility', payload: visible });
         },
-        ping(timeoutMs = 3000): Promise<boolean> {
-            if (!currentIframeWindow) return Promise.resolve(false);
-            return new Promise<boolean>((resolve) => {
-                const timer = setTimeout(() => {
-                    pendingPings.delete(resolve);
-                    resolve(false);
-                }, timeoutMs);
-                pendingPings.add((v) => {
-                    clearTimeout(timer);
-                    resolve(v);
-                });
-                // A live SDK module echoes any request; use a cheap theme call.
-                currentIframeWindow?.postMessage(
-                    { type: 'event', event: 'theme', payload: 'dark' },
-                    origin
-                );
-                // Response arrives as a request with method 'theme' only if module asks;
-                // otherwise treat silence after timeout as not-integrated (do not crash).
-                setTimeout(() => resolve(false), 0);
-            });
+        notifyLang(lang: string) {
+            notify({ type: 'event', event: 'lang', payload: lang });
         },
+        get sdkAlive() {
+            return sdkAlive;
+        },
+        startHeartbeat,
+        stopHeartbeat,
     };
 }

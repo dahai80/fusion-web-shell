@@ -64,6 +64,12 @@ export interface FusionShellSdk {
         get(): boolean;
         subscribe(listener: (visible: boolean) => void): () => void;
     };
+    /** Host language awareness (spec S9): t() picks zh/en copy. */
+    i18n: {
+        lang(): 'zh' | 'en';
+        t(zh: string, en: string): string;
+        subscribe(listener: (lang: 'zh' | 'en') => void): () => void;
+    };
 }
 
 /** Messages sent from module iframe to host. */
@@ -72,6 +78,14 @@ export interface ModuleRequest {
     id: string;
     method: 'http' | 'toast' | 'tab' | 'theme' | 'devices';
     payload: unknown;
+}
+
+/** Host-to-module request (currently heartbeat ping). */
+export interface HostRequest {
+    type: 'request';
+    id: string;
+    method: 'ping';
+    payload: null;
 }
 
 /** Messages sent from host to module. */
@@ -85,9 +99,9 @@ export interface HostResponse {
 
 export interface HostEvent {
     type: 'event';
-    event: 'theme' | 'visibility';
+    event: 'theme' | 'visibility' | 'lang';
     payload: unknown;
 }
 
 export type HostMessage = HostResponse | HostEvent;
-export type BridgeMessage = ModuleRequest | HostMessage;
+export type BridgeMessage = ModuleRequest | HostRequest | HostMessage;

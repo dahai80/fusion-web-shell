@@ -1,12 +1,16 @@
 import { ApiClient, setSharedClient, sharedClient } from '@/api/client';
 import * as api from '@/api/endpoints';
 import { ToastHost, pushToast } from '@/components/ToastHost';
-import { AdminUsersPage } from '@/pages/AdminUsers';
 import { LoginPage } from '@/pages/Login';
 import { MainPage } from '@/pages/Main';
 import { useAuth } from '@/stores/auth';
 import { useManifests } from '@/stores/manifests';
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
+
+// Route-level code split (admin console is rarely the landing view).
+const AdminUsersPage = lazy(() =>
+    import('@/pages/AdminUsers').then((m) => ({ default: m.AdminUsersPage }))
+);
 
 type Route = { name: 'main' } | { name: 'admin-users' };
 
@@ -39,7 +43,13 @@ export function App() {
     return (
         <>
             <ToastHost />
-            {route.name === 'admin-users' ? <AdminUsersPage /> : <MainPage onLogout={logoutAll} />}
+            {route.name === 'admin-users' ? (
+                <Suspense fallback={null}>
+                    <AdminUsersPage />
+                </Suspense>
+            ) : (
+                <MainPage onLogout={logoutAll} />
+            )}
         </>
     );
 }

@@ -1,3 +1,4 @@
+import { t, useLang } from '@/stores/lang';
 import { useManifests } from '@/stores/manifests';
 import { useTabs } from '@/stores/tabs';
 import { useEffect, useMemo } from 'react';
@@ -14,6 +15,8 @@ export function TabManager() {
     const restoreIframe = useTabs((s) => s.restoreIframe);
     const manifests = useManifests((s) => s.manifests);
     const byId = useMemo(() => new Map(manifests.map((m) => [m.id, m])), [manifests]);
+    // Subscribe so t() re-renders on language switch.
+    useLang((l) => l.lang);
 
     // Hidden tabs keep running (display:none) so streaming SSE/ws continues (PRD §6.2).
     useEffect(() => {
@@ -34,7 +37,7 @@ export function TabManager() {
             ))}
             {tabs.length === 0 ? (
                 <div className="flex h-full items-center justify-center text-sm text-text-muted">
-                    从左侧菜单选择一个模块开始
+                    {t('从左侧菜单选择一个模块开始', 'Pick a module from the menu to start')}
                 </div>
             ) : null}
         </div>

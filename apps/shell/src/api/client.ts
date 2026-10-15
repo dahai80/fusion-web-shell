@@ -1,4 +1,18 @@
-/** Unified HTTP client (PRD §4.1): Bearer interceptor, 401 redirect, 403 graceful. */
+import { pushToast } from '@/components/ToastHost';
+import { useTabs } from '@/stores/tabs';
+
+/** Gateway error envelope (A5): { code, message, module_id, retryable }. */
+export interface ErrorEnvelope {
+    code?: string;
+    message?: string;
+    module_id?: string;
+    retryable?: boolean;
+}
+
+/**
+ * Unified HTTP client (PRD §4.1): Bearer interceptor, 401 redirect, 403
+ * graceful, retryable-envelope surfacing (toast + active tab strip).
+ */
 export class ApiClient {
     private tokenProvider: () => string | null;
     private onUnauthorized: () => void;
@@ -43,18 +57,24 @@ export class ApiClient {
                 throw Object.assign(new Error(message), { status: 403 });
             }
             if (!res.ok) {
-                const env = await res.json().catch(() => null);
-                throw Object.assign(
-                    new Error(
-                        (env as { message?: string } | null)?.message ?? `HTTP ${res.status}`
-                    ),
-                    { status: res.status }
-                );
+                const env = (await res.json().catch(() => null)) as ErrorEnvelope | null;
+                const message = env?.message ?? `HTTP ${res.status}`;
+                this.surfaceRetryable(env, message, res.status);
+                throw Object.assign(new Error(message), { status: res.status });
             }
             return (await res.json()) as T;
         } finally {
             clearTimeout(timeout);
         }
+    }
+
+    /** A5: retryable gateway errors get a toast + transient banner on the active tab. */
+    private surfaceRetryable(env: ErrorEnvelope | null, message: string, status: number): void {
+        if (!env?.retryable && status < 500) return;
+        console.warn('[api] retryable error:', env?.code ?? status, message);
+        pushToast('warning', message);
+        const activeId = useTabs.getState().activeTabId;
+        if (activeId) useTabs.getState().setTransientError(activeId, message);
     }
 
     get<T>(path: string): Promise<T> {

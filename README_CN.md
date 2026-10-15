@@ -6,7 +6,17 @@ Fusion 统一前端宿主（union-web host）—— fusion-* 系列模块的统�
 
 ## 状态
 
-宿主 Shell 已实现（issue #1-#7）。网关侧 API（登录/RBAC/Manifest 注册中心/静态托管）在 `fusion-gateway` 仓内实现（PRD R-1），端到端联调依赖其就绪。
+宿主 Shell 已实现（issue #1-#7 + PRD/UI 规范差距项）：
+
+- 宿主桥接线（TabView ↔ SDK）：http 代理自动带 Bearer、toast/tab 事件、theme/visibility/lang 推送、30s 心跳（仅对应答过 ping 的 SDK 模块判定失联，避免误杀未接入模块）
+- 刷新恢复：持久化标签页在 manifests 加载后重建，活跃流式任务标记"已中断可重试"（PRD §6.1）
+- 网关错误信封 `{code,message,module_id,retryable}`：retryable/5xx 弹 toast + 活动标签页错误条（A5）
+- 菜单/标签页/登录页双语（`t()`，`title_en` 支持，语言切换按钮）
+- 桌面 TabStrip：崩溃/中断/错误徽标 + 活跃任务关闭确认（forceClose）；移动抽屉可关标签
+- 侧边栏 "+" 多实例打开；manifests 加载指数退避自动重试（"第 N 次重试中"）；/admin/users 路由懒加载
+- dev server 端口 11430（符合全仓 11400-11499 段规则，已登记 `architecture/port-registry.yaml`）
+
+网关侧 API（登录/RBAC/Manifest 注册中心/静态托管）在 `fusion-gateway` 仓内实现（PRD R-1），端到端联调依赖其就绪。
 
 - PRD：`~/fusion/architecture/fusion-union-web-prd-1015.md`
 - 前端统一规范：`~/fusion/architecture/fusion-web-ui-spec-1015.md`
@@ -17,7 +27,7 @@ Fusion 统一前端宿主（union-web host）—— fusion-* 系列模块的统�
 
 ```bash
 bun install
-bun run dev         # Shell dev server :5030，/api 代理到网关 :11432
+bun run dev         # Shell dev server :11430，/api 代理到网关 :11432
 bun run build       # 各 workspace typecheck + build
 bun run test        # bun test 全仓测试
 bun run lint        # biome check

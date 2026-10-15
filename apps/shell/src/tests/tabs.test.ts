@@ -1,6 +1,13 @@
 import './setup';
 import { beforeEach, describe, expect, it } from 'bun:test';
-import { MAX_TABS, entryFor, newTab, parseDevModules, useTabs } from '../stores/tabs';
+import {
+    MAX_TABS,
+    entryFor,
+    newTab,
+    parseDevModules,
+    restorePersistedTabs,
+    useTabs,
+} from '../stores/tabs';
 import type { ModuleManifest } from '../types/manifest';
 
 const mk = (id: string): ModuleManifest => ({
@@ -102,5 +109,52 @@ describe('tabs store', () => {
         const tab = newTab(mk('x'), new Map());
         expect(tab.src).toBe('/shell/x/');
         expect(tab.seq).toBe(1);
+    });
+});
+
+describe('tabs store extensions (gaps #2/#8)', () => {
+    it('forceCloseTab closes even with active task', () => {
+        const id = useTabs.getState().openTab(mk('a'));
+        useTabs.getState().setActiveTask(id!, true);
+        useTabs.getState().forceCloseTab(id!);
+        expect(useTabs.getState().tabs.length).toBe(0);
+    });
+    it('setTransientError sets and clears banner message', () => {
+        const id = useTabs.getState().openTab(mk('a'));
+        useTabs.getState().setTransientError(id!, '服务异常');
+        expect(useTabs.getState().tabs[0]!.transientError).toBe('服务异常');
+        useTabs.getState().setTransientError(id!, null);
+        expect(useTabs.getState().tabs[0]!.transientError).toBeNull();
+    });
+    it('restorePersistedTabs rebuilds skeletons and marks interrupted tasks', () => {
+        localStorage.setItem(
+            'fusion.shell.tabs',
+            JSON.stringify([
+                {
+                    id: 'fusion-mlx',
+                    manifestId: 'fusion-mlx',
+                    title: 'MLX',
+                    seq: 1,
+                    hasActiveTask: true,
+                },
+                { id: 'ghost', manifestId: 'no-such', title: 'Ghost', seq: 2 },
+            ])
+        );
+        const restored = restorePersistedTabs([mk('fusion-mlx')], new Map());
+        expect(restored).toBe(1);
+        const tab = useTabs.getState().tabs[0]!;
+        expect(tab.id).toBe('fusion-mlx');
+        expect(tab.interrupted).toBe(true);
+        expect(tab.src).toBe('/shell/fusion-mlx/');
+        expect(tab.hasActiveTask).toBe(false);
+        expect(useTabs.getState().activeTabId).toBe('fusion-mlx');
+    });
+    it('restorePersistedTabs skips unknown manifests', () => {
+        localStorage.setItem(
+            'fusion.shell.tabs',
+            JSON.stringify([{ id: 'ghost', manifestId: 'no-such', title: 'Ghost', seq: 1 }])
+        );
+        expect(restorePersistedTabs([mk('a')], new Map())).toBe(0);
+        expect(useTabs.getState().tabs.length).toBe(0);
     });
 });
