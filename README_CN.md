@@ -6,10 +6,27 @@ Fusion 统一前端宿主（union-web host）—— fusion-* 系列模块的统�
 
 ## 状态
 
-设计阶段，实现未开始。
+宿主 Shell 已实现（issue #1-#7）。网关侧 API（登录/RBAC/Manifest 注册中心/静态托管）在 `fusion-gateway` 仓内实现（PRD R-1），端到端联调依赖其就绪。
 
 - PRD：`~/fusion/architecture/fusion-union-web-prd-1015.md`
 - 前端统一规范：`~/fusion/architecture/fusion-web-ui-spec-1015.md`
+
+## 开发
+
+需要 Bun >= 1.1。
+
+```bash
+bun install
+bun run dev         # Shell dev server :5030，/api 代理到网关 :11432
+bun run build       # 各 workspace typecheck + build
+bun run test        # bun test 全仓测试
+bun run lint        # biome check
+bun run typecheck   # tsc 全仓类型检查
+```
+
+模块 iframe Dev HMR：`VITE_SHELL_ENV=dev FUSION_DEV_MODULES=<id>:<port> bun run dev`，指定模块的 iframe src 覆写为本地 dev server。
+
+CI 门禁：每个 PR 上 lint + typecheck + test + build 三绿/四绿（`.github/workflows/ci.yml`）。
 
 ## Monorepo 结构（Bun workspaces）
 

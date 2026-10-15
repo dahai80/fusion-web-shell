@@ -1,0 +1,106 @@
+import './setup';
+import { beforeEach, describe, expect, it } from 'bun:test';
+import { MAX_TABS, entryFor, newTab, parseDevModules, useTabs } from '../stores/tabs';
+import type { ModuleManifest } from '../types/manifest';
+
+const mk = (id: string): ModuleManifest => ({
+    id,
+    title: `模块 ${id}`,
+    path: `/${id}`,
+    entry: `/shell/${id}/`,
+    devices: ['desktop'],
+    category: 'platform',
+});
+
+beforeEach(() => {
+    localStorage.clear();
+    useTabs.setState({ tabs: [], activeTabId: null });
+});
+
+describe('parseDevModules', () => {
+    it('parses id:port pairs', () => {
+        const map = parseDevModules('fusion-mlx:5010, fusion-agent-studio:5020, bad, x:abc');
+        expect(map.get('fusion-mlx')).toBe('5010');
+        expect(map.get('fusion-agent-studio')).toBe('5020');
+        expect(map.size).toBe(2);
+    });
+    it('handles empty input', () => {
+        expect(parseDevModules(undefined).size).toBe(0);
+    });
+});
+
+describe('entryFor (A6 dev HMR)', () => {
+    it('overrides entry for dev modules only', () => {
+        const dev = parseDevModules('fusion-mlx:5010');
+        expect(entryFor(mk('fusion-mlx'), dev)).toBe('http://localhost:5010/?embedded=1');
+        expect(entryFor(mk('fusion-kb'), dev)).toBe('/shell/fusion-kb/');
+    });
+});
+
+describe('tabs store', () => {
+    it('opens a tab and reuses it for the same manifest (single instance default)', () => {
+        const s = useTabs.getState();
+        const id1 = s.openTab(mk('fusion-mlx'));
+        const id2 = useTabs.getState().openTab(mk('fusion-mlx'));
+        expect(id1).toBe(id2);
+        expect(useTabs.getState().tabs.length).toBe(1);
+    });
+    it('opens multi-instance tabs with seq suffix', () => {
+        useTabs.getState().openTab(mk('fusion-mlx'));
+        useTabs.getState().openTab(mk('fusion-mlx'), { multi: true });
+        const tabs = useTabs.getState().tabs;
+        expect(tabs.length).toBe(2);
+        expect(tabs[1]!.id).toBe('fusion-mlx#2');
+        expect(tabs[1]!.title).toContain('2');
+    });
+    it('enforces max 12 tabs', () => {
+        for (let i = 0; i < MAX_TABS + 2; i++) {
+            useTabs.getState().openTab(mk(`mod-${i}`), { multi: true });
+        }
+        expect(useTabs.getState().tabs.length).toBe(MAX_TABS);
+    });
+    it('closes tab and moves active to last remaining', () => {
+        const a = useTabs.getState().openTab(mk('a'));
+        const b = useTabs.getState().openTab(mk('b'));
+        expect(useTabs.getState().activeTabId).toBe(b!);
+        useTabs.getState().closeTab(b!);
+        expect(useTabs.getState().tabs.length).toBe(1);
+        expect(useTabs.getState().activeTabId).toBe(a!);
+    });
+    it('blocks close while a task is active', () => {
+        const id = useTabs.getState().openTab(mk('a'));
+        useTabs.getState().setActiveTask(id!, true);
+        expect(useTabs.getState().closeTab(id!)).toBe(false);
+        expect(useTabs.getState().tabs.length).toBe(1);
+        useTabs.getState().setActiveTask(id!, false);
+        expect(useTabs.getState().closeTab(id!)).toBe(true);
+    });
+    it('marks crashed: src released, status crashed, others unaffected (A2/A4)', () => {
+        useTabs.getState().openTab(mk('a'));
+        const b = useTabs.getState().openTab(mk('b'));
+        useTabs.getState().markCrashed(b!, 'test');
+        const tabs = useTabs.getState().tabs;
+        expect(tabs.find((t) => t.id === 'b')?.status).toBe('crashed');
+        expect(tabs.find((t) => t.id === 'b')?.src).toBeNull();
+        expect(tabs.find((t) => t.id === 'a')?.status).toBe('active');
+    });
+    it('restoreIframe resets crashed tab with fresh src', () => {
+        useTabs.getState().openTab(mk('a'));
+        useTabs.getState().markCrashed('a', 'test');
+        const id = useTabs.getState().restoreIframe(mk('a'));
+        const tab = useTabs.getState().tabs.find((t) => t.id === id);
+        expect(tab?.status).toBe('active');
+        expect(tab?.src).toBe('/shell/a/');
+        expect(tab?.crashedAt).toBeUndefined();
+    });
+    it('persists open tabs and restores skeletons', () => {
+        useTabs.getState().openTab(mk('fusion-mlx'));
+        const raw = localStorage.getItem('fusion.shell.tabs');
+        expect(raw).toContain('fusion-mlx');
+    });
+    it('newTab builds prod entry', () => {
+        const tab = newTab(mk('x'), new Map());
+        expect(tab.src).toBe('/shell/x/');
+        expect(tab.seq).toBe(1);
+    });
+});

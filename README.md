@@ -6,10 +6,27 @@ Single entry (`fusion-gateway` :11432), unified login + RBAC, per-tab same-origi
 
 ## Status
 
-Design phase. Implementation not started.
+Shell host implemented (issues #1-#7). Gateway-side APIs (session, RBAC, manifest registry, static hosting) live in `fusion-gateway` per PRD R-1 and are required for end-to-end runs.
 
 - PRD: `~/fusion/architecture/fusion-union-web-prd-1015.md`
 - UI Spec: `~/fusion/architecture/fusion-web-ui-spec-1015.md`
+
+## Development
+
+Requires Bun >= 1.1.
+
+```bash
+bun install
+bun run dev         # shell dev server on :5030, /api proxied to gateway :11432
+bun run build       # typecheck + build all workspaces
+bun run test        # bun test across packages
+bun run lint        # biome check
+bun run typecheck   # tsc across workspaces
+```
+
+Dev HMR for module iframes: `VITE_SHELL_ENV=dev FUSION_DEV_MODULES=<id>:<port> bun run dev` overrides the matching module's iframe src to the local Vite server.
+
+CI gates: lint + typecheck + test + build on every PR (`.github/workflows/ci.yml`).
 
 ## Monorepo Layout (Bun workspaces)
 
