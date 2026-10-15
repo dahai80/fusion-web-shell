@@ -62,24 +62,29 @@ export function createHostBridge(
     ): void {
         stopHeartbeat();
         heartbeatTimer = setInterval(() => {
-            if (!currentIframeWindow || !sdkAlive) return;
+            if (!currentIframeWindow) return;
             const id = `ping-${tabId}-${++pingSeq}`;
             let answered = false;
-            pendingPings.add((msgId: string) => {
+            const resolver = (msgId: string) => {
                 if (msgId === id) {
                     answered = true;
                 }
-            });
+            };
+            pendingPings.add(resolver);
             currentIframeWindow.postMessage(
                 { type: 'request', id, method: 'ping', payload: null },
                 origin
             );
             setTimeout(() => {
-                if (!answered && sdkAlive) {
+                // Drop the dead closure so long-lived tabs don't leak (review #8).
+                pendingPings.delete(resolver);
+                if (answered) {
+                    onLivenessChange(true);
+                } else if (sdkAlive) {
+                    // Enforcement only once the module has answered before;
+                    // non-SDK modules stay silent forever and never false-crash.
                     console.warn('[host-bridge] heartbeat missed for', tabId);
                     onLivenessChange(false);
-                } else if (answered) {
-                    onLivenessChange(true);
                 }
             }, timeoutMs);
         }, intervalMs);

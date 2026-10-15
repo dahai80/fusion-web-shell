@@ -78,7 +78,7 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                                     {alreadyOpen ? (
                                         <button
                                             type="button"
-                                            aria-label={`open another ${m.title}`}
+                                            aria-label={`${t('再开一个实例', 'Open another instance')}: ${moduleTitle(m, lang)}`}
                                             title={t('再开一个实例', 'Open another instance')}
                                             onClick={() => {
                                                 const id = openTab(m, { multi: true });

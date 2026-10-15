@@ -206,6 +206,8 @@ export const useTabs = create<TabsState>((set, get) => ({
     },
     setActiveTask(id, has) {
         set((s) => ({ tabs: s.tabs.map((t) => (t.id === id ? { ...t, hasActiveTask: has } : t)) }));
+        // Persist so refresh-restore knows the task was interrupted (PRD 6.1).
+        persist(get().tabs);
     },
 }));
 

@@ -1,3 +1,4 @@
+import { type ErrorEnvelope, sharedClient } from '@/api/client';
 import { pushToast } from '@/components/ToastHost';
 import { t, useLang } from '@/stores/lang';
 import type { ShellTab } from '@/stores/tabs';
@@ -5,7 +6,7 @@ import { useTabs } from '@/stores/tabs';
 import { useTheme } from '@/stores/theme';
 import type { ModuleManifest } from '@/types/manifest';
 import { type HostBridgeHandle, createHostBridge } from '@fusion/web-sdk';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const LOAD_TIMEOUT_MS = 15000;
 const HEARTBEAT_INTERVAL_MS = 30000;
@@ -54,6 +55,17 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
         };
     }, [tab.src, tab.id, onCrash]);
 
+    // Push current shell state into the module. Called at bridge creation and
+    // again on iframe load: the first postMessage lands in about:blank and is
+    // lost, so the module needs a re-push once its SDK is actually listening.
+    const pushHostState = useCallback(() => {
+        const b = bridgeRef.current;
+        if (!b) return;
+        b.notifyTheme(useTheme.getState().mode);
+        b.notifyVisibility(document.visibilityState === 'visible');
+        b.notifyLang(useLang.getState().lang);
+    }, []);
+
     // Host bridge lifecycle: create per tab instance, destroy on unmount/src change.
     useEffect(() => {
         if (!tab.src || !iframeRef.current) return;
@@ -73,32 +85,31 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
                 pushToast(level, input.message, input.durationMs);
             },
             onActiveTask: (_tabId, task) => setTask(tab.id, task !== null),
+            // Reuse the shared ApiClient: same Bearer injection, 401 session
+            // handling and A5 envelope logic as the shell's own calls.
             proxyHttp: async (req) => {
-                const res = await fetch(req.path, {
-                    method: req.method,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `Bearer ${sessionStorage.getItem('fusion.shell.token') ?? ''}`,
-                        ...(req.headers ?? {}),
-                    },
-                    body: req.body === undefined ? undefined : JSON.stringify(req.body),
-                });
-                const data = await res.json().catch(() => null);
-                // A5: standardized error envelope, retryable -> toast + tab banner.
-                const env = data as { message?: string; retryable?: boolean } | null;
-                if (res.status >= 500 || env?.retryable) {
-                    pushToast('warning', env?.message ?? `服务异常 (${res.status})`);
-                    setErr(tab.id, env?.message ?? `服务异常 (${res.status})`);
+                try {
+                    const data = await sharedClient().request(req.path, {
+                        method: req.method,
+                        headers: req.headers,
+                        body: req.body === undefined ? undefined : JSON.stringify(req.body),
+                    });
+                    return { status: 200, data };
+                } catch (err) {
+                    const status = (err as { status?: number }).status ?? 500;
+                    const env = (err as { envelope?: ErrorEnvelope }).envelope;
+                    const message = (err as Error).message || `HTTP ${status}`;
+                    if (status >= 500 || env?.retryable) {
+                        pushToast('warning', message);
+                        setErr(tab.id, message);
+                    }
+                    return { status, data: env ?? { message } };
                 }
-                return { status: res.status, data };
             },
         });
         bridgeRef.current = bridge;
+        pushHostState();
 
-        // Initial state push (module may boot after shell).
-        bridge.notifyTheme(useTheme.getState().mode);
-        bridge.notifyVisibility(document.visibilityState === 'visible');
-        bridge.notifyLang(useLang.getState().lang);
         bridge.startHeartbeat(
             (alive) => {
                 if (!alive) onCrash(tab.id, 'heartbeat lost');
@@ -185,6 +196,7 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
                 onLoad={() => {
                     setLoaded(true);
                     if (timerRef.current) clearTimeout(timerRef.current);
+                    pushHostState();
                     console.log('[tab-view] iframe loaded:', tab.id);
                 }}
                 className="h-full w-full border-0"

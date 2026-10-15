@@ -60,7 +60,8 @@ export class ApiClient {
                 const env = (await res.json().catch(() => null)) as ErrorEnvelope | null;
                 const message = env?.message ?? `HTTP ${res.status}`;
                 this.surfaceRetryable(env, message, res.status);
-                throw Object.assign(new Error(message), { status: res.status });
+                // envelope attached so bridge proxy consumers can reuse it.
+                throw Object.assign(new Error(message), { status: res.status, envelope: env });
             }
             return (await res.json()) as T;
         } finally {
@@ -68,13 +69,21 @@ export class ApiClient {
         }
     }
 
-    /** A5: retryable gateway errors get a toast + transient banner on the active tab. */
+    /**
+     * A5: retryable gateway errors get a toast + transient banner. The banner
+     * routes to the tab owning the failing module (envelope module_id) when
+     * identifiable, falling back to the active tab.
+     */
     private surfaceRetryable(env: ErrorEnvelope | null, message: string, status: number): void {
         if (!env?.retryable && status < 500) return;
         console.warn('[api] retryable error:', env?.code ?? status, message);
         pushToast('warning', message);
-        const activeId = useTabs.getState().activeTabId;
-        if (activeId) useTabs.getState().setTransientError(activeId, message);
+        const tabsState = useTabs.getState();
+        const ownerTab = env?.module_id
+            ? tabsState.tabs.find((tb) => tb.manifestId === env.module_id)?.id
+            : undefined;
+        const targetId = ownerTab ?? tabsState.activeTabId;
+        if (targetId) tabsState.setTransientError(targetId, message);
     }
 
     get<T>(path: string): Promise<T> {

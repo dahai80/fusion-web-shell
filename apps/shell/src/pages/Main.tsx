@@ -53,13 +53,15 @@ export function MainPage({ onLogout }: Props) {
         if (!id) console.warn('[main] openTab refused (limit?):', m.id);
     };
 
-    if (error && !manifestsLoaded) {
+    // First-load failure / retry UX (spec 6.1): show "第 N 次重试中" during
+    // backoff, and the manual retry button once auto-retry is exhausted.
+    if (!manifestsLoaded && (error || attempt > 0)) {
         return (
             <div className="flex h-screen items-center justify-center bg-bg text-text-primary">
                 <ErrorState
-                    message={error.message}
-                    retrying={attempt > 0 ? attempt : undefined}
-                    onRetry={loading ? undefined : manualRetry}
+                    message={error?.message ?? t('连接服务中…', 'Connecting to services…')}
+                    retrying={loading && attempt > 0 ? attempt : undefined}
+                    onRetry={!loading && error ? manualRetry : undefined}
                 />
             </div>
         );

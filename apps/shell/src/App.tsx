@@ -4,7 +4,6 @@ import { ToastHost, pushToast } from '@/components/ToastHost';
 import { LoginPage } from '@/pages/Login';
 import { MainPage } from '@/pages/Main';
 import { useAuth } from '@/stores/auth';
-import { useManifests } from '@/stores/manifests';
 import { Suspense, lazy, useEffect, useState } from 'react';
 
 // Route-level code split (admin console is rarely the landing view).
@@ -32,7 +31,7 @@ export function App() {
 
     const onAuthed = (u: api.SessionUser, token: string) => {
         useAuth.getState().setUser(u, token);
-        void useManifests.getState().load(true);
+        // Manifest loading is owned by MainPage's useAutoRetry (retry UX lives there).
         if (u.must_change_password) pushToast('warning', '请在管理员处修改初始密码');
     };
 
@@ -90,7 +89,7 @@ async function restoreSession(): Promise<void> {
     try {
         const me = await api.fetchMe();
         useAuth.getState().setUser(me, token);
-        void useManifests.getState().load(true);
+        // Main page mounts and loads manifests with auto-retry.
     } catch (err) {
         console.warn('[app] session restore failed', err);
         useAuth.getState().clearUser();

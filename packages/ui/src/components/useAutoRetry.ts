@@ -40,6 +40,9 @@ export function useAutoRetry<T>(
                 const status = (err as { status?: number }).status;
                 const lastTry = currentAttempt >= retries || noRetryStatuses.includes(status ?? 0);
                 if (lastTry) {
+                    // Reset attempt so consumers stop rendering "第 N 次重试中"
+                    // and the manual retry button becomes available again.
+                    setAttempt(0);
                     setError(err as Error);
                     setLoading(false);
                     return;

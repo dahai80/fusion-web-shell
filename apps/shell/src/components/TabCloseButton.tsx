@@ -1,3 +1,4 @@
+import { t } from '@/stores/lang';
 import { useTabs } from '@/stores/tabs';
 import { ConfirmDialog } from '@fusion/web-ui';
 import { useState } from 'react';
@@ -41,9 +42,12 @@ export function TabCloseButton({ tabId, tabTitle, hasActiveTask, className }: Pr
             <ConfirmDialog
                 open={confirming}
                 danger
-                title={`关闭「${tabTitle}」`}
-                description="该标签页仍有正在运行的任务，关闭将中断任务。"
-                confirmLabel="关闭并中断"
+                title={t(`关闭「${tabTitle}」`, `Close "${tabTitle}"`)}
+                description={t(
+                    '该标签页仍有正在运行的任务，关闭将中断任务。',
+                    'This tab still has a running task; closing it will interrupt the task.'
+                )}
+                confirmLabel={t('关闭并中断', 'Close & interrupt')}
                 onConfirm={() => {
                     setConfirming(false);
                     useTabs.getState().forceCloseTab(tabId);
