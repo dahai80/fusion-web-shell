@@ -33,6 +33,9 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
     // F-4: gateway HTTP-error docs (401/503 JSON) load "successfully" in an
     // iframe; preflight the entry and only mount on 2xx.
     const [entryOk, setEntryOk] = useState(false);
+    // Envelope {code, message, retryable} from the failing entry probe, shown
+    // on the crash card (issue #12).
+    const [entryError, setEntryError] = useState<{ code?: string; message?: string } | null>(null);
     // Subscribe so t() re-renders on language switch.
     useLang((l) => l.lang);
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -78,18 +81,29 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
         }
         let cancelled = false;
         fetch(tab.src, { credentials: 'include' })
-            .then((res) => {
+            .then(async (res) => {
                 if (cancelled) return;
-                if (!res.ok) {
-                    console.warn('[tab-view] entry preflight failed:', tab.id, res.status);
-                    pushToast(
-                        'warning',
-                        t(`模块服务异常 (${res.status})`, `Module service error (${res.status})`)
-                    );
-                    onCrash(tab.id, `entry HTTP ${res.status}`);
+                if (res.ok) {
+                    setEntryError(null);
+                    setEntryOk(true);
                     return;
                 }
-                setEntryOk(true);
+                // Gateway returns the standardized envelope on /shell/* errors;
+                // render its code/message on the crash card when present.
+                const env = (await res.json().catch(() => null)) as {
+                    code?: string;
+                    message?: string;
+                } | null;
+                console.warn('[tab-view] entry preflight failed:', tab.id, res.status, env?.code);
+                setEntryError({
+                    code: env?.code ?? `HTTP ${res.status}`,
+                    message: env?.message,
+                });
+                pushToast(
+                    'warning',
+                    env?.message ?? t(`模块服务异常 (${res.status})`, `Module service error (${res.status})`)
+                );
+                onCrash(tab.id, `entry HTTP ${res.status}`);
             })
             .catch((err) => {
                 if (cancelled) return;
@@ -194,13 +208,26 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
     if (!tab.src) {
         return (
             <div className="flex h-full flex-col items-center justify-center gap-3 bg-bg">
+                <div className="text-sm text-text-secondary">
+                    {t('模块', 'Module')}: {manifest.title}
+                </div>
                 <div className="text-error">
                     {t('模块加载失败，点击重试', 'Module failed to load; retry')}
                 </div>
+                {entryError ? (
+                    <div className="max-w-md rounded-md border border-border bg-bg-elevated px-4 py-3 text-xs">
+                        <div className="font-mono text-text-secondary">
+                            code: {entryError.code}
+                        </div>
+                        {entryError.message ? (
+                            <div className="mt-1 text-text-primary">{entryError.message}</div>
+                        ) : null}
+                    </div>
+                ) : null}
                 <div className="font-mono text-xs text-text-muted">
                     {tab.crashedAt
                         ? `crashed at ${new Date(tab.crashedAt).toLocaleTimeString()}`
-                        : 'iframe 已释放'}
+                        : t('iframe 已释放', 'iframe released')}
                 </div>
                 <button
                     type="button"
