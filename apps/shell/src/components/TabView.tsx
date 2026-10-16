@@ -1,11 +1,14 @@
 import { type ErrorEnvelope, sharedClient } from '@/api/client';
 import { pushToast } from '@/components/ToastHost';
+import { useViewport } from '@/hooks/useViewport';
 import { t, useLang } from '@/stores/lang';
+import { isReadonlyOnMobile } from '@/stores/manifests';
 import type { ShellTab } from '@/stores/tabs';
 import { useTabs } from '@/stores/tabs';
 import { useTheme } from '@/stores/theme';
 import type { ModuleManifest } from '@/types/manifest';
 import { type HostBridgeHandle, createHostBridge } from '@fusion/web-sdk';
+import { ReadOnlyBanner } from '@fusion/web-ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const LOAD_TIMEOUT_MS = 15000;
@@ -38,6 +41,10 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
     const [entryError, setEntryError] = useState<{ code?: string; message?: string } | null>(null);
     // Subscribe so t() re-renders on language switch.
     useLang((l) => l.lang);
+    // #21: shell-layer device contract — mobile-readonly modules are forced
+    // view-only here, not left to each module's own degradation.
+    const viewport = useViewport();
+    const readonly = isReadonlyOnMobile(manifest?.devices ?? [], viewport);
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const iframeRef = useRef<HTMLIFrameElement>(null);
     const bridgeRef = useRef<HostBridgeHandle | null>(null);
@@ -266,6 +273,11 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
                     {t('加载中…', 'Loading…')}
                 </div>
             ) : null}
+            {readonly ? (
+                <div className="absolute inset-x-0 top-0" style={{ zIndex: 2 }}>
+                    <ReadOnlyBanner text={t('只读模式（移动端）', 'Read-only (mobile)')} />
+                </div>
+            ) : null}
             {entryOk ? (
                 <iframe
                     ref={iframeRef}
@@ -277,7 +289,7 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
                         pushHostState();
                         console.log('[tab-view] iframe loaded:', tab.id);
                     }}
-                    className="h-full w-full border-0"
+                    className={`h-full w-full border-0 ${readonly ? 'pointer-events-none' : ''}`}
                     sandbox="allow-scripts allow-same-origin allow-forms allow-downloads"
                 />
             ) : null}

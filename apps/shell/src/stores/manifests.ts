@@ -97,6 +97,15 @@ export const useManifests = create<ManifestsState>((set, get) => ({
     },
 }));
 
+/**
+ * Shell-layer device contract (spec §8.2, issue #21): mobile-readonly modules
+ * render view-only on mobile regardless of module-side degradation, so each
+ * module does not have to re-implement read-only enforcement.
+ */
+export function isReadonlyOnMobile(devices: DeviceMode[], viewport: 'desktop' | 'mobile'): boolean {
+    return viewport === 'mobile' && devices.includes('mobile-readonly');
+}
+
 /** Filter + group for menu render. desktop: all; mobile: hide desktop-only (PRD §8.1). */
 export function menuGroups(
     manifests: ModuleManifest[],

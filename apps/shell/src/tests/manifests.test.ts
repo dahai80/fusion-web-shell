@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { menuGroups, moduleTitle } from '../stores/manifests';
+import { isReadonlyOnMobile, menuGroups, moduleTitle } from '../stores/manifests';
 import type { ModuleManifest } from '../types/manifest';
 
 const mk = (
@@ -66,5 +66,19 @@ describe('i18n (gaps #5/#6)', () => {
         const groups = menuGroups([en], () => true, false, 'en');
         expect(groups[0]!.label).toBe('Platform');
         expect(groups[0]!.items[0]!.id).toBe('mlx');
+    });
+});
+
+describe('isReadonlyOnMobile (issue #21, spec §8.2)', () => {
+    it('forces view-only on mobile for mobile-readonly modules', () => {
+        expect(isReadonlyOnMobile(['desktop', 'mobile-readonly'], 'mobile')).toBe(true);
+    });
+    it('leaves mobile-readonly modules interactive on desktop', () => {
+        expect(isReadonlyOnMobile(['desktop', 'mobile-readonly'], 'desktop')).toBe(false);
+    });
+    it('never gates mobile-ready / desktop-only manifests', () => {
+        expect(isReadonlyOnMobile(['desktop', 'mobile-ready'], 'mobile')).toBe(false);
+        expect(isReadonlyOnMobile(['desktop-only'], 'mobile')).toBe(false);
+        expect(isReadonlyOnMobile([], 'mobile')).toBe(false);
     });
 });
