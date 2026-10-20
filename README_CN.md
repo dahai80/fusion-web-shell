@@ -38,6 +38,24 @@ bun run typecheck   # tsc 全仓类型检查
 
 CI 门禁：每个 PR 上 lint + typecheck + test + build 三绿/四绿（`.github/workflows/ci.yml`）。
 
+## 发布（网关同源托管）
+
+配置 `web_shell.spa_dir` 后，`fusion-gateway` 在根路径同源托管 Shell SPA（网关 v0.9.46，`/#247`）：`"/"` 兜底路由 + `index.html` 回退位于所有 API 命名空间之下，`index.html` 以 `no-store` 下发，`assets/*` 带 vite hash 命名、immutable 缓存。
+
+```bash
+bun run publish        # 构建 apps/shell + 校验 + 同步到 ~/.fusion-gateway/shell-spa
+# 自定义目标：FUSION_SHELL_SPA_DIR=/some/dir bun run publish
+```
+
+脚本在 `index.html` 出现相对资源路径或哈希资源缺失时立即报错退出。网关侧配置配对：
+
+```yaml
+web_shell:
+    spa_dir: ~/.fusion-gateway/shell-spa
+```
+
+SPA 路由按设计不鉴权 — 首屏保持 Shell 登录页（见 issue #23）。
+
 ## Monorepo 结构（Bun workspaces）
 
 ```

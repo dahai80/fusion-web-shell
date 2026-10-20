@@ -4,6 +4,9 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
     plugins: [react()],
+    // Gateway hosts the dist at the site root (web_shell.spa_dir, #23 /
+    // gateway #247): absolute-root /assets/ refs survive SPA deep links.
+    base: '/',
     // Expose FUSION_DEV_MODULES to the client (PRD 7.1 spelling, issue #14).
     envPrefix: ['VITE_', 'FUSION_'],
     resolve: {

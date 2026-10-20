@@ -38,6 +38,24 @@ Dev HMR for module iframes: `VITE_SHELL_ENV=dev FUSION_DEV_MODULES=<id>:<port> b
 
 CI gates: lint + typecheck + test + build on every PR (`.github/workflows/ci.yml`).
 
+## Publish (gateway same-origin hosting)
+
+`fusion-gateway` hosts the shell SPA same-origin at its root when `web_shell.spa_dir` is configured (gateway v0.9.46, `/#247`): `"/"` catch-all with `index.html` fallback below every API namespace, `index.html` served `no-store`, `assets/*` immutable-cached with vite hash naming.
+
+```bash
+bun run publish        # build apps/shell + verify + sync to ~/.fusion-gateway/shell-spa
+# custom target: FUSION_SHELL_SPA_DIR=/some/dir bun run publish
+```
+
+The script fails visibly if `index.html` carries relative asset paths or hashed assets are missing. Pair the gateway config:
+
+```yaml
+web_shell:
+    spa_dir: ~/.fusion-gateway/shell-spa
+```
+
+The SPA route is unauthenticated by design — the first screen stays the shell login (see issue #23).
+
 ## Monorepo Layout (Bun workspaces)
 
 ```
