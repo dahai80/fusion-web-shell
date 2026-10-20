@@ -1,6 +1,7 @@
 import { useAuth } from '@/stores/auth';
 import { t, useLang } from '@/stores/lang';
 import { menuGroups, moduleTitle, useManifests } from '@/stores/manifests';
+import { usePalette } from '@/stores/palette';
 import { useTabs } from '@/stores/tabs';
 import { useTheme } from '@/stores/theme';
 import type { ModuleManifest } from '@/types/manifest';
@@ -27,6 +28,7 @@ export function Sidebar({ onOpen, onLogout }: Props) {
     const toggleTheme = useTheme((s) => s.toggle);
     const lang = useLang((s) => s.lang);
     const setLang = useLang((s) => s.setLang);
+    const openPalette = usePalette((s) => s.open);
     const groups = menuGroups(manifests, canView, false, lang);
     const activeManifestId = tabs.find((tb) => tb.id === activeTabId)?.manifestId;
 
@@ -35,6 +37,15 @@ export function Sidebar({ onOpen, onLogout }: Props) {
             <div className="flex items-center justify-between px-4 py-4">
                 <span className="text-lg font-medium text-text-primary">Fusion Shell</span>
                 <span className="flex gap-1">
+                    <button
+                        type="button"
+                        onClick={openPalette}
+                        className="rounded p-1 text-xs text-text-muted hover:bg-bg-muted"
+                        aria-label={t('打开命令面板 (⌘K)', 'Open command palette (⌘K)')}
+                        title="⌘K"
+                    >
+                        ⌘K
+                    </button>
                     <button
                         type="button"
                         onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}

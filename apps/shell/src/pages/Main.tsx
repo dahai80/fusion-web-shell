@@ -1,4 +1,5 @@
 import { BottomNav } from '@/components/BottomNav';
+import { CommandPalette } from '@/components/CommandPalette';
 import { MobileDrawer } from '@/components/MobileDrawer';
 import { Sidebar } from '@/components/Sidebar';
 import { TabManager } from '@/components/TabManager';
@@ -81,6 +82,7 @@ export function MainPage({ onLogout }: Props) {
                 onOpenModule={handleOpen}
                 onLogout={onLogout}
             />
+            <CommandPalette />
         </div>
     );
 }
