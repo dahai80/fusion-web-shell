@@ -31,7 +31,10 @@ export class ApiClient {
         this.base = opts.base ?? '';
     }
 
-    async request<T>(path: string, init: RequestInit & { timeoutMs?: number } = {}): Promise<T> {
+    async request<T>(
+        path: string,
+        init: RequestInit & { timeoutMs?: number; quiet?: boolean } = {}
+    ): Promise<T> {
         const token = this.tokenProvider();
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), init.timeoutMs ?? 15000);
@@ -59,7 +62,9 @@ export class ApiClient {
             if (!res.ok) {
                 const env = (await res.json().catch(() => null)) as ErrorEnvelope | null;
                 const message = env?.message ?? `HTTP ${res.status}`;
-                this.surfaceRetryable(env, message, res.status);
+                // Background/quiet calls (notification polls, palette search)
+                // never surface host toasts or tab error strips (review fix #2).
+                if (!init.quiet) this.surfaceRetryable(env, message, res.status);
                 // envelope attached so bridge proxy consumers can reuse it.
                 throw Object.assign(new Error(message), { status: res.status, envelope: env });
             }
@@ -86,8 +91,8 @@ export class ApiClient {
         if (targetId) tabsState.setTransientError(targetId, message);
     }
 
-    get<T>(path: string): Promise<T> {
-        return this.request<T>(path);
+    get<T>(path: string, opts?: { quiet?: boolean }): Promise<T> {
+        return this.request<T>(path, { quiet: opts?.quiet });
     }
 
     post<T>(path: string, body?: unknown): Promise<T> {

@@ -1,3 +1,4 @@
+import { NotificationBell } from '@/components/NotificationBell';
 import { useAuth } from '@/stores/auth';
 import { t, useLang } from '@/stores/lang';
 import { menuGroups, moduleTitle, useManifests } from '@/stores/manifests';
@@ -9,7 +10,7 @@ import { TabCloseButton } from './TabCloseButton';
 interface Props {
     open: boolean;
     onClose(): void;
-    onOpenModule(manifest: ModuleManifest): void;
+    onOpenModule(manifest: ModuleManifest, route?: string, pageTitle?: string): void;
     onLogout(): void;
 }
 
@@ -96,6 +97,27 @@ export function MobileDrawer({ open, onClose, onOpenModule, onLogout }: Props) {
                                 </button>
                             );
                         })}
+                        {g.items.flatMap((m) =>
+                            (m.pages ?? []).map((page) => {
+                                const pageTitle =
+                                    lang === 'en' && page.title_en ? page.title_en : page.title;
+                                return (
+                                    <button
+                                        key={`${m.id}:${page.route}`}
+                                        type="button"
+                                        onClick={() => {
+                                            onOpenModule(m, page.route, pageTitle);
+                                            onClose();
+                                        }}
+                                        className="flex min-h-[44px] w-full items-center rounded-md pl-6 text-left text-sm text-text-secondary"
+                                    >
+                                        <span className="truncate">
+                                            {moduleTitle(m, lang)} · {pageTitle}
+                                        </span>
+                                    </button>
+                                );
+                            })
+                        )}
                     </div>
                 ))}
                 <div className="flex items-center justify-between border-t border-border px-4 py-3 text-sm">
@@ -103,6 +125,7 @@ export function MobileDrawer({ open, onClose, onOpenModule, onLogout }: Props) {
                         {user?.display_name ?? user?.user_id}
                     </span>
                     <span className="flex gap-4">
+                        <NotificationBell />
                         <button
                             type="button"
                             onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}

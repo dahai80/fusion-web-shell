@@ -1,4 +1,5 @@
 import { BottomNav } from '@/components/BottomNav';
+import { CommandPalette } from '@/components/CommandPalette';
 import { MobileDrawer } from '@/components/MobileDrawer';
 import { Sidebar } from '@/components/Sidebar';
 import { TabManager } from '@/components/TabManager';
@@ -6,6 +7,7 @@ import { TabStrip } from '@/components/TabStrip';
 import { pushToast } from '@/components/ToastHost';
 import { t } from '@/stores/lang';
 import { useManifests } from '@/stores/manifests';
+import { useNotifications } from '@/stores/notifications';
 import { getDevModules, restorePersistedTabs, useTabs } from '@/stores/tabs';
 import type { ModuleManifest } from '@/types/manifest';
 import { ErrorState, useAutoRetry } from '@fusion/web-ui';
@@ -14,6 +16,8 @@ import { useEffect, useRef, useState } from 'react';
 interface Props {
     onLogout(): void;
 }
+
+const NOTIFICATIONS_POLL_MS = 30000;
 
 /**
  * Shell main layout (PRD §8.1): desktop sidebar + tab strip + multi-tab area;
@@ -48,8 +52,18 @@ export function MainPage({ onLogout }: Props) {
         }
     }, [manifestsLoaded]);
 
-    const handleOpen = (m: ModuleManifest) => {
-        const id = openTab(m);
+    // Notification center (issue #24): poll manifest-declared sources over the
+    // existing gateway surface. Re-poll once manifests change (new sources).
+    useEffect(() => {
+        if (!manifestsLoaded) return;
+        const store = useNotifications.getState();
+        if (!store.polling) void store.start(NOTIFICATIONS_POLL_MS);
+        else void store.pollNow();
+        return () => useNotifications.getState().stop();
+    }, [manifestsLoaded]);
+
+    const handleOpen = (m: ModuleManifest, route?: string, pageTitle?: string) => {
+        const id = openTab(m, { route, pageTitle });
         if (!id) console.warn('[main] openTab refused (limit?):', m.id);
     };
 
@@ -81,6 +95,7 @@ export function MainPage({ onLogout }: Props) {
                 onOpenModule={handleOpen}
                 onLogout={onLogout}
             />
+            <CommandPalette />
         </div>
     );
 }

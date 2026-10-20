@@ -1,6 +1,13 @@
 import * as api from '@/api/endpoints';
 import type { Lang } from '@/stores/lang';
-import type { DeviceMode, ModuleManifest } from '@/types/manifest';
+import type {
+    DeviceMode,
+    ModuleManifest,
+    ModulePage,
+    NotificationKind,
+    NotificationSource,
+    SearchProvider,
+} from '@/types/manifest';
 import { create } from 'zustand';
 
 export const CATEGORY_ORDER = ['platform', 'domain', 'infra', 'dev'] as const;
@@ -31,6 +38,57 @@ export function moduleTitle(m: ModuleManifest, lang: Lang = 'zh'): string {
 
 export const CATEGORY_LABELS = CATEGORY_LABEL;
 
+const NOTIFICATION_KINDS: readonly NotificationKind[] = ['approvals', 'runs', 'engine'];
+
+function str(v: unknown): string | null {
+    return typeof v === 'string' && v.trim().length > 0 ? v.trim() : null;
+}
+
+/** Schema v1 ext sanitizer (issue #24): shape-check, dedupe by id, cap size. */
+function pickExt<T>(
+    raw: unknown,
+    validate: (rec: Record<string, unknown>) => T | null,
+    keyOf: (item: T) => string,
+    cap = 32
+): T[] | undefined {
+    if (!Array.isArray(raw)) return undefined;
+    const seen = new Set<string>();
+    const out: T[] = [];
+    for (const item of raw) {
+        if (out.length >= cap) break;
+        if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+        const validated = validate(item as Record<string, unknown>);
+        if (!validated || seen.has(keyOf(validated))) continue;
+        seen.add(keyOf(validated));
+        out.push(validated);
+    }
+    return out.length > 0 ? out : undefined;
+}
+
+function toSearchProvider(rec: Record<string, unknown>): SearchProvider | null {
+    const id = str(rec.id);
+    const label = str(rec.label);
+    const endpoint = str(rec.endpoint);
+    if (!id || !label || !endpoint || !endpoint.startsWith('/')) return null;
+    const label_en = str(rec.label_en) ?? undefined;
+    return { id, label, label_en, endpoint };
+}
+
+function toPage(rec: Record<string, unknown>): ModulePage | null {
+    const route = str(rec.route);
+    const title = str(rec.title);
+    if (!route || !title || !route.startsWith('/') || route.includes('#')) return null;
+    return { route, title, title_en: str(rec.title_en) ?? undefined };
+}
+
+function toNotificationSource(rec: Record<string, unknown>): NotificationSource | null {
+    const base = toSearchProvider(rec);
+    const kind = rec.kind;
+    if (!base || typeof kind !== 'string' || !NOTIFICATION_KINDS.includes(kind as NotificationKind))
+        return null;
+    return { ...base, kind: kind as NotificationKind };
+}
+
 function toManifest(dto: api.ManifestDto): ModuleManifest {
     return {
         id: dto.id,
@@ -49,6 +107,9 @@ function toManifest(dto: api.ManifestDto): ModuleManifest {
             ? (dto.category as Category)
             : 'domain',
         unreachable: dto.unreachable,
+        searchProviders: pickExt(dto.searchProviders, toSearchProvider, (p) => p.id),
+        pages: pickExt(dto.pages, toPage, (p) => p.route),
+        notifications: pickExt(dto.notifications, toNotificationSource, (p) => p.id),
     };
 }
 

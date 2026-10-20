@@ -1,12 +1,14 @@
+import { NotificationBell } from '@/components/NotificationBell';
 import { useAuth } from '@/stores/auth';
 import { t, useLang } from '@/stores/lang';
 import { menuGroups, moduleTitle, useManifests } from '@/stores/manifests';
+import { usePalette } from '@/stores/palette';
 import { useTabs } from '@/stores/tabs';
 import { useTheme } from '@/stores/theme';
 import type { ModuleManifest } from '@/types/manifest';
 
 interface Props {
-    onOpen(manifest: ModuleManifest): void;
+    onOpen(manifest: ModuleManifest, route?: string, pageTitle?: string): void;
     onLogout(): void;
 }
 
@@ -27,6 +29,7 @@ export function Sidebar({ onOpen, onLogout }: Props) {
     const toggleTheme = useTheme((s) => s.toggle);
     const lang = useLang((s) => s.lang);
     const setLang = useLang((s) => s.setLang);
+    const openPalette = usePalette((s) => s.open);
     const groups = menuGroups(manifests, canView, false, lang);
     const activeManifestId = tabs.find((tb) => tb.id === activeTabId)?.manifestId;
 
@@ -35,6 +38,16 @@ export function Sidebar({ onOpen, onLogout }: Props) {
             <div className="flex items-center justify-between px-4 py-4">
                 <span className="text-lg font-medium text-text-primary">Fusion Shell</span>
                 <span className="flex gap-1">
+                    <button
+                        type="button"
+                        onClick={openPalette}
+                        className="rounded p-1 text-xs text-text-muted hover:bg-bg-muted"
+                        aria-label={t('打开命令面板 (⌘K)', 'Open command palette (⌘K)')}
+                        title="⌘K"
+                    >
+                        ⌘K
+                    </button>
+                    <NotificationBell />
                     <button
                         type="button"
                         onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
@@ -96,6 +109,24 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                                 </div>
                             );
                         })}
+                        {g.items.flatMap((m) =>
+                            (m.pages ?? []).map((page) => {
+                                const pageTitle =
+                                    lang === 'en' && page.title_en ? page.title_en : page.title;
+                                return (
+                                    <button
+                                        key={`${m.id}:${page.route}`}
+                                        type="button"
+                                        onClick={() => onOpen(m, page.route, pageTitle)}
+                                        className="flex min-w-0 items-center rounded-md px-2 py-1.5 pl-6 text-left text-xs text-text-secondary hover:bg-bg-muted hover:text-text-primary"
+                                    >
+                                        <span className="truncate">
+                                            {moduleTitle(m, lang)} · {pageTitle}
+                                        </span>
+                                    </button>
+                                );
+                            })
+                        )}
                     </div>
                 ))}
                 {groups.length === 0 ? (

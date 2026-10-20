@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { isReadonlyOnMobile, menuGroups, moduleTitle } from '../stores/manifests';
+import type { ManifestDto } from '../api/endpoints';
+import { isReadonlyOnMobile, menuGroups, moduleTitle, useManifests } from '../stores/manifests';
 import type { ModuleManifest } from '../types/manifest';
 
 const mk = (
@@ -80,5 +81,114 @@ describe('isReadonlyOnMobile (issue #21, spec §8.2)', () => {
         expect(isReadonlyOnMobile(['desktop', 'mobile-ready'], 'mobile')).toBe(false);
         expect(isReadonlyOnMobile(['desktop-only'], 'mobile')).toBe(false);
         expect(isReadonlyOnMobile([], 'mobile')).toBe(false);
+    });
+});
+
+describe('manifest ext fields (issue #24: searchProviders/pages/notifications)', () => {
+    const reset = () => {
+        useManifests.setState({ manifests: [], loaded: false, unreachableIds: new Set() });
+    };
+
+    it('parses valid searchProviders/pages/notifications', () => {
+        reset();
+        useManifests.getState().setUpstream([
+            {
+                id: 'fusion-cowork',
+                title: ' cowork',
+                path: '/shell/fusion-cowork/',
+                entry: '/shell/fusion-cowork/',
+                devices: ['desktop'],
+                category: 'platform',
+                searchProviders: [
+                    {
+                        id: 'workflows',
+                        label: '工作流',
+                        label_en: 'Workflows',
+                        endpoint: '/api/cowork/search',
+                    },
+                ],
+                pages: [{ route: '/runs', title: '运行', title_en: 'Runs' }],
+                notifications: [
+                    {
+                        id: 'approvals',
+                        label: '审批',
+                        endpoint: '/api/cowork/approvals',
+                        kind: 'approvals',
+                    },
+                ],
+            } as unknown as ManifestDto,
+        ]);
+        const m = useManifests.getState().manifests[0]!;
+        expect(m.searchProviders).toEqual([
+            {
+                id: 'workflows',
+                label: '工作流',
+                label_en: 'Workflows',
+                endpoint: '/api/cowork/search',
+            },
+        ]);
+        expect(m.pages).toEqual([{ route: '/runs', title: '运行', title_en: 'Runs' }]);
+        expect(m.notifications).toEqual([
+            {
+                id: 'approvals',
+                label: '审批',
+                endpoint: '/api/cowork/approvals',
+                kind: 'approvals',
+            },
+        ]);
+    });
+
+    it('drops invalid ext entries and absent fields stay undefined', () => {
+        reset();
+        useManifests.getState().setUpstream([
+            {
+                id: 'fusion-as',
+                title: 'as',
+                path: '/shell/fusion-as/',
+                entry: '/shell/fusion-as/',
+                devices: ['desktop'],
+                category: 'platform',
+                searchProviders: [
+                    null,
+                    { id: '', endpoint: '/x' },
+                    { id: 'ok', label: 'OK', endpoint: 'not-absolute' },
+                    { id: 'good', label: 'Good', endpoint: '/api/as/search' },
+                ],
+                pages: [
+                    { route: 'no-slash', title: 'Bad' },
+                    { route: '/ok', title: 'Ok' },
+                ],
+                notifications: [{ id: 'n1', label: 'x', endpoint: '/api/x', kind: 'bogus' }],
+            } as unknown as ManifestDto,
+        ]);
+        const m = useManifests.getState().manifests[0]!;
+        expect(m.searchProviders).toEqual([
+            { id: 'good', label: 'Good', endpoint: '/api/as/search' },
+        ]);
+        expect(m.pages).toEqual([{ route: '/ok', title: 'Ok' }]);
+        expect(m.notifications).toBeUndefined();
+    });
+
+    it('dedupes ext ids and menuGroups is unchanged without ext fields', () => {
+        reset();
+        useManifests.getState().setUpstream([
+            {
+                id: 'fusion-mlx',
+                title: 'mlx',
+                path: '/shell/fusion-mlx/',
+                entry: '/shell/fusion-mlx/',
+                devices: ['desktop'],
+                category: 'platform',
+                searchProviders: [
+                    { id: 'a', label: 'A', endpoint: '/1' },
+                    { id: 'a', label: 'B', endpoint: '/2' },
+                ],
+            } as unknown as ManifestDto,
+        ]);
+        const m = useManifests.getState().manifests[0]!;
+        expect(m.searchProviders).toHaveLength(1);
+        expect(m.searchProviders![0]!.label).toBe('A');
+        const groups = menuGroups(useManifests.getState().manifests, () => true, false);
+        expect(groups).toHaveLength(1);
     });
 });

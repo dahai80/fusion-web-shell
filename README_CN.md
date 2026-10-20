@@ -18,6 +18,25 @@ Fusion 统一前端宿主（union-web host）—— fusion-* 系列模块的统�
 
 网关侧 API（登录/RBAC/Manifest 注册中心/静态托管）在 `fusion-gateway` 仓内实现（PRD R-1），端到端联调依赖其就绪。
 
+## 宿主 GUI 升级（issue #24，fusion-all-gui-1020 §5）
+
+- **⌘K 命令面板（G4/C1）** — 全局浮层（`⌘K` / `Ctrl+K`），三源聚合：导航（模块 + 子页深链）、快速执行（新建工作流 / 运行图 / 加载模型，仅对已授权模块显示）、跨模块搜索（manifest `searchProviders`，`GET <endpoint>?q=<query>` → `{items:[{title, route?}]}`，防抖、单 provider 失败隔离）。
+- **@fusion/design-tokens（G5/C7）** — 单一来源的设计 token（色板/间距/圆角/字号，暗+亮双色），以 workspace 包发布（`packages/design-tokens`）；`@fusion/web-ui` 从它 re-export tokens.css 与 Tailwind preset。模块私有主题值废弃 —— 通过 vendor 同步消费本包。
+- **通知中心（G11/C3）** — 侧边栏（及移动抽屉）铃铛，聚合审批待办 / 运行终态 / 引擎事件，数据来自 manifest `notifications` 声明的源，走既有网关面轮询（不新增后端）。已读集合持久化；点击条目深链进入模块 tab。
+- **深链与子页 IA（C8）** — 唯一深链形 `/shell/<id>/?embedded=1#/<route>`（tab src = `${entry}#${route}`）。模块通过 manifest `pages`（`{route, title, title_en?}`）声明子页即可从宿主菜单与面板直达；同路由再开仅激活 tab 不重载（KeepAlive 保持）。
+
+Manifest schema v1 扩展字段（全部可选，加载时清洗；网关透传该字段为上游事项）：
+
+```json
+{
+    "searchProviders": [{ "id": "workflows", "label": "工作流", "label_en": "Workflows", "endpoint": "/api/cowork/search" }],
+    "pages": [{ "route": "/runs", "title": "运行", "title_en": "Runs" }],
+    "notifications": [{ "id": "approvals", "label": "审批", "endpoint": "/api/cowork/approvals?status=pending", "kind": "approvals" }]
+}
+```
+
+`notifications[].kind` 取值 `approvals | runs | engine`；轮询响应为 `{items: [{id, title, route?, level?, ts?}]}`，`level` 取值 `info | warning | error`。
+
 - PRD：`~/fusion/architecture/fusion-union-web-prd-1015.md`
 - 前端统一规范：`~/fusion/architecture/fusion-web-ui-spec-1015.md`
 
@@ -62,12 +81,17 @@ SPA 路由按设计不鉴权 — 首屏保持 Shell 登录页（见 issue #23）
 apps/shell        # 宿主 Shell：React 18 + Vite + TS + Tailwind + Zustand
                   #   Tab Manager（display:none KeepAlive）、Per-Tab 同源 iframe
                   #   加载器（/shell/<id>/）、Manifest 客户端、宿主 ErrorBoundary、
-                  #   统一 HTTP 客户端、Dev HMR 切换、桌面侧边栏/移动底部导航双形态
+                  #   统一 HTTP 客户端、Dev HMR 切换、⌘K 命令面板、通知中心、
+                  #   桌面侧边栏/移动底部导航双形态
+packages/design-tokens # @fusion/design-tokens — 单一来源设计 token
+                  #   （色板/间距/圆角/字号，暗+亮）：TS + CSS 变量 + 生成的
+                  #   Tailwind preset
 packages/sdk      # @fusion/web-sdk — postMessage 桥客户端：
                   #   http 代理（自动带宿主 token）、toast、tab API、theme、devices 探测
-packages/ui       # @fusion/web-ui — 设计 token、Tailwind preset、公共组件
-                  #   （StatusBadge/LogStream/MetricChart/DataTable/TaskProgress/
-                  #   EmptyState/ErrorState/Skeleton）、格式化工具、H5 布局原语
+packages/ui       # @fusion/web-ui — 从 @fusion/design-tokens re-export token/preset，
+                  #   公共组件（StatusBadge/LogStream/MetricChart/DataTable/
+                  #   TaskProgress/EmptyState/ErrorState/Skeleton）、格式化工具、
+                  #   H5 布局原语
 docs/             # 架构笔记与 ADR
 ```
 

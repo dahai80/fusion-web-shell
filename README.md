@@ -18,6 +18,25 @@ Shell host implemented (issues #1-#7 plus PRD/UI-spec gap items):
 
 Gateway-side APIs (session, RBAC, manifest registry, static hosting) live in `fusion-gateway` per PRD R-1 and are required for end-to-end runs.
 
+## Host GUI Upgrade (issue #24, fusion-all-gui-1020 §5)
+
+- **⌘K command palette (G4/C1)** — global overlay (`⌘K` / `Ctrl+K`), three aggregated sources: navigation (modules + sub-page deep links), quick actions (new workflow / run graph / load model, only for granted modules), and cross-module search via manifest `searchProviders` (`GET <endpoint>?q=<query>` → `{items:[{title, route?}]}`, debounced, per-provider failure isolation).
+- **@fusion/design-tokens (G5/C7)** — single-source palette/spacing/radius/typography (dark + light) published as a workspace package (`packages/design-tokens`); `@fusion/web-ui` re-exports its tokens.css and Tailwind preset. Module-private theme values are deprecated — vendor-sync this package instead.
+- **Notification center (G11/C3)** — bell in the sidebar (and mobile drawer) aggregating approvals / run terminal states / engine events from manifest `notifications` sources, polled over the existing gateway surface (no new backend). Persisted read set; item click deep-links into the module tab.
+- **Deep links + sub-page IA (C8)** — the single deep-link form is `/shell/<id>/?embedded=1#/<route>` (tab src = `${entry}#${route}`). Declare module sub-pages via manifest `pages` (`{route, title, title_en?}`) to make them reachable from the shell menu and palette; same-route re-open activates the tab without reloading (KeepAlive preserved).
+
+Manifest schema v1 ext (all optional, sanitized on load; gateway pass-through of these fields is tracked upstream):
+
+```json
+{
+    "searchProviders": [{ "id": "workflows", "label": "工作流", "label_en": "Workflows", "endpoint": "/api/cowork/search" }],
+    "pages": [{ "route": "/runs", "title": "运行", "title_en": "Runs" }],
+    "notifications": [{ "id": "approvals", "label": "审批", "endpoint": "/api/cowork/approvals?status=pending", "kind": "approvals" }]
+}
+```
+
+`notifications[].kind` is one of `approvals | runs | engine`; polled responses are `{items: [{id, title, route?, level?, ts?}]}` with `level` one of `info | warning | error`.
+
 - PRD: `~/fusion/architecture/fusion-union-web-prd-1015.md`
 - UI Spec: `~/fusion/architecture/fusion-web-ui-spec-1015.md`
 
@@ -63,13 +82,17 @@ apps/shell        # Host shell: React 18 + Vite + TS + Tailwind + Zustand
                   #   Tab Manager (KeepAlive via display:none), per-tab same-origin
                   #   iframe loader (/shell/<id>/), manifest client, host
                   #   ErrorBoundary, unified HTTP client, dev HMR switch,
+                  #   ⌘K command palette, notification center,
                   #   desktop sidebar / mobile bottom-nav dual layout
+packages/design-tokens # @fusion/design-tokens — single-source design tokens
+                  #   (palette/spacing/radius/type, dark+light): TS + CSS vars
+                  #   + generated Tailwind preset
 packages/sdk      # @fusion/web-sdk — postMessage bridge client:
                   #   http proxy (host token), toast, tab API, theme, devices probe
-packages/ui       # @fusion/web-ui — design tokens, Tailwind preset, shared
-                  #   components (StatusBadge, LogStream, MetricChart, DataTable,
-                  #   TaskProgress, EmptyState/ErrorState/Skeleton), formatters,
-                  #   H5 responsive primitives
+packages/ui       # @fusion/web-ui — re-exports @fusion/design-tokens tokens/preset,
+                  #   shared components (StatusBadge, LogStream, MetricChart,
+                  #   DataTable, TaskProgress, EmptyState/ErrorState/Skeleton),
+                  #   formatters, H5 responsive primitives
 docs/             # Architecture notes, ADRs
 ```
 
