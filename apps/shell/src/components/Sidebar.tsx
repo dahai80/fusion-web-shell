@@ -8,7 +8,7 @@ import { useTheme } from '@/stores/theme';
 import type { ModuleManifest } from '@/types/manifest';
 
 interface Props {
-    onOpen(manifest: ModuleManifest): void;
+    onOpen(manifest: ModuleManifest, route?: string, pageTitle?: string): void;
     onLogout(): void;
 }
 
@@ -109,6 +109,24 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                                 </div>
                             );
                         })}
+                        {g.items.flatMap((m) =>
+                            (m.pages ?? []).map((page) => {
+                                const pageTitle =
+                                    lang === 'en' && page.title_en ? page.title_en : page.title;
+                                return (
+                                    <button
+                                        key={`${m.id}:${page.route}`}
+                                        type="button"
+                                        onClick={() => onOpen(m, page.route, pageTitle)}
+                                        className="flex min-w-0 items-center rounded-md px-2 py-1.5 pl-6 text-left text-xs text-text-secondary hover:bg-bg-muted hover:text-text-primary"
+                                    >
+                                        <span className="truncate">
+                                            {moduleTitle(m, lang)} · {pageTitle}
+                                        </span>
+                                    </button>
+                                );
+                            })
+                        )}
                     </div>
                 ))}
                 {groups.length === 0 ? (

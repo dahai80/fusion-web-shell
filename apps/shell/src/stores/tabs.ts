@@ -14,6 +14,9 @@ export interface ShellTab {
     src: string | null;
     hasActiveTask: boolean;
     crashedAt?: number;
+    /** Deep-link state (issue #24, C8): survives refresh restore. */
+    route?: string;
+    pageTitle?: string;
     /** Refresh-restored tab whose streaming task was interrupted (PRD §6.1). */
     interrupted?: boolean;
     /** Last gateway error envelope hint (A5 tab status strip). */
@@ -50,6 +53,8 @@ interface PersistedTab {
     title: string;
     seq: number;
     hasActiveTask?: boolean;
+    route?: string;
+    pageTitle?: string;
 }
 
 function persist(tabs: ShellTab[]): void {
@@ -58,6 +63,8 @@ function persist(tabs: ShellTab[]): void {
             id: t.id,
             manifestId: t.manifestId,
             title: t.title,
+            route: t.route,
+            pageTitle: t.pageTitle,
             seq: t.seq,
             hasActiveTask: t.hasActiveTask,
         }));
@@ -128,6 +135,8 @@ export function newTab(
         status: 'active',
         seq,
         src: srcFor(manifest, devModules, opts?.route),
+        route: opts?.route,
+        pageTitle: opts?.pageTitle,
         hasActiveTask: false,
     };
 }
@@ -160,11 +169,19 @@ export const useTabs = create<TabsState>((set, get) => ({
                         const title = tabTitle(
                             manifest,
                             existing.seq,
-                            opts.pageTitle ?? existing.title.split(' · ')[1]
+                            opts.pageTitle ?? existing.pageTitle
                         );
                         set((s) => ({
                             tabs: s.tabs.map((t) =>
-                                t.id === existing.id ? { ...t, src: want, title } : t
+                                t.id === existing.id
+                                    ? {
+                                          ...t,
+                                          src: want,
+                                          title,
+                                          route: opts.route,
+                                          pageTitle: opts.pageTitle ?? existing.pageTitle,
+                                      }
+                                    : t
                             ),
                             activeTabId: existing.id,
                         }));
@@ -279,7 +296,9 @@ export function restorePersistedTabs(
             title: p.title,
             status: 'active',
             seq: p.seq,
-            src: entryFor(manifest, devModules),
+            src: srcFor(manifest, devModules, p.route),
+            route: p.route,
+            pageTitle: p.pageTitle,
             hasActiveTask: false,
             interrupted: p.hasActiveTask === true,
         });

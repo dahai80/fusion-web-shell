@@ -62,8 +62,8 @@ export function MainPage({ onLogout }: Props) {
         return () => useNotifications.getState().stop();
     }, [manifestsLoaded]);
 
-    const handleOpen = (m: ModuleManifest) => {
-        const id = openTab(m);
+    const handleOpen = (m: ModuleManifest, route?: string, pageTitle?: string) => {
+        const id = openTab(m, { route, pageTitle });
         if (!id) console.warn('[main] openTab refused (limit?):', m.id);
     };
 

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'bun:test';
 import {
     MAX_TABS,
     entryFor,
+    loadPersistedTabs,
     newTab,
     parseDevModules,
     restorePersistedTabs,
@@ -206,5 +207,23 @@ describe('tab deep-link routes (issue #24, C8)', () => {
         const after = useTabs.getState().tabs[0]!;
         expect(after.src).toBe(before.src);
         expect(useTabs.getState().activeTabId).toBe(after.id);
+    });
+});
+
+describe('deep-link route survives refresh restore (review fix #3)', () => {
+    beforeEach(() => {
+        localStorage.removeItem('fusion.shell.tabs');
+        useTabs.setState({ tabs: [], activeTabId: null });
+    });
+
+    it('persisted tabs keep route; restore rebuilds hashed src', () => {
+        const m = mk('fusion-as');
+        useTabs.getState().openTab(m, { route: '/runs', pageTitle: 'Runs' });
+        const persisted = loadPersistedTabs();
+        expect(persisted[0]!.route).toBe('/runs');
+        useTabs.setState({ tabs: [], activeTabId: null });
+        restorePersistedTabs([m], new Map());
+        const tab = useTabs.getState().tabs[0]!;
+        expect(tab.src).toBe(`${m.entry}#/runs`);
     });
 });

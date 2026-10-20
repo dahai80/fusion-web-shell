@@ -27,7 +27,7 @@ export type NotificationFetchFn = (path: string) => Promise<{ items?: unknown }>
 
 let fetcher: NotificationFetchFn = async (path) => {
     try {
-        return await sharedClient().get(path);
+        return await sharedClient().get(path, { quiet: true });
     } catch (err) {
         console.warn('[notifications] fetch failed:', path, err);
         return {};
@@ -79,6 +79,7 @@ interface NotificationsState {
 }
 
 let timer: ReturnType<typeof setInterval> | null = null;
+let generation = 0;
 
 export const useNotifications = create<NotificationsState>((set, get) => ({
     items: [],
@@ -140,10 +141,13 @@ export const useNotifications = create<NotificationsState>((set, get) => ({
     },
 
     async start(intervalMs = 30000) {
-        if (get().polling) return;
+        if (get().polling || timer !== null) return;
+        const gen = ++generation;
         set({ polling: true });
         await get().pollNow();
-        if (!get().polling) return;
+        // A stop() (or a newer start) during the first poll invalidates this
+        // start — never install an orphan interval (review fix #1).
+        if (gen !== generation || !get().polling || timer !== null) return;
         timer = setInterval(() => {
             void get().pollNow();
         }, intervalMs);
@@ -151,6 +155,7 @@ export const useNotifications = create<NotificationsState>((set, get) => ({
     },
 
     stop() {
+        generation += 1;
         if (timer !== null) {
             clearInterval(timer);
             timer = null;

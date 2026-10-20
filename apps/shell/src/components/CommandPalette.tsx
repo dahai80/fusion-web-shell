@@ -31,6 +31,7 @@ export function CommandPalette() {
     const lang = useLang((s) => s.lang);
     const [searchResults, setSearchResults] = useState<PaletteCommand[]>([]);
     const inputRef = useRef<HTMLInputElement>(null);
+    const dialogRef = useRef<HTMLDivElement>(null);
     const listRef = useRef<HTMLDivElement>(null);
 
     // Global toggle key.
@@ -91,19 +92,44 @@ export function CommandPalette() {
         cmd.run();
     };
 
-    const onInputKey = (e: React.KeyboardEvent) => {
+    const onDialogKey = (e: React.KeyboardEvent) => {
         if (e.key === 'Escape') {
             e.preventDefault();
             close();
-        } else if (e.key === 'ArrowDown') {
+            return;
+        }
+        if (e.key === 'ArrowDown') {
             e.preventDefault();
             setActive(all.length === 0 ? 0 : (activeIndex + 1) % all.length);
-        } else if (e.key === 'ArrowUp') {
+            return;
+        }
+        if (e.key === 'ArrowUp') {
             e.preventDefault();
             setActive(all.length === 0 ? 0 : (activeIndex - 1 + all.length) % all.length);
-        } else if (e.key === 'Enter') {
+            return;
+        }
+        if (e.key === 'Enter') {
             e.preventDefault();
             runAt(activeIndex);
+            return;
+        }
+        // Focus trap: Tab wraps within the dialog (review fix #5).
+        if (e.key !== 'Tab') return;
+        const root = dialogRef.current;
+        if (!root) return;
+        const focusables = Array.from(root.querySelectorAll<HTMLElement>('input, button')).filter(
+            (el) => !el.hasAttribute('disabled')
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0]!;
+        const last = focusables[focusables.length - 1]!;
+        const active = document.activeElement;
+        if (e.shiftKey && (active === first || active === inputRef.current)) {
+            e.preventDefault();
+            last.focus();
+        } else if (!e.shiftKey && active === last) {
+            e.preventDefault();
+            first.focus();
         }
     };
 
@@ -130,8 +156,10 @@ export function CommandPalette() {
             tabIndex={-1}
         >
             <div
+                ref={dialogRef}
                 role="dialog"
                 aria-modal="true"
+                onKeyDown={onDialogKey}
                 aria-label={t('命令面板', 'Command palette')}
                 className="w-full max-w-lg rounded-card border border-bg bg-bg-elevated shadow-overlay"
             >
@@ -139,7 +167,7 @@ export function CommandPalette() {
                     ref={inputRef}
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    onKeyDown={onInputKey}
+                    onKeyDown={onDialogKey}
                     placeholder={t('搜索 / 跳转 / 执行…', 'Search / jump / run…')}
                     aria-label={t('命令输入', 'Command input')}
                     className="w-full rounded-t-card bg-transparent px-4 py-3 text-sm text-text-primary outline-none placeholder:text-text-muted"

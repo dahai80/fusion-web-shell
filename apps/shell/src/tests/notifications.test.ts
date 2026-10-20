@@ -185,3 +185,26 @@ describe('notification center (issue #24, G11/C3)', () => {
         expect(calls).toBeGreaterThanOrEqual(2);
     });
 });
+
+it('stop cancels polling; no orphan interval after stop→start→stop', async () => {
+    setupSources([
+        mk({
+            id: 'fusion-as',
+            notifications: [{ id: 'r', label: 'R', endpoint: '/api/as/runs', kind: 'runs' }],
+        }),
+    ]);
+    let calls = 0;
+    setFetcher(async () => {
+        calls += 1;
+        return { items: [] };
+    });
+    const p1 = useNotifications.getState().start(20);
+    useNotifications.getState().stop();
+    const p2 = useNotifications.getState().start(20);
+    await Promise.all([p1, p2]);
+    useNotifications.getState().stop();
+    const after = calls;
+    await new Promise((r) => setTimeout(r, 80));
+    expect(useNotifications.getState().polling).toBe(false);
+    expect(calls).toBe(after);
+});
