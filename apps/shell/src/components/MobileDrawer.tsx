@@ -1,3 +1,4 @@
+import { NotificationBell } from '@/components/NotificationBell';
 import { useAuth } from '@/stores/auth';
 import { t, useLang } from '@/stores/lang';
 import { menuGroups, moduleTitle, useManifests } from '@/stores/manifests';
@@ -103,6 +104,7 @@ export function MobileDrawer({ open, onClose, onOpenModule, onLogout }: Props) {
                         {user?.display_name ?? user?.user_id}
                     </span>
                     <span className="flex gap-4">
+                        <NotificationBell />
                         <button
                             type="button"
                             onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
