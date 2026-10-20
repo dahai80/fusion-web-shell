@@ -12,6 +12,9 @@
         "./tokens.css": "./src/tokens.css",
         "./format": "./src/format.ts"
     },
+    "dependencies": {
+        "@fusion/design-tokens": "workspace:*"
+    },
     "scripts": {
         "typecheck": "tsc --noEmit",
         "build": "bun run typecheck && bun build src/index.ts --outdir dist --target browser --format esm --external react --external react-dom"
