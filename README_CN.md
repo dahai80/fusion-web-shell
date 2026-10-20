@@ -37,6 +37,8 @@ Manifest schema v1 扩展字段（全部可选，加载时清洗；网关透传�
 
 `notifications[].kind` 取值 `approvals | runs | engine`；轮询响应为 `{items: [{id, title, route?, level?, ts?}]}`，`level` 取值 `info | warning | error`。
 
+完整 schema addendum（复制即用 manifest 示例 + 双侧校验词表）：[`docs/manifest-ext-schema.md`](docs/manifest-ext-schema.md)（#26）。
+
 - PRD：`~/fusion/architecture/fusion-union-web-prd-1015.md`
 - 前端统一规范：`~/fusion/architecture/fusion-web-ui-spec-1015.md`
 

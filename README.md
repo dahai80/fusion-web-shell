@@ -37,6 +37,8 @@ Manifest schema v1 ext (all optional, sanitized on load; gateway pass-through of
 
 `notifications[].kind` is one of `approvals | runs | engine`; polled responses are `{items: [{id, title, route?, level?, ts?}]}` with `level` one of `info | warning | error`.
 
+Full schema addendum with copy-paste manifest example and both-sides validation vocabulary: [`docs/manifest-ext-schema.md`](docs/manifest-ext-schema.md) (#26).
+
 - PRD: `~/fusion/architecture/fusion-union-web-prd-1015.md`
 - UI Spec: `~/fusion/architecture/fusion-web-ui-spec-1015.md`
 
