@@ -1,6 +1,37 @@
 /** Manifest schema v1 (PRD §5.1). Single source for shell-side types. */
 export type DeviceMode = 'desktop' | 'mobile-ready' | 'mobile-readonly' | 'desktop-only';
 
+/**
+ * Schema v1 ext fields (issue #24, fusion-all-gui-1020 §5): optional module
+ * registrations for ⌘K search, sub-page deep links and the notification
+ * center. Gateway pass-through of these fields is tracked upstream.
+ */
+export interface SearchProvider {
+    id: string;
+    label: string;
+    label_en?: string;
+    /** Gateway-absolute path queried as `${endpoint}?q=<query>`. */
+    endpoint: string;
+}
+
+export interface ModulePage {
+    /** In-module hash route, e.g. '/runs'. Deep link: `${entry}#${route}`. */
+    route: string;
+    title: string;
+    title_en?: string;
+}
+
+export type NotificationKind = 'approvals' | 'runs' | 'engine';
+
+export interface NotificationSource {
+    id: string;
+    label: string;
+    label_en?: string;
+    /** Gateway-absolute path polled for `{ count, items: [...] }`. */
+    endpoint: string;
+    kind: NotificationKind;
+}
+
 export interface ModuleManifest {
     id: string;
     title: string;
@@ -14,4 +45,7 @@ export interface ModuleManifest {
     devices: DeviceMode[];
     category: 'platform' | 'domain' | 'infra' | 'dev';
     unreachable?: boolean;
+    searchProviders?: SearchProvider[];
+    pages?: ModulePage[];
+    notifications?: NotificationSource[];
 }

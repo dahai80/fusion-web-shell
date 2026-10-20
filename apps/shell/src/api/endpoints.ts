@@ -31,6 +31,10 @@ export interface ManifestDto {
     devices: string[];
     category: string;
     unreachable?: boolean;
+    /** Schema v1 ext (issue #24) — unknown JSON until sanitized by the store. */
+    searchProviders?: unknown;
+    pages?: unknown;
+    notifications?: unknown;
 }
 
 export function login(
