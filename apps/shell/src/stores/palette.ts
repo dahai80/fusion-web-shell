@@ -143,7 +143,7 @@ const SEARCH_TIMEOUT_MS = 5000;
 function defaultFetcher(): SearchFetcher {
     return async (path) => {
         try {
-            return await sharedClient().get(path);
+            return await sharedClient().get(path, { quiet: true });
         } catch (err) {
             console.warn('[palette] provider fetch failed:', path, err);
             return {};
