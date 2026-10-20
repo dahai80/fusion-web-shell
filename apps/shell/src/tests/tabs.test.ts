@@ -158,3 +158,53 @@ describe('tabs store extensions (gaps #2/#8)', () => {
         expect(useTabs.getState().tabs.length).toBe(0);
     });
 });
+
+describe('tab deep-link routes (issue #24, C8)', () => {
+    beforeEach(() => {
+        localStorage.removeItem('fusion.shell.tabs');
+        useTabs.setState({ tabs: [], activeTabId: null });
+    });
+
+    it('newTab with route appends hash to entry src and composes title', () => {
+        const m = mk('fusion-mlx');
+        const tab = newTab(m, new Map(), 1, { route: '/metrics', pageTitle: 'Metrics' });
+        expect(tab.src).toBe('/shell/fusion-mlx/#/metrics');
+        expect(tab.title).toBe('模块 fusion-mlx · Metrics');
+    });
+
+    it('dev override keeps ?embedded=1 before the hash route', () => {
+        const m = mk('fusion-mlx');
+        const tab = newTab(m, parseDevModules('fusion-mlx:5199'), 1, { route: '/metrics' });
+        expect(tab.src).toBe('http://localhost:5199/?embedded=1#/metrics');
+    });
+
+    it('openTab without route keeps plain entry src', () => {
+        const m = mk('fusion-as');
+        const tab = newTab(m, new Map(), 1);
+        expect(tab.src).toBe(m.entry);
+        expect(tab.title).toBe(m.title);
+    });
+
+    it('openTab with new route re-srcs the existing tab and activates it', () => {
+        const m = mk('fusion-as');
+        const first = useTabs.getState().openTab(m);
+        const tabBefore = useTabs.getState().tabs.find((t) => t.id === first)!;
+        const second = useTabs.getState().openTab(m, { route: '/runs', pageTitle: 'Runs' });
+        expect(second).toBe(first);
+        const state = useTabs.getState();
+        expect(state.activeTabId).toBe(first);
+        const tab = state.tabs.find((t) => t.id === first)!;
+        expect(tab.src).toBe(`${tabBefore.src}#/runs`);
+        expect(tab.title).toContain('Runs');
+    });
+
+    it('openTab with the same route only activates, no src churn (KeepAlive)', () => {
+        const m = mk('fusion-as');
+        useTabs.getState().openTab(m, { route: '/runs' });
+        const before = useTabs.getState().tabs[0]!;
+        useTabs.getState().openTab(m, { route: '/runs' });
+        const after = useTabs.getState().tabs[0]!;
+        expect(after.src).toBe(before.src);
+        expect(useTabs.getState().activeTabId).toBe(after.id);
+    });
+});

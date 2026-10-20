@@ -20,10 +20,17 @@ export interface ShellTab {
     transientError?: string | null;
 }
 
+/** Deep-link options (issue #24, C8): route becomes `${src}#${route}`. */
+export interface OpenTabOptions {
+    multi?: boolean;
+    route?: string;
+    pageTitle?: string;
+}
+
 export interface TabsState {
     tabs: ShellTab[];
     activeTabId: string | null;
-    openTab(manifest: ModuleManifest, opts?: { multi?: boolean }): string | null;
+    openTab(manifest: ModuleManifest, opts?: OpenTabOptions): string | null;
     activateTab(id: string): void;
     closeTab(id: string): boolean;
     /** Close ignoring the active-task guard (used after user confirmation). */
@@ -92,18 +99,35 @@ export function entryFor(manifest: ModuleManifest, devModules: Map<string, strin
     return manifest.entry;
 }
 
+/** Deep-link src (C8 single form): `${entry}#${route}` with the same
+ * entry rules (dev override / ?embedded=1) as plain tabs. */
+export function srcFor(
+    manifest: ModuleManifest,
+    devModules: Map<string, string>,
+    route?: string
+): string {
+    const base = entryFor(manifest, devModules);
+    return route ? `${base}#${route}` : base;
+}
+
+export function tabTitle(manifest: ModuleManifest, seq: number, pageTitle?: string): string {
+    const base = seq === 1 ? manifest.title : `${manifest.title} (${seq})`;
+    return pageTitle ? `${base} · ${pageTitle}` : base;
+}
+
 export function newTab(
     manifest: ModuleManifest,
     devModules: Map<string, string>,
-    seq = 1
+    seq = 1,
+    opts?: { route?: string; pageTitle?: string }
 ): ShellTab {
     return {
         id: seq === 1 ? manifest.id : `${manifest.id}#${seq}`,
         manifestId: manifest.id,
-        title: seq === 1 ? manifest.title : `${manifest.title} (${seq})`,
+        title: tabTitle(manifest, seq, opts?.pageTitle),
         status: 'active',
         seq,
-        src: entryFor(manifest, devModules),
+        src: srcFor(manifest, devModules, opts?.route),
         hasActiveTask: false,
     };
 }
@@ -128,6 +152,26 @@ export const useTabs = create<TabsState>((set, get) => ({
             const existing = get().tabs.find((t) => t.manifestId === manifest.id);
             if (existing) {
                 if (existing.status === 'crashed') return get().restoreIframe(manifest);
+                if (opts?.route && existing.src !== null) {
+                    const want = srcFor(manifest, getDevModules(), opts.route);
+                    // Same route: activate only (KeepAlive, no iframe reload);
+                    // new route: re-src the tab (deep-link navigation, C8).
+                    if (existing.src !== want) {
+                        const title = tabTitle(
+                            manifest,
+                            existing.seq,
+                            opts.pageTitle ?? existing.title.split(' · ')[1]
+                        );
+                        set((s) => ({
+                            tabs: s.tabs.map((t) =>
+                                t.id === existing.id ? { ...t, src: want, title } : t
+                            ),
+                            activeTabId: existing.id,
+                        }));
+                        persist(get().tabs);
+                        return existing.id;
+                    }
+                }
                 set({ activeTabId: existing.id });
                 return existing.id;
             }
@@ -137,7 +181,7 @@ export const useTabs = create<TabsState>((set, get) => ({
             return null;
         }
         const count = get().tabs.filter((t) => t.manifestId === manifest.id).length;
-        const tab = newTab(manifest, getDevModules(), count + 1);
+        const tab = newTab(manifest, getDevModules(), count + 1, opts);
         set((s) => ({ tabs: [...s.tabs, tab], activeTabId: tab.id }));
         persist(get().tabs);
         return tab.id;
