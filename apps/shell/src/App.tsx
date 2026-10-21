@@ -10,11 +10,16 @@ import { Suspense, lazy, useEffect, useState } from 'react';
 const AdminUsersPage = lazy(() =>
     import('@/pages/AdminUsers').then((m) => ({ default: m.AdminUsersPage }))
 );
+const SettingsPage = lazy(() =>
+    import('@/pages/Settings').then((m) => ({ default: m.SettingsPage }))
+);
 
-type Route = { name: 'main' } | { name: 'admin-users' };
+type Route = { name: 'main' } | { name: 'admin-users' } | { name: 'settings' };
 
 function readRoute(): Route {
-    return window.location.pathname === '/admin/users' ? { name: 'admin-users' } : { name: 'main' };
+    if (window.location.pathname === '/admin/users') return { name: 'admin-users' };
+    if (window.location.pathname === '/settings') return { name: 'settings' };
+    return { name: 'main' };
 }
 
 /** Shell root (PRD §4.1): unknown session renders login; 401 anywhere kicks back here. */
@@ -45,6 +50,10 @@ export function App() {
             {route.name === 'admin-users' ? (
                 <Suspense fallback={null}>
                     <AdminUsersPage />
+                </Suspense>
+            ) : route.name === 'settings' ? (
+                <Suspense fallback={null}>
+                    <SettingsPage />
                 </Suspense>
             ) : (
                 <MainPage onLogout={logoutAll} />
