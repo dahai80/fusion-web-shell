@@ -1,9 +1,11 @@
+import { pushToast } from '@/components/ToastHost';
 import { useAuth } from '@/stores/auth';
 import { t, useLang } from '@/stores/lang';
 import { moduleTitle, useManifests } from '@/stores/manifests';
+import { type ApprovalAction, type TaskItem, taskBucket, useTasks } from '@/stores/tasks';
 import type { ModuleManifest } from '@/types/manifest';
 import { EmptyState } from '@fusion/web-ui';
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 
 interface Props {
     onOpen(manifest: ModuleManifest, route?: string, pageTitle?: string): void;
@@ -135,36 +137,195 @@ function StatusStrip({
 
 // SECTION: task sections
 
+const RISK_LABEL: Record<'low' | 'medium' | 'high', [string, string]> = {
+    low: ['低风险', 'Low risk'],
+    medium: ['中风险', 'Medium risk'],
+    high: ['高风险', 'High risk'],
+};
+
+/** Approval-first card (issue #33): three actions without opening the module. */
+function ApprovalCard({
+    task,
+    onAction,
+    busy,
+}: { task: TaskItem; onAction(taskId: string, action: ApprovalAction): void; busy: boolean }) {
+    const ap = task.pendingApproval!;
+    return (
+        <div className="mt-2 rounded-card border border-warning/50 bg-bg-muted p-3">
+            <div className="flex items-center gap-2 text-xs text-text-secondary">
+                <span aria-hidden>⚠</span>
+                {ap.risk ? t(...RISK_LABEL[ap.risk]) : t('待审批', 'Pending approval')}
+            </div>
+            {ap.prompt ? <div className="mt-1 text-sm text-text-primary">{ap.prompt}</div> : null}
+            <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => onAction(task.id, 'reject')}
+                    className="rounded-md border border-border px-3 py-1.5 text-xs text-text-secondary hover:border-error hover:text-error disabled:opacity-50"
+                >
+                    {t('拒绝', 'Reject')}
+                </button>
+                <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => onAction(task.id, 'allow_once')}
+                    className="rounded-md bg-brand px-3 py-1.5 text-xs text-white disabled:opacity-50"
+                >
+                    {t('仅本次允许', 'Allow once')}
+                </button>
+                <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => onAction(task.id, 'always_allow')}
+                    className="rounded-md border border-border px-3 py-1.5 text-xs text-text-secondary hover:border-brand hover:text-brand disabled:opacity-50"
+                >
+                    {t('始终允许', 'Always allow')}
+                </button>
+            </div>
+        </div>
+    );
+}
+
+function TaskRow({
+    task,
+    moduleLabel,
+    onOpen,
+    onApprove,
+    approveBusy,
+}: {
+    task: TaskItem;
+    moduleLabel: string;
+    onOpen(task: TaskItem): void;
+    onApprove(taskId: string, action: ApprovalAction): void;
+    approveBusy: boolean;
+}) {
+    return (
+        <div className="border-b border-border px-4 py-3 last:border-b-0">
+            <div className="flex items-center justify-between gap-3">
+                <button
+                    type="button"
+                    onClick={() => onOpen(task)}
+                    className="min-w-0 flex-1 truncate text-left text-sm text-text-primary hover:text-brand"
+                    title={task.title}
+                >
+                    {task.title}
+                </button>
+                <span className="shrink-0 text-xs text-text-muted">{moduleLabel}</span>
+                {typeof task.progress === 'number' ? (
+                    <span className="shrink-0 font-mono text-xs tabular-nums text-text-secondary">
+                        {task.progress}%
+                    </span>
+                ) : null}
+                {typeof task.artifacts === 'number' && task.artifacts > 0 ? (
+                    <span className="shrink-0 text-xs text-text-muted">
+                        {t('产物', 'Artifacts')} {task.artifacts}
+                    </span>
+                ) : null}
+            </div>
+            {typeof task.progress === 'number' ? (
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-bg-muted">
+                    <div
+                        className={`h-full rounded-full transition-all ${task.status === 'failed' || task.status === 'error' ? 'bg-error' : 'bg-running'}`}
+                        style={{ width: `${task.progress}%` }}
+                    />
+                </div>
+            ) : null}
+            {task.pendingApproval ? (
+                <ApprovalCard task={task} onAction={onApprove} busy={approveBusy} />
+            ) : null}
+        </div>
+    );
+}
+
 function TaskSection({
     icon,
     title,
+    tasks,
     emptyTitle,
     emptyDesc,
-}: { icon: string; title: string; emptyTitle: string; emptyDesc: string }) {
+    renderRow,
+}: {
+    icon: string;
+    title: string;
+    tasks: TaskItem[];
+    emptyTitle: string;
+    emptyDesc: string;
+    renderRow(task: TaskItem): ReactNode;
+}) {
     return (
         <section className="rounded-card border border-border bg-bg-elevated">
             <h2 className="flex items-center gap-2 border-b border-border px-4 py-3 text-sm font-medium text-text-primary">
                 <span aria-hidden>{icon}</span>
                 {title}
+                <span className="text-xs font-normal text-text-muted">{tasks.length}</span>
             </h2>
-            {/* Task items arrive with the aggregation API (issue #33); empty state meanwhile. */}
-            <EmptyState title={emptyTitle} description={emptyDesc} />
+            {tasks.length === 0 ? (
+                <EmptyState title={emptyTitle} description={emptyDesc} />
+            ) : (
+                tasks.map((task) => renderRow(task))
+            )}
         </section>
     );
 }
 
 // SECTION: page
 
-/** Home landing (issue #32): greeting + status strip + delegation message box +
- *  task sections + suggested chips. Tasks render empty until #33 ships the
- *  aggregation API; the message box hands off to the delegation routing (#34). */
+/** Home landing (issue #32/#33): greeting + status strip + delegation message
+ *  box + aggregated task sections (approval-first) + suggested chips. The
+ *  message box hands off to the delegation routing (#34). */
 export function HomePage({ onOpen }: Props) {
     const manifests = useManifests((s) => s.manifests);
     const unreachableIds = useManifests((s) => s.unreachableIds);
     const user = useAuth((s) => s.user);
     const lang = useLang((l) => l.lang);
+    const tasks = useTasks((s) => s.items);
+    const approve = useTasks((s) => s.approve);
+    const [approveBusyId, setApproveBusyId] = useState<string | null>(null);
     const [draft, setDraft] = useState('');
     const byId = new Map(manifests.map((m) => [m.id, m]));
+
+    const running = tasks.filter((x) => taskBucket(x) === 'running');
+    const recent = tasks.filter((x) => taskBucket(x) === 'recent');
+    const scheduled = tasks.filter((x) => taskBucket(x) === 'scheduled');
+
+    const openTask = (task: TaskItem) => {
+        const m = byId.get(task.moduleId);
+        if (!m) {
+            console.warn('[home] task module missing:', task.moduleId);
+            return;
+        }
+        onOpen(m, task.route, task.title.slice(0, 24));
+    };
+
+    const handleApprove = async (taskId: string, action: ApprovalAction) => {
+        setApproveBusyId(taskId);
+        try {
+            await approve(taskId, action);
+            pushToast(
+                'success',
+                action === 'reject' ? t('已拒绝', 'Rejected') : t('审批已提交', 'Approval sent')
+            );
+        } catch {
+            pushToast('error', t('审批提交失败，请重试', 'Approval failed, please retry'));
+        } finally {
+            setApproveBusyId(null);
+        }
+    };
+
+    const renderRow = (task: TaskItem): ReactNode => (
+        <TaskRow
+            key={task.id}
+            task={task}
+            moduleLabel={(() => {
+                const m = byId.get(task.moduleId);
+                return m ? moduleTitle(m, lang) : task.moduleId;
+            })()}
+            onOpen={openTask}
+            onApprove={(id, action) => void handleApprove(id, action)}
+            approveBusy={approveBusyId === task.id}
+        />
+    );
 
     const manifestChips = manifests.flatMap((m) =>
         (m.home ?? []).filter((c) => c.chip).map((c) => ({ manifest: m, card: c }))
@@ -245,15 +406,18 @@ export function HomePage({ onOpen }: Props) {
                     <TaskSection
                         icon="▷"
                         title={t('进行中', 'Running')}
+                        tasks={running}
                         emptyTitle={t('暂无进行中的任务', 'No running tasks')}
                         emptyDesc={t(
                             '模块任务将跨模块聚合在此展示',
                             'Module tasks will aggregate here across modules'
                         )}
+                        renderRow={renderRow}
                     />
                     <TaskSection
                         icon="✓"
                         title={t('最近完成', 'Recently completed')}
+                        tasks={recent}
                         emptyTitle={t(
                             '最近完成的任务会出现在这里',
                             'Completed tasks will appear here'
@@ -262,15 +426,18 @@ export function HomePage({ onOpen }: Props) {
                             '完成后可查看产物与引用',
                             'Inspect artifacts and references once done'
                         )}
+                        renderRow={renderRow}
                     />
                     <TaskSection
                         icon="⏰"
                         title={t('定时', 'Scheduled')}
+                        tasks={scheduled}
                         emptyTitle={t('暂无定时任务', 'No scheduled tasks')}
                         emptyDesc={t(
                             '定时节奏的任务将在此展示',
                             'Scheduled rhythms will surface here'
                         )}
+                        renderRow={renderRow}
                     />
                 </div>
             </div>

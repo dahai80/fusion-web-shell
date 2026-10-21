@@ -9,6 +9,7 @@ import { t } from '@/stores/lang';
 import { useManifests } from '@/stores/manifests';
 import { useNotifications } from '@/stores/notifications';
 import { getDevModules, restorePersistedTabs, useTabs } from '@/stores/tabs';
+import { useTasks } from '@/stores/tasks';
 import type { ModuleManifest } from '@/types/manifest';
 import { ErrorState, useAutoRetry } from '@fusion/web-ui';
 import { useEffect, useRef, useState } from 'react';
@@ -60,6 +61,16 @@ export function MainPage({ onLogout }: Props) {
         if (!store.polling) void store.start(NOTIFICATIONS_POLL_MS);
         else void store.pollNow();
         return () => useNotifications.getState().stop();
+    }, [manifestsLoaded]);
+
+    // Home task feed (issue #33): same poll cadence as notifications, kind
+    // `tasks` sources only; per-source isolation keeps offline snapshots.
+    useEffect(() => {
+        if (!manifestsLoaded) return;
+        const store = useTasks.getState();
+        if (!store.polling) void store.start(NOTIFICATIONS_POLL_MS);
+        else void store.pollNow();
+        return () => useTasks.getState().stop();
     }, [manifestsLoaded]);
 
     const handleOpen = (m: ModuleManifest, route?: string, pageTitle?: string) => {

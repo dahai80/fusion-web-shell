@@ -95,6 +95,35 @@ describe('notification center (issue #24, G11/C3)', () => {
         expect(useNotifications.getState().items).toHaveLength(0);
     });
 
+    it('excludes kind:tasks sources — those feed the Home task cards (issue #33)', async () => {
+        setupSources([
+            mk({
+                id: 'fusion-cowork',
+                notifications: [
+                    {
+                        id: 'tasks',
+                        label: '任务',
+                        endpoint: '/api/cowork/tasks',
+                        kind: 'tasks',
+                    },
+                    {
+                        id: 'approvals',
+                        label: '审批',
+                        endpoint: '/api/cowork/approvals',
+                        kind: 'approvals',
+                    },
+                ],
+            }),
+        ]);
+        const calls: string[] = [];
+        setFetcher(async (path) => {
+            calls.push(path);
+            return {};
+        });
+        await useNotifications.getState().pollNow();
+        expect(calls).toEqual(['/api/cowork/approvals']);
+    });
+
     it('polls declared sources, maps items, dedupes across polls', async () => {
         setupSources([
             mk({
