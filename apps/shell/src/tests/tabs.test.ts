@@ -53,6 +53,14 @@ describe('tabs store', () => {
         expect(id1).toBe(id2);
         expect(useTabs.getState().tabs.length).toBe(1);
     });
+    it('goHome clears the active tab so the host shows Home (issue #32)', () => {
+        useTabs.getState().openTab(mk('fusion-mlx'));
+        expect(useTabs.getState().activeTabId).not.toBeNull();
+        useTabs.getState().goHome();
+        expect(useTabs.getState().activeTabId).toBeNull();
+        // KeepAlive: tabs stay mounted, only the active pointer moves.
+        expect(useTabs.getState().tabs.length).toBe(1);
+    });
     it('opens multi-instance tabs with seq suffix', () => {
         useTabs.getState().openTab(mk('fusion-mlx'));
         useTabs.getState().openTab(mk('fusion-mlx'), { multi: true });

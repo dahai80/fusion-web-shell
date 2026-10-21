@@ -48,4 +48,21 @@ export interface ModuleManifest {
     searchProviders?: SearchProvider[];
     pages?: ModulePage[];
     notifications?: NotificationSource[];
+    home?: HomeCard[];
+}
+
+/**
+ * Home-page contribution (issue #32, gateway #263): one card a module
+ * renders on the shell Home landing. route is a module-relative deep link
+ * of the same form as ModulePage.route.
+ */
+export interface HomeCard {
+    id: string;
+    title: string;
+    title_en?: string;
+    description?: string;
+    description_en?: string;
+    route: string;
+    /** true = also surface as a suggested chip under the message box. */
+    chip?: boolean;
 }

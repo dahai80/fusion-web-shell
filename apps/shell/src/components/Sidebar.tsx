@@ -67,6 +67,16 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                 </span>
             </div>
             <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+                <button
+                    type="button"
+                    onClick={() => useTabs.getState().goHome()}
+                    className={`mb-3 flex w-full items-center rounded-md px-2 py-2 text-left text-sm ${activeTabId === null ? 'bg-brand/15 text-brand' : 'text-text-primary hover:bg-bg-muted'}`}
+                >
+                    <span aria-hidden className="mr-2">
+                        ⌂
+                    </span>
+                    {t('首页', 'Home')}
+                </button>
                 {groups.map((g) => (
                     <div key={g.category} className="mb-3">
                         <div className="px-2 pb-1 text-xs text-text-muted">{g.label}</div>

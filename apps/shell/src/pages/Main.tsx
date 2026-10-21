@@ -86,8 +86,12 @@ export function MainPage({ onLogout }: Props) {
             <Sidebar onOpen={handleOpen} onLogout={onLogout} />
             <div className="flex min-w-0 flex-1 flex-col">
                 <TabStrip />
-                <TabManager />
-                <BottomNav onOpen={handleOpen} onMore={() => setDrawerOpen(true)} />
+                <TabManager onOpen={handleOpen} />
+                <BottomNav
+                    onOpen={handleOpen}
+                    onMore={() => setDrawerOpen(true)}
+                    onHome={() => useTabs.getState().goHome()}
+                />
             </div>
             <MobileDrawer
                 open={drawerOpen}

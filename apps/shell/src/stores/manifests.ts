@@ -2,6 +2,7 @@ import * as api from '@/api/endpoints';
 import type { Lang } from '@/stores/lang';
 import type {
     DeviceMode,
+    HomeCard,
     ModuleManifest,
     ModulePage,
     NotificationKind,
@@ -89,6 +90,32 @@ function toNotificationSource(rec: Record<string, unknown>): NotificationSource 
     return { ...base, kind: kind as NotificationKind };
 }
 
+/** Home card sanitizer (issue #32): same route rules as pages. */
+function toHomeCard(rec: Record<string, unknown>): HomeCard | null {
+    const id = str(rec.id);
+    const title = str(rec.title);
+    const route = str(rec.route);
+    if (!id || !title || !route || !route.startsWith('/') || route.includes('#')) return null;
+    const card: HomeCard = {
+        id,
+        title,
+        title_en: str(rec.title_en) ?? undefined,
+        description: str(rec.description) ?? undefined,
+        description_en: str(rec.description_en) ?? undefined,
+        route,
+    };
+    if (rec.chip === true) card.chip = true;
+    return card;
+}
+
+/** dto.home is {cards: [...]}; absent or wrong shape = no contribution. */
+function pickHome(raw: unknown): HomeCard[] | undefined {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+    const cards = (raw as Record<string, unknown>).cards;
+    if (!Array.isArray(cards)) return undefined;
+    return pickExt(cards, toHomeCard, (c) => c.id);
+}
+
 function toManifest(dto: api.ManifestDto): ModuleManifest {
     return {
         id: dto.id,
@@ -110,6 +137,7 @@ function toManifest(dto: api.ManifestDto): ModuleManifest {
         searchProviders: pickExt(dto.searchProviders, toSearchProvider, (p) => p.id),
         pages: pickExt(dto.pages, toPage, (p) => p.route),
         notifications: pickExt(dto.notifications, toNotificationSource, (p) => p.id),
+        home: pickHome(dto.home),
     };
 }
 
