@@ -92,6 +92,13 @@ export const useNotifications = create<NotificationsState>((set, get) => ({
     },
 
     async pollNow() {
+        // Issue #28: background polls wait for a confirmed session; skip a
+        // round silently while login/restore is still in flight.
+        const auth = useAuth.getState();
+        if (auth.status !== 'authed' || !auth.token) {
+            console.log('[notifications] session not ready, skipping poll');
+            return;
+        }
         const { manifests, unreachableIds } = useManifests.getState();
         const canView = useAuth.getState().canView;
         const targets = manifests.flatMap((m) =>
