@@ -1,5 +1,6 @@
 import { t, useLang } from '@/stores/lang';
 import { useTabs } from '@/stores/tabs';
+import { TriangleAlert } from 'lucide-react';
 import { TabCloseButton } from './TabCloseButton';
 
 /**
@@ -44,8 +45,13 @@ export function TabStrip() {
                                 </span>
                             ) : null}
                             {tab.transientError ? (
-                                <span className="shrink-0 text-warning" title={tab.transientError}>
-                                    !
+                                <span
+                                    className="shrink-0 text-warning"
+                                    role="img"
+                                    aria-label={t('模块 API 异常', 'Module API error')}
+                                    title={`${t('模块 API 异常', 'Module API error')}: ${tab.transientError}`}
+                                >
+                                    <TriangleAlert size={12} aria-hidden="true" />
                                 </span>
                             ) : null}
                             {tab.hasActiveTask ? (
