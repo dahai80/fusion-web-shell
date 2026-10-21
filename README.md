@@ -59,6 +59,16 @@ Modules contribute Home cards via the manifest `home` section (gateway pass-thro
 
 Modules declare a `notifications` source with `kind: "tasks"` (poll contract in [`docs/manifest-ext-schema.md`](docs/manifest-ext-schema.md)); the shell polls it every 30s alongside the bell (tasks sources are excluded from the bell) and buckets items into running / recently completed / scheduled Home sections. Tasks carrying `pending_approval: {endpoint, prompt?, risk?}` render a three-action approval card (reject / allow once / always allow) — the decision `POST`s `{id, action}` to the module endpoint without opening the tab. Per-source failure isolation: a broken source keeps its last good snapshot, so offline task state stays readable. Card click deep-links `${entry}#${route}` into the owning module.
 
+## Delegation entry + global model selector (issue #34)
+
+The Home message box is a shell-level delegation entry with phase-1 rule routing (never silent — the decision and reason render under the box):
+
+- **Questions** → shell-level chat: `POST /api/v1/shell/chat/completions` (session-gated LLM proxy, fusion-gateway#268) with the persisted global model; the thread renders on Home.
+- **Task-flavored prompts** → deep-link into the owning module with the prompt prefilled: cowork `/workflows?new=1&prompt=<encoded>` (task verbs), agent-studio `/canvas?run=1&prompt=<encoded>` (orchestration/agent keywords).
+- **Audit**: every delegation appends `{ts, prompt, route, reason}` to `fusion.shell.delegations` (capped 50).
+- **Global model/effort selector** in the Home status strip (options from `GET /shell/fusion-mlx/v1/models` through the module proxy). Persisted at shell level; **module handoff contract**: module iframes are same-origin, so cowork delegate / agent-studio Composer converge their per-module model keys onto reading `localStorage["fusion.shell.model"]` / `["fusion.shell.effort"]` (`''`/`default` = gateway routing default).
+- Phase 2 (model-based classification with manual override chips) is deferred; the rule layer is a single pure function (`routeDelegation`) ready to swap.
+
 - PRD: `~/fusion/architecture/fusion-union-web-prd-1015.md`
 - UI Spec: `~/fusion/architecture/fusion-web-ui-spec-1015.md`
 
