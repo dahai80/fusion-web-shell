@@ -55,6 +55,10 @@ Modules contribute Home cards via the manifest `home` section (gateway pass-thro
 
 `chip: true` cards surface as suggested chips: click = prefill the message box + deep-link `${entry}#${route}` into the module. Unreachable modules render greyed (offline-safe).
 
+## Home task feed + inline approvals (issue #33)
+
+Modules declare a `notifications` source with `kind: "tasks"` (poll contract in [`docs/manifest-ext-schema.md`](docs/manifest-ext-schema.md)); the shell polls it every 30s alongside the bell (tasks sources are excluded from the bell) and buckets items into running / recently completed / scheduled Home sections. Tasks carrying `pending_approval: {endpoint, prompt?, risk?}` render a three-action approval card (reject / allow once / always allow) — the decision `POST`s `{id, action}` to the module endpoint without opening the tab. Per-source failure isolation: a broken source keeps its last good snapshot, so offline task state stays readable. Card click deep-links `${entry}#${route}` into the owning module.
+
 - PRD: `~/fusion/architecture/fusion-union-web-prd-1015.md`
 - UI Spec: `~/fusion/architecture/fusion-web-ui-spec-1015.md`
 

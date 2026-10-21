@@ -87,6 +87,30 @@ Cards with `chip: true` render as suggested chips; clicking one prefills the
 Home message box and deep-links `${entry}#${route}` into the module. Absent
 `home` = no contribution.
 
+## kind: tasks — Home task feed + inline approvals (shell#33)
+
+A `notifications` source with `kind: "tasks"` feeds the Home running /
+recently completed / scheduled sections instead of the bell. Poll contract:
+`GET ${endpoint}` returns `{"items": [...]}` with per-item fields:
+
+| Item field | Type | Required | Description |
+|---|---|---|---|
+| `id` | string | yes | Stable item id (not a fresh UUID per poll) |
+| `title` | string | yes | Card title |
+| `status` | string | no | Module vocabulary; host buckets: `scheduled` → scheduled; `done/succeeded/failed/error/cancelled/completed` → recent; everything else → running |
+| `progress` | number | no | 0-100, clamped; renders a progress bar |
+| `pending_approval` | object | no | `{endpoint, prompt?, risk?}` — renders the three-action approval card |
+| `artifacts` | number | no | Artifact count badge |
+| `updated_at` | string | no | Rendered as-is |
+| `route` | string | no | Module-relative `/...`; card click deep-links into the module |
+
+Approval wire contract: the host `POST`s to `pending_approval.endpoint` with
+`{"id": <item id>, "action": "reject" | "allow_once" | "always_allow"}`; any
+2xx removes the card, an error keeps it. The endpoint is
+gateway-absolute and must answer same-origin through the gateway.
+Per-source failure isolation: a broken source keeps its last good snapshot
+(offline tasks stay readable), and never breaks the rest of the feed.
+
 ## Validation (both sides)
 
 Gateway validates at registration (fusion-gateway#252), the shell host

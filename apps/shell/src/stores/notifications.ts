@@ -104,7 +104,10 @@ export const useNotifications = create<NotificationsState>((set, get) => ({
         const targets = manifests.flatMap((m) =>
             m.unreachable || unreachableIds.has(m.id) || !canView(m.id)
                 ? []
-                : (m.notifications ?? []).map((s) => ({ m, s }))
+                : // kind:tasks feeds the Home task cards (issue #33), not the bell.
+                  (m.notifications ?? [])
+                      .filter((s) => s.kind !== 'tasks')
+                      .map((s) => ({ m, s }))
         );
         const settled = await Promise.allSettled(
             targets.map(async ({ m, s }) => {

@@ -21,7 +21,7 @@ export interface ModulePage {
     title_en?: string;
 }
 
-export type NotificationKind = 'approvals' | 'runs' | 'engine';
+export type NotificationKind = 'approvals' | 'runs' | 'engine' | 'tasks';
 
 export interface NotificationSource {
     id: string;

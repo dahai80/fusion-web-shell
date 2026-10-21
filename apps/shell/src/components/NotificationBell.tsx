@@ -7,6 +7,7 @@ const KIND_LABEL: Record<NotificationItem['kind'], [string, string]> = {
     approvals: ['审批', 'Approvals'],
     runs: ['运行', 'Runs'],
     engine: ['引擎', 'Engine'],
+    tasks: ['任务', 'Tasks'],
 };
 
 const LEVEL_DOT: Record<NotificationItem['level'], string> = {

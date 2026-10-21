@@ -39,7 +39,7 @@ export function moduleTitle(m: ModuleManifest, lang: Lang = 'zh'): string {
 
 export const CATEGORY_LABELS = CATEGORY_LABEL;
 
-const NOTIFICATION_KINDS: readonly NotificationKind[] = ['approvals', 'runs', 'engine'];
+const NOTIFICATION_KINDS: readonly NotificationKind[] = ['approvals', 'runs', 'engine', 'tasks'];
 
 function str(v: unknown): string | null {
     return typeof v === 'string' && v.trim().length > 0 ? v.trim() : null;
