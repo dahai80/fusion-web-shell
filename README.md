@@ -69,6 +69,16 @@ The Home message box is a shell-level delegation entry with phase-1 rule routing
 - **Global model/effort selector** in the Home status strip (options from `GET /shell/fusion-mlx/v1/models` through the module proxy). Persisted at shell level; **module handoff contract**: module iframes are same-origin, so cowork delegate / agent-studio Composer converge their per-module model keys onto reading `localStorage["fusion.shell.model"]` / `["fusion.shell.effort"]` (`''`/`default` = gateway routing default).
 - Phase 2 (model-based classification with manual override chips) is deferred; the rule layer is a single pure function (`routeDelegation`) ready to swap.
 
+## Settings: API keys (issue #35)
+
+`/settings` (sidebar `⚙ Settings`): self-serve API keys for scripts/CI against the gateway.
+
+- **Create** — key name + scope matrix driven by registered manifests (`<module>:read|write|execute`, all unchecked by default). The plaintext is revealed exactly once in a copy dialog (never logged, never persisted client-side); the list surface only carries the last 4 chars.
+- **Rotate** — confirmation notes the grace window for the old key; the new plaintext uses the same one-time reveal.
+- **Revoke** — confirmation with the key name; immediate and irreversible.
+- **Usage** — per key: scopes, created/last-used dates, recent call count.
+- **Degradation** — until the gateway ships the key service (K2, fusion-gateway#262) the page shows a gateway-pending notice instead of an error wall; it becomes fully usable the moment the endpoint exists.
+
 - PRD: `~/fusion/architecture/fusion-union-web-prd-1015.md`
 - UI Spec: `~/fusion/architecture/fusion-web-ui-spec-1015.md`
 

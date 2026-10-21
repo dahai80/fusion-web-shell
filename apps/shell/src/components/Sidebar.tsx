@@ -150,13 +150,22 @@ export function Sidebar({ onOpen, onLogout }: Props) {
             </nav>
             <div className="border-t border-border px-4 py-3 text-xs text-text-secondary">
                 <div className="truncate">{user?.display_name ?? user?.user_id}</div>
-                <button
-                    type="button"
-                    onClick={onLogout}
-                    className="mt-1 text-text-muted hover:text-error"
-                >
-                    {t('退出登录', 'Sign out')}
-                </button>
+                <div className="mt-1 flex items-center gap-3">
+                    <button
+                        type="button"
+                        onClick={() => window.location.assign('/settings')}
+                        className="text-text-muted hover:text-brand"
+                    >
+                        {t('⚙ 设置', '⚙ Settings')}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onLogout}
+                        className="text-text-muted hover:text-error"
+                    >
+                        {t('退出登录', 'Sign out')}
+                    </button>
+                </div>
             </div>
         </aside>
     );
