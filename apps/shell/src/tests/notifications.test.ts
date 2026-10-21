@@ -44,6 +44,57 @@ describe('notification center (issue #24, G11/C3)', () => {
         setFetcher(async () => ({}));
     });
 
+    it('skips the poll entirely when the session is not ready (issue #28)', async () => {
+        setupSources([
+            mk({
+                id: 'fusion-cowork',
+                notifications: [
+                    {
+                        id: 'approvals',
+                        label: '审批',
+                        endpoint: '/api/cowork/approvals?status=pending',
+                        kind: 'approvals',
+                    },
+                ],
+            }),
+        ]);
+        useAuth.setState({ user: null, token: null, status: 'guest' });
+        let calls = 0;
+        setFetcher(async () => {
+            calls += 1;
+            return {};
+        });
+        await useNotifications.getState().pollNow();
+        expect(calls).toBe(0);
+        expect(useNotifications.getState().items).toHaveLength(0);
+    });
+
+    it('skips the poll while a session restore is still in flight (issue #28)', async () => {
+        setupSources([
+            mk({
+                id: 'fusion-cowork',
+                notifications: [
+                    {
+                        id: 'approvals',
+                        label: '审批',
+                        endpoint: '/api/cowork/approvals?status=pending',
+                        kind: 'approvals',
+                    },
+                ],
+            }),
+        ]);
+        // User object present (canView works) but session not confirmed yet.
+        useAuth.setState({ status: 'unknown' });
+        let calls = 0;
+        setFetcher(async () => {
+            calls += 1;
+            return {};
+        });
+        await useNotifications.getState().pollNow();
+        expect(calls).toBe(0);
+        expect(useNotifications.getState().items).toHaveLength(0);
+    });
+
     it('polls declared sources, maps items, dedupes across polls', async () => {
         setupSources([
             mk({

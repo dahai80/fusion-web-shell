@@ -13,6 +13,11 @@ export interface ErrorEnvelope {
  * Unified HTTP client (PRD §4.1): Bearer interceptor, 401 redirect, 403
  * graceful, retryable-envelope surfacing (toast + active tab strip).
  */
+
+/** First-party gateway auth surfaces whose 401 means "shell session dead" (issue #28). */
+function isShellAuthPath(path: string): boolean {
+    return path.startsWith('/api/v1/shell/') || path.startsWith('/api/v1/password');
+}
 export class ApiClient {
     private tokenProvider: () => string | null;
     private onUnauthorized: () => void;
@@ -49,9 +54,28 @@ export class ApiClient {
                 },
             });
             if (res.status === 401) {
-                sessionStorage.removeItem('fusion.shell.token');
-                this.onUnauthorized();
-                throw Object.assign(new Error('unauthorized'), { status: 401 });
+                // Issue #28: only shell's own auth surfaces mean "session dead".
+                // Module API 401s (proxied iframes, notification polls, palette
+                // search) route to the owning tab's error state instead — a
+                // single failing module must never kick the whole shell to login.
+                if (isShellAuthPath(path)) {
+                    sessionStorage.removeItem('fusion.shell.token');
+                    this.onUnauthorized();
+                    throw Object.assign(new Error('unauthorized'), { status: 401 });
+                }
+                const env = (await res.json().catch(() => null)) as ErrorEnvelope | null;
+                const message = env?.message ?? '模块鉴权失败 (401)';
+                if (!init.quiet) {
+                    console.warn('[api] module auth failed:', env?.module_id ?? path, message);
+                    pushToast('warning', message);
+                    const tabsState = useTabs.getState();
+                    const ownerTab = env?.module_id
+                        ? tabsState.tabs.find((tb) => tb.manifestId === env.module_id)?.id
+                        : undefined;
+                    const targetId = ownerTab ?? tabsState.activeTabId;
+                    if (targetId) tabsState.setTransientError(targetId, message);
+                }
+                throw Object.assign(new Error(message), { status: 401, envelope: env });
             }
             if (res.status === 403) {
                 const env = await res.json().catch(() => null);

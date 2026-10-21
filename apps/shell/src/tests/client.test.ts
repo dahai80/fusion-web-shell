@@ -39,3 +39,93 @@ describe('ApiClient quiet requests (review fix #2)', () => {
         expect(useTabs.getState().tabs[0]!.transientError).toBeUndefined();
     });
 });
+
+describe('ApiClient scoped 401 handling (issue #28)', () => {
+    let unauthorizedCalls: number;
+    beforeEach(() => {
+        useTabs.setState({ tabs: [], activeTabId: null });
+        sessionStorage.clear();
+        unauthorizedCalls = 0;
+    });
+
+    const mkClient = () =>
+        new ApiClient({
+            tokenProvider: () => sessionStorage.getItem('fusion.shell.token'),
+            onUnauthorized: () => {
+                unauthorizedCalls += 1;
+            },
+        });
+
+    const err401 = (body: unknown) =>
+        new Response(JSON.stringify(body), {
+            status: 401,
+            headers: { 'Content-Type': 'application/json' },
+        });
+
+    it('module API 401 keeps the session and surfaces the owning tab error', async () => {
+        sessionStorage.setItem('fusion.shell.token', 'tok');
+        useTabs.getState().openTab(manifest);
+        globalThis.fetch = (async () =>
+            err401({
+                code: 'auth_failed',
+                message: 'cowork token invalid',
+            })) as unknown as typeof fetch;
+        await expect(mkClient().get('/api/cowork/notifications')).rejects.toThrow(
+            'cowork token invalid'
+        );
+        expect(unauthorizedCalls).toBe(0);
+        expect(sessionStorage.getItem('fusion.shell.token')).toBe('tok');
+        expect(useTabs.getState().tabs[0]!.transientError).toBe('cowork token invalid');
+    });
+
+    it('quiet module API 401 stays silent (background polls)', async () => {
+        sessionStorage.setItem('fusion.shell.token', 'tok');
+        useTabs.getState().openTab(manifest);
+        globalThis.fetch = (async () =>
+            err401({
+                code: 'auth_failed',
+                message: 'cowork token invalid',
+            })) as unknown as typeof fetch;
+        await expect(mkClient().get('/api/cowork/notifications', { quiet: true })).rejects.toThrow(
+            'cowork token invalid'
+        );
+        expect(unauthorizedCalls).toBe(0);
+        expect(useTabs.getState().tabs[0]!.transientError).toBeUndefined();
+    });
+
+    it('shell API 401 clears the session and triggers logout redirect', async () => {
+        sessionStorage.setItem('fusion.shell.token', 'tok');
+        globalThis.fetch = (async () =>
+            err401({
+                code: 'unauthorized',
+                message: 'session expired',
+            })) as unknown as typeof fetch;
+        await expect(mkClient().get('/api/v1/shell/me')).rejects.toThrow('unauthorized');
+        expect(unauthorizedCalls).toBe(1);
+        expect(sessionStorage.getItem('fusion.shell.token')).toBeNull();
+    });
+
+    it('password change 401 is treated as session invalid (first-party auth surface)', async () => {
+        sessionStorage.setItem('fusion.shell.token', 'tok');
+        globalThis.fetch = (async () =>
+            err401({
+                code: 'unauthorized',
+                message: 'session expired',
+            })) as unknown as typeof fetch;
+        await expect(mkClient().post('/api/v1/password', { password: 'x' })).rejects.toThrow(
+            'unauthorized'
+        );
+        expect(unauthorizedCalls).toBe(1);
+        expect(sessionStorage.getItem('fusion.shell.token')).toBeNull();
+    });
+
+    it('module API 401 with no envelope falls back to a generic message', async () => {
+        sessionStorage.setItem('fusion.shell.token', 'tok');
+        useTabs.getState().openTab(manifest);
+        globalThis.fetch = (async () =>
+            new Response('denied', { status: 401 })) as unknown as typeof fetch;
+        await expect(mkClient().get('/api/cowork/runs')).rejects.toThrow('模块鉴权失败 (401)');
+        expect(unauthorizedCalls).toBe(0);
+        expect(useTabs.getState().tabs[0]!.transientError).toBe('模块鉴权失败 (401)');
+    });
+});
