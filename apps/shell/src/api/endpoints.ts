@@ -58,6 +58,22 @@ export function fetchManifests(): Promise<ManifestDto[]> {
     return sharedClient().get('/api/v1/shell/manifests');
 }
 
+/**
+ * Loaded engine models for the global selector (issue #34): fusion-mlx's
+ * OpenAI list route reached through the same-origin module proxy.
+ */
+export function fetchEngineModels(): Promise<string[]> {
+    return sharedClient()
+        .get<{ data?: Array<{ id?: string }> }>('/shell/fusion-mlx/v1/models', { quiet: true })
+        .then((r) =>
+            (r.data ?? []).map((m) => m.id).filter((id): id is string => typeof id === 'string')
+        )
+        .catch((err) => {
+            console.warn('[endpoints] engine model list failed', err);
+            return [];
+        });
+}
+
 export function changePassword(password: string): Promise<void> {
     return sharedClient().post('/api/v1/password', { password });
 }

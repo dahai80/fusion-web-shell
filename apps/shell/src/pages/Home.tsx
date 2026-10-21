@@ -1,11 +1,19 @@
+import { fetchEngineModels } from '@/api/endpoints';
 import { pushToast } from '@/components/ToastHost';
 import { useAuth } from '@/stores/auth';
+import {
+    type DelegationDecision,
+    logDelegation,
+    routeDelegation,
+    useDelegation,
+} from '@/stores/delegation';
 import { t, useLang } from '@/stores/lang';
 import { moduleTitle, useManifests } from '@/stores/manifests';
+import { type Effort, usePrefs } from '@/stores/prefs';
 import { type ApprovalAction, type TaskItem, taskBucket, useTasks } from '@/stores/tasks';
 import type { ModuleManifest } from '@/types/manifest';
 import { EmptyState } from '@fusion/web-ui';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 
 interface Props {
     onOpen(manifest: ModuleManifest, route?: string, pageTitle?: string): void;
@@ -104,6 +112,19 @@ function StatusStrip({
 }: { manifests: ModuleManifest[]; unreachableIds: Set<string> }) {
     const engine = manifests.find((m) => m.id === ENGINE_ID);
     const node = manifests.find((m) => m.id === NODE_ID);
+    // Global model/effort selector (issue #34): shell-level persistence, handed
+    // off to modules via the documented same-origin localStorage keys.
+    const model = usePrefs((s) => s.model);
+    const setModel = usePrefs((s) => s.setModel);
+    const effort = usePrefs((s) => s.effort);
+    const setEffort = usePrefs((s) => s.setEffort);
+    const [models, setModels] = useState<string[]>([]);
+    useEffect(() => {
+        void fetchEngineModels().then((ids) => {
+            console.log('[home] engine models:', ids.length);
+            setModels(ids);
+        });
+    }, []);
     return (
         <div className="flex flex-wrap items-center gap-4">
             <StatusDot
@@ -122,15 +143,31 @@ function StatusStrip({
                         : t('常驻节点未注册', 'Node not registered')
                 }
             />
-            {/* Global model/effort selector placeholder — wired in the delegation issue (#34). */}
-            <button
-                type="button"
-                disabled
-                title={t('全局模型选择器即将上线', 'Global model selector coming soon')}
-                className="rounded-md border border-border px-2.5 py-1 text-xs text-text-muted"
+            <select
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                aria-label={t('全局模型', 'Global model')}
+                className="rounded-md border border-border bg-bg-elevated px-2 py-1 text-xs text-text-secondary"
             >
-                {t('模型', 'Model')} ▾
-            </button>
+                <option value="">{t('模型：默认', 'Model: default')}</option>
+                {models.map((id) => (
+                    <option key={id} value={id}>
+                        {id}
+                    </option>
+                ))}
+                {model && !models.includes(model) ? <option value={model}>{model}</option> : null}
+            </select>
+            <select
+                value={effort}
+                onChange={(e) => setEffort(e.target.value as Effort)}
+                aria-label={t('推理力度', 'Effort')}
+                className="rounded-md border border-border bg-bg-elevated px-2 py-1 text-xs text-text-secondary"
+            >
+                <option value="default">{t('力度：默认', 'Effort: default')}</option>
+                <option value="low">{t('力度：低', 'Effort: low')}</option>
+                <option value="medium">{t('力度：中', 'Effort: medium')}</option>
+                <option value="high">{t('力度：高', 'Effort: high')}</option>
+            </select>
         </div>
     );
 }
@@ -338,6 +375,43 @@ export function HomePage({ onOpen }: Props) {
         else console.warn('[home] chip target module not registered:', moduleId);
     };
 
+    // Delegation (issue #34): phase-1 rule routing; the decision is shown,
+    // never silent, and every send is audit-logged.
+    const chatMessages = useDelegation((s) => s.messages);
+    const chatBusy = useDelegation((s) => s.busy);
+    const chatError = useDelegation((s) => s.error);
+    const ask = useDelegation((s) => s.ask);
+    const [lastDecision, setLastDecision] = useState<DelegationDecision | null>(null);
+
+    const send = () => {
+        const prompt = draft.trim();
+        if (!prompt) return;
+        const decision = routeDelegation(prompt);
+        setLastDecision(decision);
+        logDelegation(
+            prompt,
+            decision.route,
+            lang === 'en' ? decision.reasonEn : decision.reasonZh
+        );
+        if (decision.route === 'chat') {
+            setDraft('');
+            void ask(prompt);
+            return;
+        }
+        const targetId = decision.route === 'cowork' ? 'fusion-cowork' : 'fusion-agent-studio';
+        const m = byId.get(targetId);
+        if (m && decision.handoffRoute) {
+            onOpen(m, decision.handoffRoute);
+            setDraft('');
+        } else {
+            console.warn('[home] handoff target not registered:', targetId);
+            pushToast(
+                'error',
+                t('目标模块未注册或未授权', 'Target module not registered or granted')
+            );
+        }
+    };
+
     return (
         <div className="h-full overflow-y-auto">
             <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-8 md:px-8">
@@ -352,6 +426,12 @@ export function HomePage({ onOpen }: Props) {
                     <textarea
                         value={draft}
                         onChange={(e) => setDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                send();
+                            }
+                        }}
                         rows={2}
                         placeholder={t(
                             '问点什么，或直接把活交出来…',
@@ -362,13 +442,52 @@ export function HomePage({ onOpen }: Props) {
                     />
                     <button
                         type="button"
-                        onClick={() => setDraft('')}
-                        title={t('智能路由即将上线（#34）', 'Smart routing coming soon (#34)')}
-                        className="h-10 shrink-0 rounded-card bg-brand px-4 text-sm text-white"
+                        onClick={send}
+                        disabled={chatBusy}
+                        className="h-10 shrink-0 rounded-card bg-brand px-4 text-sm text-white disabled:opacity-50"
                     >
-                        {t('发送', 'Send')}
+                        {chatBusy ? t('回答中…', 'Thinking…') : t('发送', 'Send')}
                     </button>
                 </div>
+
+                {lastDecision ? (
+                    <div
+                        className="rounded-card border border-border bg-bg-muted px-3 py-2 text-xs text-text-secondary"
+                        role="status"
+                    >
+                        {t('路由决策', 'Routing')}:{' '}
+                        {lastDecision.route === 'chat'
+                            ? t('壳级问答', 'Shell chat')
+                            : lastDecision.route === 'cowork'
+                              ? 'Cowork'
+                              : 'Agent Studio'}{' '}
+                        — {lang === 'en' ? lastDecision.reasonEn : lastDecision.reasonZh}
+                    </div>
+                ) : null}
+
+                {chatMessages.length > 0 || chatError ? (
+                    <section
+                        className="flex max-h-80 flex-col gap-2 overflow-y-auto rounded-card border border-border bg-bg-elevated px-4 py-3"
+                        aria-label={t('壳级问答', 'Shell chat')}
+                    >
+                        {chatMessages.map((m, i) => (
+                            <div
+                                key={i}
+                                className={`text-sm ${m.role === 'user' ? 'text-text-primary' : 'text-text-secondary'}`}
+                            >
+                                <span className="mr-2 font-mono text-xs text-text-muted">
+                                    {m.role === 'user' ? t('你', 'You') : t('Fusion', 'Fusion')}
+                                </span>
+                                {m.content}
+                            </div>
+                        ))}
+                        {chatError ? (
+                            <div className="text-xs text-error" role="alert">
+                                {t('问答失败', 'Chat failed')}: {chatError}
+                            </div>
+                        ) : null}
+                    </section>
+                ) : null}
 
                 <div className="flex flex-wrap gap-2" aria-label={t('建议任务', 'Suggested tasks')}>
                     {STATIC_CHIPS.map((c) => {
