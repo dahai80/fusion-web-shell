@@ -1,14 +1,21 @@
-import { t, useLang } from '@/stores/lang';
+import { HomePage } from '@/pages/Home';
+import { useLang } from '@/stores/lang';
 import { useManifests } from '@/stores/manifests';
 import { useTabs } from '@/stores/tabs';
+import type { ModuleManifest } from '@/types/manifest';
 import { useEffect, useMemo } from 'react';
 import { TabView } from './TabView';
+
+interface Props {
+    onOpen(manifest: ModuleManifest, route?: string, pageTitle?: string): void;
+}
 
 /**
  * KeepAlive container (PRD §6): every tab stays mounted; switching toggles
  * display via the hidden class only. DOM/iframe state survives switches (A3).
+ * No active tab = Home landing (issue #32).
  */
-export function TabManager() {
+export function TabManager({ onOpen }: Props) {
     const tabs = useTabs((s) => s.tabs);
     const activeTabId = useTabs((s) => s.activeTabId);
     const markCrashed = useTabs((s) => s.markCrashed);
@@ -35,11 +42,7 @@ export function TabManager() {
                     onReload={() => restoreIframe(byId.get(tab.manifestId)!)}
                 />
             ))}
-            {tabs.length === 0 ? (
-                <div className="flex h-full items-center justify-center text-sm text-text-muted">
-                    {t('从左侧菜单选择一个模块开始', 'Pick a module from the menu to start')}
-                </div>
-            ) : null}
+            {activeTabId === null ? <HomePage onOpen={onOpen} /> : null}
         </div>
     );
 }

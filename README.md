@@ -39,6 +39,22 @@ Manifest schema v1 ext (all optional, sanitized on load; gateway pass-through of
 
 Full schema addendum with copy-paste manifest example and both-sides validation vocabulary: [`docs/manifest-ext-schema.md`](docs/manifest-ext-schema.md) (#26).
 
+## Home (issue #32)
+
+Home is the default landing when no tab is active: time-of-day greeting, status strip (engine `fusion-mlx` / resident node `fusion-multi-node` online dots + global model selector placeholder), delegation message box, suggested task chips, and running / recently completed / scheduled task sections (empty states until the aggregation API ships). The sidebar gains a `⌂ 首页` entry and mobile BottomNav a Home slot; both clear the active tab pointer (KeepAlive tabs stay mounted).
+
+Modules contribute Home cards via the manifest `home` section (gateway pass-through: fusion-gateway#264):
+
+```json
+{
+    "home": {
+        "cards": [{ "id": "monthly-close", "title": "月度对账", "title_en": "Monthly close", "route": "/workflows/monthly-close", "chip": true }]
+    }
+}
+```
+
+`chip: true` cards surface as suggested chips: click = prefill the message box + deep-link `${entry}#${route}` into the module. Unreachable modules render greyed (offline-safe).
+
 - PRD: `~/fusion/architecture/fusion-union-web-prd-1015.md`
 - UI Spec: `~/fusion/architecture/fusion-web-ui-spec-1015.md`
 

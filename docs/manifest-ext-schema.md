@@ -1,10 +1,10 @@
 # Manifest ext fields — schema v1 addendum (PRD §5.1)
 
 Addendum to the module manifest schema for the shell host features shipped in
-fusion-web-shell#24: the ⌘K command palette (cross-module search), the
-notification center, and sub-page deep links. Gateway pass-through landed in
-fusion-gateway#252; this document is the copy-paste reference for module repos
-declaring the fields.
+fusion-web-shell#24 (⌘K command palette, notification center, sub-page deep
+links) and fusion-web-shell#32/#33 (Home page cards, task feed). Gateway
+pass-through landed in fusion-gateway#252 and fusion-gateway#264; this
+document is the copy-paste reference for module repos declaring the fields.
 
 ## Where the fields live
 
@@ -49,7 +49,7 @@ drawer, and ⌘K navigation.
 | `label` | string | yes | zh label shown in the bell panel |
 | `label_en` | string | no | en label |
 | `endpoint` | string | yes | Gateway-absolute `/...` path of the poll API |
-| `kind` | string | yes | One of `approvals`, `runs`, `engine` |
+| `kind` | string | yes | One of `approvals`, `runs`, `engine`, `tasks` |
 
 Poll contract (host side): `GET ${endpoint}` returns
 `{"items": [{...}]}` with per-item fields:
@@ -68,15 +68,34 @@ The host composes the stable read-set key as
 The host polls every 30s, drops items with missing `id`/`title`, caps 32
 items per source, and isolates per-source failures.
 
+## home — Home page cards (shell#32)
+
+`home` is an optional object (not an array) contributing cards to the shell
+Home landing:
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `home.cards[].id` | string | yes | Card key, unique within the module |
+| `home.cards[].title` | string | yes | zh card title |
+| `home.cards[].title_en` | string | no | en card title |
+| `home.cards[].description` | string | no | zh one-line description |
+| `home.cards[].description_en` | string | no | en one-line description |
+| `home.cards[].route` | string | yes | Module-relative `/...` deep link, must not contain `#` |
+| `home.cards[].chip` | boolean | no | `true` = also surface as a suggested chip under the Home message box |
+
+Cards with `chip: true` render as suggested chips; clicking one prefills the
+Home message box and deep-links `${entry}#${route}` into the module. Absent
+`home` = no contribution.
+
 ## Validation (both sides)
 
 Gateway validates at registration (fusion-gateway#252), the shell host
 re-sanitizes on load — modules must satisfy the strictest of the two:
 
 - Endpoints and page routes: gateway-absolute `/...`, no `..` traversal.
-- Page routes must not contain `#` (the deep-link form is `#${route}`).
-- `kind` is restricted to `approvals|runs|engine`.
-- Each ext array caps at 32 entries.
+- Page routes and home card routes must not contain `#` (the deep-link form is `#${route}`).
+- `kind` is restricted to `approvals|runs|engine|tasks`.
+- Each ext array caps at 32 entries (`home.cards` included).
 
 ## Copy-paste example
 
@@ -98,8 +117,14 @@ re-sanitizes on load — modules must satisfy the strictest of the two:
     { "route": "/runs", "title": "运行记录", "title_en": "Runs" }
   ],
   "notifications": [
-    { "id": "cowork-approvals", "label": "审批", "label_en": "Approvals", "endpoint": "/api/v1/cowork/notifications", "kind": "approvals" }
-  ]
+    { "id": "cowork-approvals", "label": "审批", "label_en": "Approvals", "endpoint": "/api/v1/cowork/notifications", "kind": "approvals" },
+    { "id": "cowork-tasks", "label": "任务", "label_en": "Tasks", "endpoint": "/api/v1/cowork/tasks", "kind": "tasks" }
+  ],
+  "home": {
+    "cards": [
+      { "id": "monthly-close", "title": "月度对账", "title_en": "Monthly close", "description": "对账并生成报告", "route": "/workflows/monthly-close", "chip": true }
+    ]
+  }
 }
 ```
 

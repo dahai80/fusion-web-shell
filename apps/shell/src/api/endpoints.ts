@@ -35,6 +35,8 @@ export interface ManifestDto {
     searchProviders?: unknown;
     pages?: unknown;
     notifications?: unknown;
+    /** Home contribution (issue #32, gateway #263): {cards: [...]}. */
+    home?: unknown;
 }
 
 export function login(

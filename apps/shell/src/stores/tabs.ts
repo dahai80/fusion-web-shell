@@ -35,6 +35,8 @@ export interface TabsState {
     activeTabId: string | null;
     openTab(manifest: ModuleManifest, opts?: OpenTabOptions): string | null;
     activateTab(id: string): void;
+    /** Clear the active pointer so the host shows Home (issue #32). Tabs stay mounted. */
+    goHome(): void;
     closeTab(id: string): boolean;
     /** Close ignoring the active-task guard (used after user confirmation). */
     forceCloseTab(id: string): void;
@@ -205,6 +207,9 @@ export const useTabs = create<TabsState>((set, get) => ({
     },
     activateTab(id) {
         set({ activeTabId: id });
+    },
+    goHome() {
+        set({ activeTabId: null });
     },
     closeTab(id) {
         const tab = get().tabs.find((t) => t.id === id);
