@@ -158,6 +158,15 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                     >
                         {t('⚙ 设置', '⚙ Settings')}
                     </button>
+                    {user?.roles.includes('admin') ? (
+                        <button
+                            type="button"
+                            onClick={() => window.location.assign('/users')}
+                            className="text-text-muted hover:text-brand"
+                        >
+                            {t('👥 用户', '👥 Users')}
+                        </button>
+                    ) : null}
                     {user?.roles.includes('admin') || user?.roles.includes('auditor') ? (
                         <button
                             type="button"

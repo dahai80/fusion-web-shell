@@ -18,7 +18,9 @@ const AuditPage = lazy(() => import('@/pages/Audit').then((m) => ({ default: m.A
 type Route = { name: 'main' } | { name: 'admin-users' } | { name: 'settings' } | { name: 'audit' };
 
 function readRoute(): Route {
-    if (window.location.pathname === '/admin/users') return { name: 'admin-users' };
+    // /users, not /admin/users: the gateway reserves /admin/* for its own
+    // embedded admin SPA, which would shadow this route (#42 followup).
+    if (window.location.pathname === '/users') return { name: 'admin-users' };
     if (window.location.pathname === '/settings') return { name: 'settings' };
     if (window.location.pathname === '/audit') return { name: 'audit' };
     return { name: 'main' };

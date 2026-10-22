@@ -228,13 +228,56 @@ export const SYNC_EXAMPLE = {
     },
 };
 
-/** Parse a JSON textarea payload; returns an error message on invalid JSON. */
+/**
+ * Parse a JSON textarea payload; returns an error message on invalid JSON.
+ * requireNonEmpty rejects blank input (connector docs and policy overrides
+ * must be explicit; adapter credentials keep the `{}` fallback).
+ */
 export function parseJsonInput(
-    text: string
+    text: string,
+    opts?: { requireNonEmpty?: boolean }
 ): { ok: true; value: unknown } | { ok: false; error: string } {
+    if (opts?.requireNonEmpty && text.trim().length === 0) {
+        return { ok: false, error: 'empty input' };
+    }
     try {
         return { ok: true, value: JSON.parse(text || '{}') };
     } catch (err) {
         return { ok: false, error: (err as Error).message };
     }
+}
+
+/**
+ * Human-readable message from an ApiClient error (issue #42 followup): the
+ * gateway attaches the response envelope; detail may be a string, a
+ * {reason, users} object (role still in use), or a problems list.
+ */
+export function formatAdminError(err: unknown): string {
+    if (!err) return '';
+    const e = err as { message?: string; envelope?: Record<string, unknown> };
+    const env = e.envelope;
+    if (env) {
+        const detail = env.detail;
+        if (typeof detail === 'string' && detail.length > 0) return detail;
+        if (detail && typeof detail === 'object') {
+            const d = detail as { reason?: unknown; users?: unknown };
+            const reason = typeof d.reason === 'string' ? d.reason : '';
+            const users = Array.isArray(d.users)
+                ? d.users.filter((u): u is string => typeof u === 'string').join(', ')
+                : '';
+            if (reason || users) return [reason, users].filter(Boolean).join(': ');
+        }
+        if (Array.isArray(env.problems)) {
+            const problems = env.problems.filter(
+                (p): p is string => typeof p === 'string' && p.length > 0
+            );
+            if (problems.length > 0) return problems.join('; ');
+        }
+    }
+    return e.message ?? '';
+}
+
+/** Display-only path shortening (audit.html strips the API prefix). */
+export function stripAuditPathPrefix(path: string): string {
+    return path.startsWith('/api/v1/shell') ? path.slice('/api/v1/shell'.length) : path;
 }

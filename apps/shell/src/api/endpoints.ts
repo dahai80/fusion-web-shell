@@ -16,6 +16,7 @@ export interface AdminUserRow {
     disabled: boolean;
     must_change_password: boolean;
     permissions: string[];
+    created_at?: number;
 }
 
 export interface ManifestDto {

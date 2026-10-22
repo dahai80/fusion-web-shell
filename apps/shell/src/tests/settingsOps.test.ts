@@ -5,11 +5,13 @@ import {
     auditQueryString,
     collectMenuMatrix,
     effectiveMenus,
+    formatAdminError,
     parseJsonInput,
     sanitizeAdapters,
     sanitizeAudit,
     sanitizeConnectors,
     sanitizeRoles,
+    stripAuditPathPrefix,
 } from '../lib/settingsOps';
 
 describe('settingsOps sanitizers (issue #42, migration E6)', () => {
@@ -199,5 +201,47 @@ describe('audit filter + json input (issue #42)', () => {
             expect(Object.keys(doc.operations).length).toBeGreaterThan(0);
             expect(doc.credential_ref).toBe('aws-catalog-sync');
         }
+    });
+});
+
+describe('E6 parity followup (issue #42 incomplete fix)', () => {
+    it('parseJsonInput rejects empty input when requireNonEmpty is set', () => {
+        expect(parseJsonInput('{"a":1}', { requireNonEmpty: true })).toEqual({
+            ok: true,
+            value: { a: 1 },
+        });
+        const empty = parseJsonInput('', { requireNonEmpty: true });
+        expect(empty.ok).toBe(false);
+        const blank = parseJsonInput('   ', { requireNonEmpty: true });
+        expect(blank.ok).toBe(false);
+        // default behavior unchanged: empty falls back to {}
+        expect(parseJsonInput('')).toEqual({ ok: true, value: {} });
+    });
+
+    it('formatAdminError surfaces envelope detail, including reassigned-user lists', () => {
+        const strDetail = Object.assign(new Error('HTTP 400'), {
+            envelope: { message: 'save failed', detail: 'name already taken' },
+        });
+        expect(formatAdminError(strDetail)).toBe('name already taken');
+        const objDetail = Object.assign(new Error('HTTP 409'), {
+            envelope: {
+                message: 'role in use',
+                detail: { reason: 'role still has users', users: ['op1', 'op2'] },
+            },
+        });
+        expect(formatAdminError(objDetail)).toBe('role still has users: op1, op2');
+        const problems = Object.assign(new Error('HTTP 400'), {
+            envelope: { message: 'invalid connector', problems: ['missing base_url', 'bad op'] },
+        });
+        expect(formatAdminError(problems)).toBe('missing base_url; bad op');
+        expect(formatAdminError(new Error('plain failure'))).toBe('plain failure');
+        expect(formatAdminError(null)).toBe('');
+    });
+
+    it('stripAuditPathPrefix shortens shell paths for display', () => {
+        expect(stripAuditPathPrefix('/api/v1/shell/config/pricing')).toBe('/config/pricing');
+        expect(stripAuditPathPrefix('/api/v1/other/thing')).toBe('/api/v1/other/thing');
+        expect(stripAuditPathPrefix('/config/x')).toBe('/config/x');
+        expect(stripAuditPathPrefix('')).toBe('');
     });
 });

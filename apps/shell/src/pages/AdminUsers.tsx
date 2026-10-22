@@ -6,6 +6,7 @@ import {
     type RoleRow,
     collectMenuMatrix,
     effectiveMenus,
+    formatAdminError,
     sanitizeRoles,
 } from '@/lib/settingsOps';
 import { useAuth } from '@/stores/auth';
@@ -21,6 +22,9 @@ import { useCallback, useEffect, useState } from 'react';
 type LoadState = 'loading' | 'ready' | 'error';
 type AdminTab = 'users' | 'roles' | 'menus';
 
+/** users.html ALL_ROLES default; replaced by the roles endpoint once it answers. */
+const DEFAULT_ROLE_NAMES = ['operator', 'ops_lead', 'admin', 'auditor'];
+
 /** Built-in admin page (PRD §4.2, migration E6): Users / Roles / Menu
  *  Permissions tabs — Users tab is the existing user CRUD + grant tree;
  *  Roles and Menu Permissions follow the f-ecommerce users.html GUI backed
@@ -35,6 +39,12 @@ export function AdminUsersPage() {
     const [confirmDelete, setConfirmDelete] = useState<api.AdminUserRow | null>(null);
     const manifests = useManifests((s) => s.manifests);
     const me = useAuth((s) => s.user);
+    const [roleNames, setRoleNames] = useState<string[]>(DEFAULT_ROLE_NAMES);
+    const [newUsername, setNewUsername] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [newRole, setNewRole] = useState('operator');
+    const [createMsg, setCreateMsg] = useState('');
+    const [createOk, setCreateOk] = useState(true);
 
     const reload = useCallback(async () => {
         setState('loading');
@@ -49,12 +59,67 @@ export function AdminUsersPage() {
         }
     }, []);
 
-    useEffect(() => {
-        void reload();
-    }, [reload]);
+    const isAdmin = me?.roles.includes('admin') ?? false;
 
-    if (me && !me.roles.includes('admin')) {
+    useEffect(() => {
+        // Guard before fetch (users.html whoami): non-admins never fire listUsers.
+        if (me && !isAdmin) return;
+        if (me) void reload();
+    }, [reload, me, isAdmin]);
+
+    useEffect(() => {
+        if (!isAdmin) return;
+        api.listRoles()
+            .then((d) => {
+                const parsed = sanitizeRoles(d);
+                if (parsed.roles.length > 0) setRoleNames(parsed.roles.map((r) => r.name));
+            })
+            .catch((err) => {
+                if (!isGatewayPending(err))
+                    console.warn('[admin] roles list failed for user tab', err);
+            });
+    }, [isAdmin]);
+
+    const createUser = () => {
+        if (!newUsername.trim() || !newPassword || !newRole) {
+            setCreateOk(false);
+            setCreateMsg('用户名、密码与角色必填。');
+            return;
+        }
+        api.createUser({
+            username: newUsername.trim(),
+            display_name: newUsername.trim(),
+            password: newPassword,
+            permissions: [],
+        })
+            .then((u) =>
+                api
+                    .updateUser(u.user_id, { roles: [newRole] })
+                    .catch((err) => console.warn('[admin] role patch after create failed', err))
+            )
+            .then(() => {
+                setCreateOk(true);
+                setCreateMsg('用户已创建。');
+                setNewUsername('');
+                setNewPassword('');
+                console.log('[admin] user created:', newUsername, 'role:', newRole);
+                void reload();
+            })
+            .catch((err) => {
+                setCreateOk(false);
+                setCreateMsg(formatAdminError(err) || '创建失败。');
+            });
+    };
+
+    if (me && !isAdmin) {
         return <div className="p-6 text-sm text-error">需要管理员角色</div>;
+    }
+    if (!me) {
+        return (
+            <div className="p-6">
+                <Skeleton className="h-10 w-full" />
+            </div>
+        );
     }
 
     return (
@@ -104,6 +169,51 @@ export function AdminUsersPage() {
             </div>
             {tab === 'users' ? (
                 <>
+                    <div className="mb-4 rounded-card border border-border bg-bg-elevated px-4 py-3">
+                        <div className="mb-2 text-sm text-text-primary">创建用户</div>
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                            <input
+                                value={newUsername}
+                                onChange={(e) => setNewUsername(e.target.value)}
+                                placeholder="用户名"
+                                className="w-36 rounded-md border border-border bg-bg px-3 py-2 text-sm text-text-primary"
+                            />
+                            <input
+                                value={newPassword}
+                                onChange={(e) => setNewPassword(e.target.value)}
+                                type="password"
+                                placeholder="初始密码"
+                                className="w-40 rounded-md border border-border bg-bg px-3 py-2 text-sm text-text-primary"
+                            />
+                            <select
+                                value={newRole}
+                                onChange={(e) => setNewRole(e.target.value)}
+                                aria-label="角色"
+                                className="rounded-md border border-border bg-bg px-2 py-2 text-sm text-text-primary"
+                            >
+                                {roleNames.map((r) => (
+                                    <option key={r} value={r}>
+                                        {r}
+                                    </option>
+                                ))}
+                            </select>
+                            <button
+                                type="button"
+                                onClick={createUser}
+                                className="rounded-md bg-brand px-3 py-2 text-xs text-white"
+                            >
+                                创建
+                            </button>
+                            {createMsg ? (
+                                <span
+                                    className={`text-xs ${createOk ? 'text-success' : 'text-error'}`}
+                                    role="status"
+                                >
+                                    {createMsg}
+                                </span>
+                            ) : null}
+                        </div>
+                    </div>
                     {state === 'loading' ? (
                         <div className="flex flex-col gap-2">
                             <Skeleton className="h-10 w-full" />
@@ -117,7 +227,7 @@ export function AdminUsersPage() {
                     {state === 'ready' && users.length === 0 ? (
                         <EmptyState
                             title="暂无用户"
-                            description="创建第一个用户后开始分配模块权限"
+                            description="创建第一个用户后开始分配模块权限；身份后端未同步的用户不会显示在此。"
                         />
                     ) : null}
                     {state === 'ready' && users.length > 0 ? (
@@ -133,21 +243,48 @@ export function AdminUsersPage() {
                                             <span className="font-mono text-xs text-text-muted">
                                                 {u.user_id}
                                             </span>
-                                            {u.roles.includes('admin') ? (
-                                                <span className="ml-2 rounded-full bg-brand/15 px-2 text-xs text-brand">
-                                                    admin
-                                                </span>
-                                            ) : null}
                                             {u.disabled ? (
                                                 <span className="ml-2 rounded-full bg-bg-muted px-2 text-xs text-offline">
                                                     已禁用
                                                 </span>
-                                            ) : null}
+                                            ) : (
+                                                <span className="ml-2 rounded-full bg-success/15 px-2 text-xs text-success">
+                                                    正常
+                                                </span>
+                                            )}
                                         </div>
                                         <div className="text-xs text-text-muted">
                                             已授权 {u.permissions.length} 个模块
+                                            {u.created_at
+                                                ? ` · ${new Date(u.created_at * 1000).toLocaleDateString()}`
+                                                : ''}
                                         </div>
                                     </div>
+                                    <select
+                                        value={u.roles[0] ?? ''}
+                                        onChange={(e) =>
+                                            void api
+                                                .updateUser(u.user_id, { roles: [e.target.value] })
+                                                .then(() => void reload())
+                                                .catch((err) =>
+                                                    pushToast(
+                                                        'error',
+                                                        formatAdminError(err) || '角色更新失败'
+                                                    )
+                                                )
+                                        }
+                                        aria-label={`角色: ${u.display_name}`}
+                                        className="mx-3 shrink-0 rounded-md border border-border bg-bg px-2 py-1.5 text-xs text-text-primary"
+                                    >
+                                        {(roleNames.includes(u.roles[0] ?? '')
+                                            ? roleNames
+                                            : [...roleNames, u.roles[0] ?? '']
+                                        ).map((r) => (
+                                            <option key={r} value={r}>
+                                                {r}
+                                            </option>
+                                        ))}
+                                    </select>
                                     <div className="flex shrink-0 gap-2">
                                         <button
                                             type="button"
@@ -425,7 +562,7 @@ function RolesPanel() {
                 setMsg(
                     isGatewayPending(err)
                         ? t(PENDING_NOTE_ZH, PENDING_NOTE_EN)
-                        : (err as Error).message
+                        : formatAdminError(err) || t('删除失败。', 'Delete failed.')
                 );
             });
     };
@@ -573,7 +710,12 @@ function RolesPanel() {
 
 // SECTION: menu permissions (migration E6, f-ecommerce users.html tab 3)
 
-const cell = (role: string, i: number) => `${role}:${i}`;
+/**
+ * Grid keys are menu-id based, not index based: deleting a menu must not
+ * scramble the surviving rows' role assignments (bug inherited from
+ * users.html index-keyed grid, fixed here).
+ */
+const cell = (role: string, menuId: string) => `${role}|${menuId}`;
 
 function MenuPermissionsPanel() {
     const [menus, setMenus] = useState<MenuPermissionsDoc['menus']>([]);
@@ -597,7 +739,7 @@ function MenuPermissionsPanel() {
             setMenus(doc.menus);
             setAllRoles(parsed.roles.map((r) => r.name));
             const next = new Set<string>();
-            doc.menus.forEach((m, i) => m.roles.forEach((r) => next.add(cell(r, i))));
+            doc.menus.forEach((m) => m.roles.forEach((r) => next.add(cell(r, m.id))));
             setGrid(next);
             setPending(false);
         } catch (err) {
@@ -610,8 +752,9 @@ function MenuPermissionsPanel() {
         void reload();
     }, [reload]);
 
-    const saveGrid = (doc: MenuPermissionsDoc, note: string) => {
-        api.saveMenuPermissions(doc)
+    const saveGrid = (doc: MenuPermissionsDoc, note: string) =>
+        api
+            .saveMenuPermissions(doc)
             .then(() => {
                 setOk(true);
                 setMsg(note);
@@ -622,14 +765,15 @@ function MenuPermissionsPanel() {
                 setMsg(
                     isGatewayPending(err)
                         ? t(PENDING_NOTE_ZH, PENDING_NOTE_EN)
-                        : (err as Error).message
+                        : formatAdminError(err) || (err as Error).message
                 );
             });
-    };
 
     const save = () => {
-        const doc = collectMenuMatrix(menus, allRoles, (role, i) => grid.has(cell(role, i)));
-        saveGrid(
+        const doc = collectMenuMatrix(menus, allRoles, (role, i) =>
+            grid.has(cell(role, menus[i]?.id ?? ''))
+        );
+        void saveGrid(
             doc,
             t(
                 '已保存 — 用户下次加载页面时生效。',
@@ -647,7 +791,9 @@ function MenuPermissionsPanel() {
                 setMsg(t('无默认菜单矩阵可重置。', 'No defaults to reset to.'));
                 return;
             }
-            saveGrid(defaults, t('已重置为默认。', 'Reset to defaults.'));
+            // Await the PUT before reloading — a racing GET can re-render the
+            // pre-reset matrix (users.html awaits too).
+            await saveGrid(defaults, t('已重置为默认。', 'Reset to defaults.'));
             void reload();
         } catch (err) {
             setOk(false);
@@ -670,11 +816,13 @@ function MenuPermissionsPanel() {
         }
         const next = [...menus, { id, label: newLabel.trim() || id, href, roles: ['admin'] }];
         const nextGrid = new Set(grid);
-        nextGrid.add(cell('admin', next.length - 1));
+        nextGrid.add(cell('admin', id));
         setMenus(next);
         setGrid(nextGrid);
-        saveGrid(
-            collectMenuMatrix(next, allRoles, (role, i) => nextGrid.has(cell(role, i))),
+        void saveGrid(
+            collectMenuMatrix(next, allRoles, (role, i) =>
+                nextGrid.has(cell(role, next[i]?.id ?? ''))
+            ),
             t('菜单已添加。', 'Menu added.')
         );
         setNewId('');
@@ -691,8 +839,9 @@ function MenuPermissionsPanel() {
             return;
         const next = menus.filter((m) => m.id !== id);
         setMenus(next);
-        saveGrid(
-            collectMenuMatrix(next, allRoles, (role, i) => grid.has(cell(role, i))),
+        // Grid keys are menu-id based, so surviving rows keep their roles.
+        void saveGrid(
+            collectMenuMatrix(next, allRoles, (role, i) => grid.has(cell(role, next[i]?.id ?? ''))),
             t('菜单已移除。', 'Menu removed.')
         );
     };
@@ -728,7 +877,7 @@ function MenuPermissionsPanel() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {menus.map((m, i) => (
+                                {menus.map((m) => (
                                     <tr
                                         key={m.id}
                                         className="border-b border-border/40 last:border-0"
@@ -744,10 +893,10 @@ function MenuPermissionsPanel() {
                                                 <input
                                                     type="checkbox"
                                                     aria-label={`${m.label} ${r}`}
-                                                    checked={grid.has(cell(r, i))}
+                                                    checked={grid.has(cell(r, m.id))}
                                                     onChange={() => {
                                                         const next = new Set(grid);
-                                                        const c = cell(r, i);
+                                                        const c = cell(r, m.id);
                                                         if (next.has(c)) next.delete(c);
                                                         else next.add(c);
                                                         setGrid(next);

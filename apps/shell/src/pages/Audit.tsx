@@ -1,5 +1,10 @@
 import { fetchAudit, isGatewayPending } from '@/api/endpoints';
-import { AUDIT_CLASSES, type AuditEntry, sanitizeAudit } from '@/lib/settingsOps';
+import {
+    AUDIT_CLASSES,
+    type AuditEntry,
+    sanitizeAudit,
+    stripAuditPathPrefix,
+} from '@/lib/settingsOps';
 import { useAuth } from '@/stores/auth';
 import { t } from '@/stores/lang';
 import { ErrorState } from '@fusion/web-ui';
@@ -143,7 +148,7 @@ export function AuditPage() {
                                         </span>
                                     </td>
                                     <td className="px-3 py-2 text-text-muted">
-                                        {r.method} {r.path}
+                                        {r.method} {stripAuditPathPrefix(r.path)}
                                     </td>
                                     <td className="px-3 py-2">
                                         <span
