@@ -49,6 +49,7 @@ export interface ModuleManifest {
     pages?: ModulePage[];
     notifications?: NotificationSource[];
     home?: HomeCard[];
+    homeProjects?: HomeProjectSource[];
 }
 
 /**
@@ -65,4 +66,17 @@ export interface HomeCard {
     route: string;
     /** true = also surface as a suggested chip under the message box. */
     chip?: boolean;
+}
+
+/**
+ * Home projects/spaces poll source (issue #41, gateway #273): the shell
+ * host polls `${endpoint}` for `{ items: [...] }` and renders the entries
+ * in the Home "项目/空间" section, same contract family as notifications.
+ */
+export interface HomeProjectSource {
+    id: string;
+    label: string;
+    label_en?: string;
+    /** Gateway-absolute path polled for `{ items: [...] }`. */
+    endpoint: string;
 }

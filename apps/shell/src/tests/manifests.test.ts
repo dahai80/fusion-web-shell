@@ -297,3 +297,103 @@ describe('manifest home cards (issue #32)', () => {
         expect(m.home![0]!.id).toBe('c0');
     });
 });
+
+describe('manifest home projects sources (issue #41)', () => {
+    const reset = () => {
+        useManifests.setState({ manifests: [], loaded: false, unreachableIds: new Set() });
+    };
+
+    it('parses valid home.projects poll sources with bilingual labels', () => {
+        reset();
+        useManifests.getState().setUpstream([
+            {
+                id: 'fusion-cowork',
+                title: 'cowork',
+                path: '/shell/fusion-cowork/',
+                entry: '/shell/fusion-cowork/',
+                devices: ['desktop'],
+                category: 'platform',
+                home: {
+                    projects: [
+                        {
+                            id: 'spaces',
+                            label: '空间',
+                            label_en: 'Spaces',
+                            endpoint: '/api/v1/shell/spaces',
+                        },
+                    ],
+                },
+            } as unknown as ManifestDto,
+        ]);
+        const m = useManifests.getState().manifests[0]!;
+        expect(m.homeProjects).toEqual([
+            {
+                id: 'spaces',
+                label: '空间',
+                label_en: 'Spaces',
+                endpoint: '/api/v1/shell/spaces',
+            },
+        ]);
+        expect(m.home).toBeUndefined();
+    });
+
+    it('drops invalid sources (missing label, non-absolute endpoint) and dedupes by id', () => {
+        reset();
+        useManifests.getState().setUpstream([
+            {
+                id: 'fusion-as',
+                title: 'as',
+                path: '/shell/fusion-as/',
+                entry: '/shell/fusion-as/',
+                devices: ['desktop'],
+                category: 'platform',
+                home: {
+                    projects: [
+                        { id: 'no-label', endpoint: '/x' },
+                        { id: 'bad-ep', label: 'B', endpoint: 'api/x' },
+                        { id: 'dup', label: 'One', endpoint: '/one' },
+                        { id: 'dup', label: 'Two', endpoint: '/two' },
+                        { id: 'good', label: 'Good', endpoint: '/api/as/spaces' },
+                    ],
+                },
+            } as unknown as ManifestDto,
+        ]);
+        const m = useManifests.getState().manifests[0]!;
+        expect(m.homeProjects).toEqual([
+            { id: 'dup', label: 'One', endpoint: '/one' },
+            { id: 'good', label: 'Good', endpoint: '/api/as/spaces' },
+        ]);
+    });
+
+    it('caps home.projects at 32 entries and keeps absent home undefined', () => {
+        reset();
+        const projects = Array.from({ length: 40 }, (_, i) => ({
+            id: `p${i}`,
+            label: `P${i}`,
+            endpoint: `/api/p${i}`,
+        }));
+        useManifests.getState().setUpstream([
+            {
+                id: 'fusion-hub',
+                title: 'hub',
+                path: '/shell/fusion-hub/',
+                entry: '/shell/fusion-hub/',
+                devices: ['desktop'],
+                category: 'platform',
+                home: { projects },
+            } as unknown as ManifestDto,
+            {
+                id: 'fusion-mlx',
+                title: 'mlx',
+                path: '/shell/fusion-mlx/',
+                entry: '/shell/fusion-mlx/',
+                devices: ['desktop'],
+                category: 'platform',
+            } as unknown as ManifestDto,
+        ]);
+        const [hub, mlx] = useManifests.getState().manifests;
+        expect(hub!.homeProjects).toHaveLength(32);
+        expect(hub!.homeProjects![0]!.id).toBe('p0');
+        expect(mlx!.homeProjects).toBeUndefined();
+    });
+});

@@ -34,6 +34,10 @@ export interface TaskItem {
     updatedAt?: string;
     /** Module-relative deep link. */
     route?: string;
+    /** Owning space/project display name (issue #41) — rendered as a chip. */
+    space?: string;
+    /** Module-relative deep link into the owning space view. */
+    spaceRoute?: string;
 }
 
 export type TaskBucket = 'running' | 'recent' | 'scheduled';
@@ -80,6 +84,11 @@ function toTask(moduleId: string, sourceId: string, raw: unknown): TaskItem | nu
     if (!itemId || !title) return null;
     const route =
         typeof rec.route === 'string' && rec.route.startsWith('/') ? rec.route : undefined;
+    const space = typeof rec.space === 'string' && rec.space.trim() ? rec.space.trim() : undefined;
+    const spaceRoute =
+        typeof rec.space_route === 'string' && rec.space_route.startsWith('/')
+            ? rec.space_route
+            : undefined;
     const progress =
         typeof rec.progress === 'number' && Number.isFinite(rec.progress)
             ? Math.max(0, Math.min(100, Math.round(rec.progress)))
@@ -111,6 +120,8 @@ function toTask(moduleId: string, sourceId: string, raw: unknown): TaskItem | nu
         artifacts: typeof rec.artifacts === 'number' ? rec.artifacts : undefined,
         updatedAt: typeof rec.updated_at === 'string' ? rec.updated_at : undefined,
         route,
+        space,
+        spaceRoute,
     };
 }
 

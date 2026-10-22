@@ -57,7 +57,11 @@ Modules contribute Home cards via the manifest `home` section (gateway pass-thro
 
 ## Home task feed + inline approvals (issue #33)
 
-Modules declare a `notifications` source with `kind: "tasks"` (poll contract in [`docs/manifest-ext-schema.md`](docs/manifest-ext-schema.md)); the shell polls it every 30s alongside the bell (tasks sources are excluded from the bell) and buckets items into running / recently completed / scheduled Home sections. Tasks carrying `pending_approval: {endpoint, prompt?, risk?}` render a three-action approval card (reject / allow once / always allow) — the decision `POST`s `{id, action}` to the module endpoint without opening the tab. Per-source failure isolation: a broken source keeps its last good snapshot, so offline task state stays readable. Card click deep-links `${entry}#${route}` into the owning module.
+Modules declare a `notifications` source with `kind: "tasks"` (poll contract in [`docs/manifest-ext-schema.md`](docs/manifest-ext-schema.md)); the shell polls it every 30s alongside the bell (tasks sources are excluded from the bell) and buckets items into running / recently completed / scheduled Home sections. Tasks carrying `pending_approval: {endpoint, prompt?, risk?}` render a three-action approval card (reject / allow once / always allow) — the decision `POST`s `{id, action}` to the module endpoint without opening the tab. Per-source failure isolation: a broken source keeps its last good snapshot, so offline task state stays readable. Card click deep-links `${entry}#${route}` into the owning module. Tasks may carry `space` (+ optional `space_route`) — the owning space/project renders as a chip that deep-links into the space view (issue #41).
+
+## Home projects/spaces section (issue #41)
+
+The organization dimension: modules declare their spaces/projects via a manifest `home.projects` poll source (gateway pass-through: fusion-gateway#274). The shell polls each source every 60s and renders a "项目 / 空间" section below the task feed, grouped by module and greyed when the module is unreachable; each entry deep-links `${entry}#${route}` into the module's space view. Poll contract: `GET ${endpoint}` returns `{"items": [{id, title, route, description?, updated_at?}]}` — items without a valid `route` are dropped. The section stays hidden until a module declares `home.projects`; per-source failure isolation matches the task feed.
 
 ## Delegation entry + global model selector (issue #34)
 

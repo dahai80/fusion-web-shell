@@ -156,6 +156,40 @@ describe('task feed (issue #33)', () => {
         }
     });
 
+    it('parses space ownership for the chip and deep link (issue #41)', async () => {
+        setupSources([
+            mk({ id: 'fusion-cowork', notifications: tasksSource('/api/cowork/tasks') }),
+        ]);
+        setFetcher(async () => ({
+            items: [
+                {
+                    id: 't1',
+                    title: '对账',
+                    status: 'running',
+                    space: '财务空间',
+                    space_route: '/spaces/fin',
+                },
+                { id: 't2', title: '无空间', status: 'running' },
+                {
+                    id: 't3',
+                    title: '坏路由',
+                    status: 'running',
+                    space: 'X',
+                    space_route: 'spaces/x',
+                },
+            ],
+        }));
+        await useTasks.getState().pollNow();
+        const items = useTasks.getState().items;
+        const t1 = items.find((i) => i.itemId === 't1')!;
+        expect(t1.space).toBe('财务空间');
+        expect(t1.spaceRoute).toBe('/spaces/fin');
+        expect(items.find((i) => i.itemId === 't2')!.space).toBeUndefined();
+        expect(items.find((i) => i.itemId === 't2')!.spaceRoute).toBeUndefined();
+        expect(items.find((i) => i.itemId === 't3')!.space).toBe('X');
+        expect(items.find((i) => i.itemId === 't3')!.spaceRoute).toBeUndefined();
+    });
+
     it('approve posts the three-action decision and drops the resolved item', async () => {
         setupSources([
             mk({ id: 'fusion-cowork', notifications: tasksSource('/api/cowork/tasks') }),

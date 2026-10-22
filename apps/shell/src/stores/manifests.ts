@@ -3,6 +3,7 @@ import type { Lang } from '@/stores/lang';
 import type {
     DeviceMode,
     HomeCard,
+    HomeProjectSource,
     ModuleManifest,
     ModulePage,
     NotificationKind,
@@ -108,15 +109,30 @@ function toHomeCard(rec: Record<string, unknown>): HomeCard | null {
     return card;
 }
 
-/** dto.home is {cards: [...]}; absent or wrong shape = no contribution. */
-function pickHome(raw: unknown): HomeCard[] | undefined {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
-    const cards = (raw as Record<string, unknown>).cards;
-    if (!Array.isArray(cards)) return undefined;
-    return pickExt(cards, toHomeCard, (c) => c.id);
+/** dto.home is {cards?, projects?}; absent or wrong shape = no contribution. */
+function pickHome(raw: unknown): { cards?: HomeCard[]; projects?: HomeProjectSource[] } {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+    const rec = raw as Record<string, unknown>;
+    const cards = Array.isArray(rec.cards)
+        ? pickExt(rec.cards, toHomeCard, (c) => c.id)
+        : undefined;
+    const projects = Array.isArray(rec.projects)
+        ? pickExt(rec.projects, toHomeProjectSource, (p) => p.id)
+        : undefined;
+    return { cards, projects };
+}
+
+/** Home projects/spaces source sanitizer (issue #41): same rules as notifications. */
+function toHomeProjectSource(rec: Record<string, unknown>): HomeProjectSource | null {
+    const id = str(rec.id);
+    const label = str(rec.label);
+    const endpoint = str(rec.endpoint);
+    if (!id || !label || !endpoint || !endpoint.startsWith('/')) return null;
+    return { id, label, label_en: str(rec.label_en) ?? undefined, endpoint };
 }
 
 function toManifest(dto: api.ManifestDto): ModuleManifest {
+    const home = pickHome(dto.home);
     return {
         id: dto.id,
         title: dto.title,
@@ -137,7 +153,8 @@ function toManifest(dto: api.ManifestDto): ModuleManifest {
         searchProviders: pickExt(dto.searchProviders, toSearchProvider, (p) => p.id),
         pages: pickExt(dto.pages, toPage, (p) => p.route),
         notifications: pickExt(dto.notifications, toNotificationSource, (p) => p.id),
-        home: pickHome(dto.home),
+        home: home.cards,
+        homeProjects: home.projects,
     };
 }
 
