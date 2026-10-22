@@ -25,14 +25,7 @@ export interface NotificationItem {
 
 export type NotificationFetchFn = (path: string) => Promise<{ items?: unknown }>;
 
-let fetcher: NotificationFetchFn = async (path) => {
-    try {
-        return await sharedClient().get(path, { quiet: true });
-    } catch (err) {
-        console.warn('[notifications] fetch failed:', path, err);
-        return {};
-    }
-};
+let fetcher: NotificationFetchFn = (path) => sharedClient().get(path, { quiet: true });
 
 /** Test seam: swap the HTTP layer (production default = sharedClient). */
 export function setFetcher(fn: NotificationFetchFn): void {
@@ -109,43 +102,56 @@ export const useNotifications = create<NotificationsState>((set, get) => ({
                       .filter((s) => s.kind !== 'tasks')
                       .map((s) => ({ m, s }))
         );
-        const settled = await Promise.allSettled(
+        const settled = await Promise.all(
             targets.map(async ({ m, s }) => {
-                const data = await fetcher(s.endpoint);
-                const items = Array.isArray(data?.items) ? data.items : [];
-                return items.slice(0, MAX_ITEMS_PER_SOURCE).map((raw): NotificationItem | null => {
-                    if (!raw || typeof raw !== 'object') return null;
-                    const rec = raw as Record<string, unknown>;
-                    const itemId = typeof rec.id === 'string' ? rec.id.trim() : '';
-                    const title = typeof rec.title === 'string' ? rec.title.trim() : '';
-                    if (!itemId || !title) return null;
-                    const level =
-                        rec.level === 'warning' || rec.level === 'error' ? rec.level : 'info';
-                    const route =
-                        typeof rec.route === 'string' && rec.route.startsWith('/')
-                            ? rec.route
-                            : undefined;
-                    return {
-                        id: `${m.id}:${s.id}:${itemId}`,
-                        sourceId: s.id,
-                        moduleId: m.id,
-                        kind: s.kind,
-                        title,
-                        route,
-                        level,
-                        ts: typeof rec.ts === 'string' ? rec.ts : undefined,
-                    };
-                });
+                try {
+                    const data = await fetcher(s.endpoint);
+                    const items = Array.isArray(data?.items) ? data.items : [];
+                    return items
+                        .slice(0, MAX_ITEMS_PER_SOURCE)
+                        .map((raw): NotificationItem | null => {
+                            if (!raw || typeof raw !== 'object') return null;
+                            const rec = raw as Record<string, unknown>;
+                            const itemId = typeof rec.id === 'string' ? rec.id.trim() : '';
+                            const title = typeof rec.title === 'string' ? rec.title.trim() : '';
+                            if (!itemId || !title) return null;
+                            const level =
+                                rec.level === 'warning' || rec.level === 'error'
+                                    ? rec.level
+                                    : 'info';
+                            const route =
+                                typeof rec.route === 'string' && rec.route.startsWith('/')
+                                    ? rec.route
+                                    : undefined;
+                            return {
+                                id: `${m.id}:${s.id}:${itemId}`,
+                                sourceId: s.id,
+                                moduleId: m.id,
+                                kind: s.kind,
+                                title,
+                                route,
+                                level,
+                                ts: typeof rec.ts === 'string' ? rec.ts : undefined,
+                            };
+                        })
+                        .filter((x): x is NotificationItem => x !== null);
+                } catch (err) {
+                    // Issue #46: 502/503 = the module's upstream refuses
+                    // connections (stale registration). Mark it unreachable
+                    // once — later polls skip it, killing the 503 spam. The
+                    // gateway heartbeat re-registers on the next real start.
+                    const status = (err as { status?: number })?.status;
+                    if (status === 502 || status === 503) {
+                        useManifests.getState().markUnreachable(m.id, true);
+                        console.log('[notifications] upstream down, muted module:', m.id);
+                    } else {
+                        console.warn('[notifications] source rejected:', s.endpoint, err);
+                    }
+                    return [];
+                }
             })
         );
-        const merged: NotificationItem[] = [];
-        for (const r of settled) {
-            if (r.status === 'fulfilled') {
-                merged.push(...r.value.filter((x): x is NotificationItem => x !== null));
-            } else {
-                console.warn('[notifications] source rejected:', r.reason);
-            }
-        }
+        const merged: NotificationItem[] = settled.flat();
         set({ items: merged });
         console.log('[notifications] polled', targets.length, 'sources,', merged.length, 'items');
     },
