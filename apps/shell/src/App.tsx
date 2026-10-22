@@ -13,12 +13,14 @@ const AdminUsersPage = lazy(() =>
 const SettingsPage = lazy(() =>
     import('@/pages/Settings').then((m) => ({ default: m.SettingsPage }))
 );
+const AuditPage = lazy(() => import('@/pages/Audit').then((m) => ({ default: m.AuditPage })));
 
-type Route = { name: 'main' } | { name: 'admin-users' } | { name: 'settings' };
+type Route = { name: 'main' } | { name: 'admin-users' } | { name: 'settings' } | { name: 'audit' };
 
 function readRoute(): Route {
     if (window.location.pathname === '/admin/users') return { name: 'admin-users' };
     if (window.location.pathname === '/settings') return { name: 'settings' };
+    if (window.location.pathname === '/audit') return { name: 'audit' };
     return { name: 'main' };
 }
 
@@ -54,6 +56,10 @@ export function App() {
             ) : route.name === 'settings' ? (
                 <Suspense fallback={null}>
                     <SettingsPage />
+                </Suspense>
+            ) : route.name === 'audit' ? (
+                <Suspense fallback={null}>
+                    <AuditPage />
                 </Suspense>
             ) : (
                 <MainPage onLogout={logoutAll} />
