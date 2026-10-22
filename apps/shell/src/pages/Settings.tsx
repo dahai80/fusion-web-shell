@@ -69,7 +69,7 @@ export function SettingsPage() {
 
     const onRotate = async () => {
         if (!rotateTarget) return;
-        const res = await useKeys.getState().rotate(rotateTarget.key_id);
+        const res = await useKeys.getState().rotate(rotateTarget.name);
         setRotateTarget(null);
         if (res) setIssued(res);
         else pushToast('error', t('轮换失败', 'Rotation failed'));
@@ -78,7 +78,7 @@ export function SettingsPage() {
     const onRevoke = async () => {
         if (!revokeTarget) return;
         try {
-            await useKeys.getState().revoke(revokeTarget.key_id);
+            await useKeys.getState().revoke(revokeTarget.name);
         } catch (err) {
             pushToast('error', (err as Error).message);
         }
@@ -118,8 +118,8 @@ export function SettingsPage() {
             {gatewayPending ? (
                 <div className="mb-4 rounded-card border border-border bg-bg-elevated px-4 py-3 text-sm text-text-secondary">
                     {t(
-                        '网关尚未提供密钥服务（K2 待上线，fusion-gateway#262）。页面将在服务就绪后自动可用。',
-                        'The gateway does not expose the key service yet (K2 pending, fusion-gateway#262). This page becomes usable once it ships.'
+                        '网关尚未提供会话级密钥服务（fusion-gateway#271 待上线）。服务就绪后本页自动可用。',
+                        'The gateway does not expose the session-gated key service yet (fusion-gateway#271). This page becomes usable once it ships.'
                     )}
                 </div>
             ) : null}
@@ -200,15 +200,20 @@ export function SettingsPage() {
                     <div className="overflow-hidden rounded-card border border-border bg-bg-elevated">
                         {items.map((k) => (
                             <div
-                                key={k.key_id}
+                                key={k.name}
                                 className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3 last:border-0"
                             >
                                 <div className="min-w-0">
                                     <div className="text-sm text-text-primary">
                                         {k.name}
                                         <span className="ml-2 rounded-full bg-bg-muted px-2 font-mono text-xs text-text-muted">
-                                            fk-…{k.tail4}
+                                            {k.key_prefix}
                                         </span>
+                                        {k.status !== 'active' ? (
+                                            <span className="ml-2 rounded-full bg-bg-muted px-2 text-xs text-offline">
+                                                {k.status}
+                                            </span>
+                                        ) : null}
                                     </div>
                                     <div className="mt-0.5 flex flex-wrap gap-1">
                                         {k.scopes.map((sc) => (
@@ -223,28 +228,30 @@ export function SettingsPage() {
                                     <div className="mt-0.5 text-xs text-text-muted">
                                         {t('创建于', 'Created')} {k.created_at.slice(0, 10)}
                                         {' · '}
-                                        {k.last_used_at
-                                            ? `${t('最近使用', 'Last used')} ${k.last_used_at.slice(0, 10)}`
-                                            : t('从未使用', 'Never used')}
-                                        {` · ${t('近 24h 调用', 'Calls (24h)')}: ${k.recent_calls}`}
+                                        {t('更新于', 'Updated')} {k.updated_at.slice(0, 10)}
+                                        {k.quota_limit > 0
+                                            ? ` · ${t('用量', 'Usage')}: ${k.quota_used}/${k.quota_limit}`
+                                            : ''}
                                     </div>
                                 </div>
-                                <div className="flex shrink-0 gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => setRotateTarget(k)}
-                                        className="rounded-md border border-border px-3 py-1.5 text-xs text-text-primary"
-                                    >
-                                        {t('轮换', 'Rotate')}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setRevokeTarget(k)}
-                                        className="rounded-md border border-error/60 px-3 py-1.5 text-xs text-error"
-                                    >
-                                        {t('吊销', 'Revoke')}
-                                    </button>
-                                </div>
+                                {k.status === 'active' ? (
+                                    <div className="flex shrink-0 gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setRotateTarget(k)}
+                                            className="rounded-md border border-border px-3 py-1.5 text-xs text-text-primary"
+                                        >
+                                            {t('轮换', 'Rotate')}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setRevokeTarget(k)}
+                                            className="rounded-md border border-error/60 px-3 py-1.5 text-xs text-error"
+                                        >
+                                            {t('吊销', 'Revoke')}
+                                        </button>
+                                    </div>
+                                ) : null}
                             </div>
                         ))}
                     </div>

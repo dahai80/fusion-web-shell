@@ -3,10 +3,12 @@ import type { ModuleManifest } from '@/types/manifest';
 import { create } from 'zustand';
 
 /**
- * User API keys (issue #35, gateway K2 = fusion-gateway#262): self-serve
- * create / rotate / revoke / usage on the Settings page. Plaintext is shown
- * exactly once (never logged, never persisted client-side); the list surface
- * only carries tail-4. Until the gateway ships K2 the store degrades to a
+ * User API keys (issue #35, gateway K2 #262 + session proxy #271):
+ * self-serve create / rotate / revoke / usage on the Settings page, called
+ * through the session-gated /api/v1/shell/keys surface (admin role).
+ * Plaintext (raw_key) is shown exactly once (never logged, never persisted
+ * client-side); the list surface only carries the fk-…tail4 prefix. Until
+ * the gateway ships the session proxy the store degrades to a
  * gateway-pending state on 404 instead of an error wall.
  */
 
@@ -34,18 +36,25 @@ export function flattenScopes(rows: ScopeRow[]): string[] {
     );
 }
 
+/** List projection from the gateway — no hashes, no plaintext, tail-4 prefix. */
 export interface ApiKeyRow {
-    key_id: string;
     name: string;
-    tail4: string;
+    key_prefix: string;
+    status: string;
     scopes: string[];
+    tenant?: string;
+    quota_limit: number;
+    quota_used: number;
+    rpm: number;
+    tpm: number;
+    rotated_at: string | null;
     created_at: string;
-    last_used_at: string | null;
-    recent_calls: number;
+    updated_at: string;
 }
 
+/** Create/rotate payload — raw_key appears exactly once, here. */
 export interface IssuedKey {
-    key_id: string;
+    name: string;
     plaintext: string;
 }
 
@@ -58,41 +67,90 @@ export class GatewayError extends Error {
     }
 }
 
+interface RawIssued {
+    name?: string;
+    raw_key?: string;
+}
+
+interface RawListEntry {
+    name?: string;
+    key_prefix?: string;
+    status?: string;
+    scopes?: unknown;
+    tenant?: string;
+    quota_limit?: number;
+    quota_used?: number;
+    rpm?: number;
+    tpm?: number;
+    rotated_at?: string | null;
+    created_at?: string;
+    updated_at?: string;
+}
+
+function sanitizeListEntry(raw: RawListEntry): ApiKeyRow {
+    return {
+        name: typeof raw.name === 'string' ? raw.name : '',
+        key_prefix: typeof raw.key_prefix === 'string' ? raw.key_prefix : 'fk-…',
+        status: typeof raw.status === 'string' ? raw.status : 'active',
+        scopes: Array.isArray(raw.scopes)
+            ? raw.scopes.filter((s): s is string => typeof s === 'string')
+            : [],
+        tenant: typeof raw.tenant === 'string' ? raw.tenant : undefined,
+        quota_limit: typeof raw.quota_limit === 'number' ? raw.quota_limit : 0,
+        quota_used: typeof raw.quota_used === 'number' ? raw.quota_used : 0,
+        rpm: typeof raw.rpm === 'number' ? raw.rpm : 0,
+        tpm: typeof raw.tpm === 'number' ? raw.tpm : 0,
+        rotated_at: typeof raw.rotated_at === 'string' ? raw.rotated_at : null,
+        created_at: typeof raw.created_at === 'string' ? raw.created_at : '',
+        updated_at: typeof raw.updated_at === 'string' ? raw.updated_at : '',
+    };
+}
+
+function toIssued(raw: RawIssued): IssuedKey {
+    return {
+        name: typeof raw.name === 'string' ? raw.name : '',
+        plaintext: typeof raw.raw_key === 'string' ? raw.raw_key : '',
+    };
+}
+
 export interface KeysApi {
     list(): Promise<ApiKeyRow[]>;
     create(body: { name: string; scopes: string[] }): Promise<IssuedKey>;
-    rotate(keyId: string): Promise<IssuedKey>;
-    revoke(keyId: string): Promise<void>;
+    rotate(name: string): Promise<IssuedKey>;
+    revoke(name: string): Promise<void>;
 }
 
 let api: KeysApi = {
     async list() {
         try {
-            const r = await sharedClient().get<{ items?: ApiKeyRow[] }>('/api/v1/keys', {
+            const r = await sharedClient().get<unknown>('/api/v1/shell/keys', {
                 quiet: true,
             });
-            return Array.isArray(r.items) ? r.items : [];
+            const rows = Array.isArray(r) ? r : [];
+            return rows.map((row) => sanitizeListEntry(row as RawListEntry));
         } catch (err) {
             throw toGatewayError(err);
         }
     },
     async create(body) {
         try {
-            return await sharedClient().post<IssuedKey>('/api/v1/keys', body);
+            const r = await sharedClient().post<RawIssued>('/api/v1/shell/keys', body);
+            return toIssued(r);
         } catch (err) {
             throw toGatewayError(err);
         }
     },
-    async rotate(keyId) {
+    async rotate(name) {
         try {
-            return await sharedClient().post<IssuedKey>(`/api/v1/keys/${keyId}/rotate`);
+            const r = await sharedClient().post<RawIssued>(`/api/v1/shell/keys/${name}/rotate`);
+            return toIssued(r);
         } catch (err) {
             throw toGatewayError(err);
         }
     },
-    async revoke(keyId) {
+    async revoke(name) {
         try {
-            await sharedClient().delete(`/api/v1/keys/${keyId}`);
+            await sharedClient().delete(`/api/v1/shell/keys/${name}`);
         } catch (err) {
             throw toGatewayError(err);
         }
@@ -114,12 +172,12 @@ interface KeysState {
     items: ApiKeyRow[];
     loading: boolean;
     error: string | null;
-    /** Gateway K2 (fusion-gateway#262) not shipped yet — show pending state. */
+    /** Session-gated key surface (gateway #271) not shipped yet — pending state. */
     gatewayPending: boolean;
     refresh(): Promise<void>;
     create(name: string, scopes: string[]): Promise<IssuedKey>;
-    rotate(keyId: string): Promise<IssuedKey | null>;
-    revoke(keyId: string): Promise<void>;
+    rotate(name: string): Promise<IssuedKey | null>;
+    revoke(name: string): Promise<void>;
 }
 
 export const useKeys = create<KeysState>((set, get) => ({
@@ -136,7 +194,7 @@ export const useKeys = create<KeysState>((set, get) => ({
             console.log('[keys] listed', items.length, 'keys');
         } catch (err) {
             const ge = err as GatewayError;
-            console.warn('[keys] list failed:', ge.message);
+            console.warn('[keys] list failed:', ge.status, ge.message);
             set({
                 loading: false,
                 gatewayPending: ge.status === 404 || ge.status === 501,
@@ -147,27 +205,27 @@ export const useKeys = create<KeysState>((set, get) => ({
 
     async create(name, scopes) {
         const issued = await api.create({ name, scopes });
-        console.log('[keys] created key', issued.key_id, 'scopes:', scopes.length);
+        console.log('[keys] created key', issued.name, 'scopes:', scopes.length);
         await get().refresh();
         return issued;
     },
 
-    async rotate(keyId) {
+    async rotate(name) {
         try {
-            const issued = await api.rotate(keyId);
-            console.log('[keys] rotated key', keyId);
+            const issued = await api.rotate(name);
+            console.log('[keys] rotated key', name);
             await get().refresh();
             return issued;
         } catch (err) {
-            console.error('[keys] rotate failed', keyId, err);
+            console.error('[keys] rotate failed', name, err);
             set({ error: (err as Error).message });
             return null;
         }
     },
 
-    async revoke(keyId) {
-        await api.revoke(keyId);
-        console.log('[keys] revoked key', keyId);
+    async revoke(name) {
+        await api.revoke(name);
+        console.log('[keys] revoked key', name);
         await get().refresh();
     },
 }));

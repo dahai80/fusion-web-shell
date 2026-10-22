@@ -2,6 +2,7 @@ import './setup';
 import { beforeEach, describe, expect, it } from 'bun:test';
 import { useAuth } from '../stores/auth';
 import { GatewayError, flattenScopes, scopeMatrix, setKeysApi, useKeys } from '../stores/keys';
+import type { ApiKeyRow } from '../stores/keys';
 import type { ModuleManifest } from '../types/manifest';
 
 const mk = (over: Partial<ModuleManifest> & { id: string }): ModuleManifest => ({
@@ -10,6 +11,21 @@ const mk = (over: Partial<ModuleManifest> & { id: string }): ModuleManifest => (
     entry: `/shell/${over.id}/`,
     devices: ['desktop'],
     category: 'platform',
+    ...over,
+});
+
+const row = (over: Partial<ApiKeyRow> = {}): ApiKeyRow => ({
+    name: 'ci',
+    key_prefix: 'fk-…ab12',
+    status: 'active',
+    scopes: ['fusion-cowork:read'],
+    quota_limit: 0,
+    quota_used: 0,
+    rpm: 0,
+    tpm: 0,
+    rotated_at: null,
+    created_at: '2026-10-22T00:00:00Z',
+    updated_at: '2026-10-22T00:00:00Z',
     ...over,
 });
 
@@ -34,7 +50,7 @@ describe('scope matrix (issue #35)', () => {
     });
 });
 
-describe('keys store (issue #35)', () => {
+describe('keys store (issue #35, gateway #271 wire contract)', () => {
     beforeEach(() => {
         useKeys.setState({ items: [], loading: false, error: null, gatewayPending: false });
         useAuth.setState({
@@ -50,27 +66,17 @@ describe('keys store (issue #35)', () => {
         });
     });
 
-    it('lists keys from the gateway', async () => {
+    it('lists keys from the session-gated gateway surface', async () => {
         setKeysApi({
-            list: async () => [
-                {
-                    key_id: 'k1',
-                    name: 'ci',
-                    tail4: 'ab12',
-                    scopes: ['fusion-cowork:read'],
-                    created_at: '2026-10-22T00:00:00Z',
-                    last_used_at: null,
-                    recent_calls: 7,
-                },
-            ],
+            list: async () => [row()],
         });
         await useKeys.getState().refresh();
         expect(useKeys.getState().items).toHaveLength(1);
-        expect(useKeys.getState().items[0]!.tail4).toBe('ab12');
+        expect(useKeys.getState().items[0]!.key_prefix).toBe('fk-…ab12');
         expect(useKeys.getState().gatewayPending).toBe(false);
     });
 
-    it('marks gateway-pending on 404 (K2 not shipped yet)', async () => {
+    it('marks gateway-pending on 404 (session proxy #271 not shipped yet)', async () => {
         setKeysApi({
             list: async () => {
                 throw new GatewayError('not found', 404);
@@ -87,11 +93,11 @@ describe('keys store (issue #35)', () => {
             list: async () => [],
             create: async (body) => {
                 created.push(body);
-                return { key_id: 'k2', plaintext: 'fk-plain-xyz' };
+                return { name: body.name, plaintext: 'fk-plain-xyz' };
             },
         });
         const res = await useKeys.getState().create('ci', ['fusion-cowork:read']);
-        expect(res).toEqual({ key_id: 'k2', plaintext: 'fk-plain-xyz' });
+        expect(res).toEqual({ name: 'ci', plaintext: 'fk-plain-xyz' });
         expect(created).toEqual([{ name: 'ci', scopes: ['fusion-cowork:read'] }]);
     });
 
@@ -100,18 +106,18 @@ describe('keys store (issue #35)', () => {
         let revoked = '';
         setKeysApi({
             list: async () => [],
-            rotate: async (id) => {
-                rotated = id;
-                return { key_id: id, plaintext: 'fk-new' };
+            rotate: async (name) => {
+                rotated = name;
+                return { name, plaintext: 'fk-new' };
             },
-            revoke: async (id) => {
-                revoked = id;
+            revoke: async (name) => {
+                revoked = name;
             },
         });
-        const r = await useKeys.getState().rotate('k1');
+        const r = await useKeys.getState().rotate('ci');
         expect(r!.plaintext).toBe('fk-new');
-        expect(rotated).toBe('k1');
-        await useKeys.getState().revoke('k1');
-        expect(revoked).toBe('k1');
+        expect(rotated).toBe('ci');
+        await useKeys.getState().revoke('ci');
+        expect(revoked).toBe('ci');
     });
 });
