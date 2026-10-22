@@ -266,6 +266,69 @@ describe('notification center (issue #24, G11/C3)', () => {
     });
 });
 
+describe('stale registration degradation (issue #46)', () => {
+    beforeEach(() => {
+        localStorage.removeItem('fusion.shell.notifications.read');
+        useNotifications.setState({ items: [], readIds: new Set(), polling: false });
+        useTabs.setState({ tabs: [], activeTabId: null });
+        useManifests.setState({ manifests: [], loaded: false, unreachableIds: new Set() });
+        useAuth.setState({ user: null, token: null, status: 'unknown' });
+        setFetcher(async () => ({}));
+    });
+
+    it('503 marks the module unreachable and later polls skip its sources', async () => {
+        setupSources([
+            mk({
+                id: 'fusion-mlx',
+                notifications: [
+                    { id: 'n', label: 'N', endpoint: '/api/mlx/notifications', kind: 'engine' },
+                ],
+            }),
+            mk({
+                id: 'fusion-cowork',
+                notifications: [
+                    { id: 'c', label: 'C', endpoint: '/api/cowork/runs', kind: 'runs' },
+                ],
+            }),
+        ]);
+        let mlxCalls = 0;
+        setFetcher(async (path) => {
+            if (path.startsWith('/api/mlx')) {
+                mlxCalls += 1;
+                throw Object.assign(new Error('upstream refused'), { status: 503 });
+            }
+            return { items: [{ id: 'r1', title: 'run R-1 done' }] };
+        });
+        await useNotifications.getState().pollNow();
+        expect(useManifests.getState().unreachableIds.has('fusion-mlx')).toBe(true);
+        expect(mlxCalls).toBe(1);
+        await useNotifications.getState().pollNow();
+        expect(mlxCalls).toBe(1);
+        expect(useNotifications.getState().items.map((i) => i.moduleId)).toEqual(['fusion-cowork']);
+    });
+
+    it('502 also marks unreachable; other errors do not', async () => {
+        setupSources([
+            mk({
+                id: 'fusion-a',
+                notifications: [{ id: 'n', label: 'N', endpoint: '/api/a', kind: 'runs' }],
+            }),
+            mk({
+                id: 'fusion-b',
+                notifications: [{ id: 'n', label: 'N', endpoint: '/api/b', kind: 'runs' }],
+            }),
+        ]);
+        setFetcher(async (path) => {
+            if (path.startsWith('/api/a'))
+                throw Object.assign(new Error('bad gateway'), { status: 502 });
+            throw new Error('plain boom');
+        });
+        await useNotifications.getState().pollNow();
+        expect(useManifests.getState().unreachableIds.has('fusion-a')).toBe(true);
+        expect(useManifests.getState().unreachableIds.has('fusion-b')).toBe(false);
+    });
+});
+
 it('stop cancels polling; no orphan interval after stop→start→stop', async () => {
     setupSources([
         mk({

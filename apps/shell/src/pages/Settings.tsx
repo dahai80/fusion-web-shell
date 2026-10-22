@@ -1,6 +1,7 @@
 import * as api from '@/api/endpoints';
 import { isGatewayPending } from '@/api/endpoints';
 import { pushToast } from '@/components/ToastHost';
+import { guardedLoad } from '@/lib/pendingSurfaces';
 import {
     type AdapterRow,
     type ConnectorRow,
@@ -408,15 +409,18 @@ function PlatformAdaptersSection() {
     const [enabled, setEnabled] = useState(true);
 
     const reload = useCallback(() => {
-        api.listAdapters()
-            .then((d) => {
-                setRows(sanitizeAdapters(d));
+        // Issue #46: one 404 marks the surface pending for the session —
+        // later reloads short-circuit, no repeat console/network noise.
+        guardedLoad('adapters', () => api.listAdapters())
+            .then((r) => {
+                if (r.pending) {
+                    setPending(true);
+                    return;
+                }
+                setRows(sanitizeAdapters(r.data));
                 setPending(false);
             })
-            .catch((err) => {
-                if (isGatewayPending(err)) setPending(true);
-                else console.warn('[settings] adapters list failed', err);
-            });
+            .catch((err) => console.warn('[settings] adapters list failed', err));
     }, []);
     useEffect(() => {
         reload();
@@ -647,15 +651,16 @@ function ConnectorsSection() {
     const [ok, setOk] = useState(true);
 
     const reload = useCallback(() => {
-        api.listConnectors()
-            .then((d) => {
-                setRows(sanitizeConnectors(d));
+        guardedLoad('connectors', () => api.listConnectors())
+            .then((r) => {
+                if (r.pending) {
+                    setPending(true);
+                    return;
+                }
+                setRows(sanitizeConnectors(r.data));
                 setPending(false);
             })
-            .catch((err) => {
-                if (isGatewayPending(err)) setPending(true);
-                else console.warn('[settings] connectors list failed', err);
-            });
+            .catch((err) => console.warn('[settings] connectors list failed', err));
     }, []);
     useEffect(() => {
         reload();
@@ -886,9 +891,13 @@ function PolicyOverridesSection() {
 
     const load = (k: string) => {
         if (!k.trim()) return;
-        api.loadConfig(k.trim())
-            .then((d) => {
-                const body = (d ?? {}) as {
+        guardedLoad(`config:${k.trim()}`, () => api.loadConfig(k.trim()))
+            .then((r) => {
+                if (r.pending) {
+                    setPending(true);
+                    return;
+                }
+                const body = (r.data ?? {}) as {
                     overrides?: Record<string, unknown>;
                     defaults?: Record<string, unknown>;
                 };
@@ -899,12 +908,9 @@ function PolicyOverridesSection() {
                 setDoc(JSON.stringify(overrides ?? body.defaults ?? {}, null, 2));
                 setPending(false);
             })
-            .catch((err) => {
-                if (isGatewayPending(err)) setPending(true);
-                else {
-                    setOk(false);
-                    setMsg(t('加载失败', 'Load failed'));
-                }
+            .catch(() => {
+                setOk(false);
+                setMsg(t('加载失败', 'Load failed'));
             });
     };
 

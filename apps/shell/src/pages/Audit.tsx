@@ -1,4 +1,5 @@
-import { fetchAudit, isGatewayPending } from '@/api/endpoints';
+import { fetchAudit } from '@/api/endpoints';
+import { guardedLoad } from '@/lib/pendingSurfaces';
 import {
     AUDIT_CLASSES,
     type AuditEntry,
@@ -25,19 +26,21 @@ export function AuditPage() {
     const me = useAuth((s) => s.user);
 
     const load = useCallback(async (u: string, c: string) => {
-        try {
-            const d = await fetchAudit(u, c);
-            setEntries(sanitizeAudit(d));
-            setPending(false);
+        // Issue #46: one 404 marks the audit surface pending for the session;
+        // later Apply clicks short-circuit without hitting the network.
+        const r = await guardedLoad('audit', () => fetchAudit(u, c)).catch((err) => {
+            setError((err as Error).message);
+            return null;
+        });
+        if (!r) return;
+        if (r.pending) {
+            setPending(true);
             setError(null);
-        } catch (err) {
-            if (isGatewayPending(err)) {
-                setPending(true);
-                setError(null);
-            } else {
-                setError((err as Error).message);
-            }
+            return;
         }
+        setEntries(sanitizeAudit(r.data));
+        setPending(false);
+        setError(null);
     }, []);
 
     useEffect(() => {

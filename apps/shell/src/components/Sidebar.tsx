@@ -1,4 +1,5 @@
 import { NotificationBell } from '@/components/NotificationBell';
+import { syncExpandedWithActive, toggleExpanded } from '@/lib/sidebarTree';
 import { useAuth } from '@/stores/auth';
 import { t, useLang } from '@/stores/lang';
 import { menuGroups, moduleTitle, useManifests } from '@/stores/manifests';
@@ -6,6 +7,7 @@ import { usePalette } from '@/stores/palette';
 import { useTabs } from '@/stores/tabs';
 import { useTheme } from '@/stores/theme';
 import type { ModuleManifest } from '@/types/manifest';
+import { useEffect, useState } from 'react';
 
 interface Props {
     onOpen(manifest: ModuleManifest, route?: string, pageTitle?: string): void;
@@ -13,9 +15,12 @@ interface Props {
 }
 
 /**
- * Desktop sidebar menu (>= md). Unreachable modules greyed, not removed
- * (PRD §5.2). "+" re-opens an already-open module as a second instance
- * (PRD §6 multi-instance). Bilingual per spec S9.
+ * Desktop sidebar menu (>= md), two-level per issue #46: level 1 = product
+ * (accordion row, click opens its default page), level 2 = the product's
+ * manifest pages, expanded one product at a time. The active product
+ * auto-expands when a tab focuses it. Unreachable modules greyed, not
+ * removed (PRD §5.2). "+" re-opens an already-open module as a second
+ * instance (PRD §6 multi-instance). Bilingual per spec S9.
  */
 export function Sidebar({ onOpen, onLogout }: Props) {
     const manifests = useManifests((s) => s.manifests);
@@ -31,7 +36,12 @@ export function Sidebar({ onOpen, onLogout }: Props) {
     const setLang = useLang((s) => s.setLang);
     const openPalette = usePalette((s) => s.open);
     const groups = menuGroups(manifests, canView, false, lang);
-    const activeManifestId = tabs.find((tb) => tb.id === activeTabId)?.manifestId;
+    const activeManifestId = tabs.find((tb) => tb.id === activeTabId)?.manifestId ?? null;
+    const [expanded, setExpanded] = useState<string | null>(null);
+
+    useEffect(() => {
+        setExpanded((prev) => syncExpandedWithActive(prev, activeManifestId));
+    }, [activeManifestId]);
 
     return (
         <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-bg-elevated md:flex">
@@ -84,59 +94,80 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                             const unreachable = unreachableIds.has(m.id);
                             const active = activeManifestId === m.id;
                             const alreadyOpen = tabs.some((tb) => tb.manifestId === m.id);
+                            const pages = m.pages ?? [];
+                            const open = expanded === m.id;
                             return (
-                                <div key={m.id} className="flex items-center">
-                                    <button
-                                        type="button"
-                                        onClick={() => onOpen(m)}
-                                        className={`flex min-w-0 flex-1 items-center justify-between rounded-md px-2 py-2 text-left text-sm ${active ? 'bg-brand/15 text-brand' : 'text-text-primary hover:bg-bg-muted'} ${unreachable ? 'opacity-40' : ''}`}
-                                    >
-                                        <span className="truncate">{moduleTitle(m, lang)}</span>
-                                        {unreachable ? (
-                                            <span className="ml-2 shrink-0 text-xs text-offline">
-                                                {t('离线', 'Offline')}
-                                            </span>
-                                        ) : null}
-                                    </button>
-                                    {alreadyOpen ? (
+                                <div key={m.id}>
+                                    <div className="flex items-center">
                                         <button
                                             type="button"
-                                            aria-label={`${t('再开一个实例', 'Open another instance')}: ${moduleTitle(m, lang)}`}
-                                            title={t('再开一个实例', 'Open another instance')}
-                                            onClick={() => {
-                                                const id = openTab(m, { multi: true });
-                                                if (!id)
-                                                    console.warn(
-                                                        '[sidebar] multi open refused (limit?)',
-                                                        m.id
-                                                    );
-                                            }}
-                                            className="ml-1 shrink-0 rounded px-1.5 text-sm text-text-muted hover:bg-bg-muted hover:text-brand"
+                                            onClick={() => onOpen(m)}
+                                            className={`flex min-w-0 flex-1 items-center justify-between rounded-md px-2 py-2 text-left text-sm ${active ? 'bg-brand/15 text-brand' : 'text-text-primary hover:bg-bg-muted'} ${unreachable ? 'opacity-40' : ''}`}
                                         >
-                                            +
+                                            <span className="truncate">{moduleTitle(m, lang)}</span>
+                                            {unreachable ? (
+                                                <span className="ml-2 shrink-0 text-xs text-offline">
+                                                    {t('离线', 'Offline')}
+                                                </span>
+                                            ) : null}
                                         </button>
-                                    ) : null}
+                                        {pages.length > 0 ? (
+                                            <button
+                                                type="button"
+                                                aria-expanded={open}
+                                                aria-label={`${t('展开页面列表', 'Expand page list')}: ${moduleTitle(m, lang)}`}
+                                                onClick={() =>
+                                                    setExpanded((prev) =>
+                                                        toggleExpanded(prev, m.id)
+                                                    )
+                                                }
+                                                className={`ml-1 shrink-0 rounded p-1 text-xs text-text-muted hover:bg-bg-muted hover:text-brand ${open ? 'rotate-90' : ''}`}
+                                            >
+                                                ▸
+                                            </button>
+                                        ) : null}
+                                        {alreadyOpen ? (
+                                            <button
+                                                type="button"
+                                                aria-label={`${t('再开一个实例', 'Open another instance')}: ${moduleTitle(m, lang)}`}
+                                                title={t('再开一个实例', 'Open another instance')}
+                                                onClick={() => {
+                                                    const id = openTab(m, { multi: true });
+                                                    if (!id)
+                                                        console.warn(
+                                                            '[sidebar] multi open refused (limit?)',
+                                                            m.id
+                                                        );
+                                                }}
+                                                className="ml-1 shrink-0 rounded px-1.5 text-sm text-text-muted hover:bg-bg-muted hover:text-brand"
+                                            >
+                                                +
+                                            </button>
+                                        ) : null}
+                                    </div>
+                                    {open
+                                        ? pages.map((page) => {
+                                              const pageTitle =
+                                                  lang === 'en' && page.title_en
+                                                      ? page.title_en
+                                                      : page.title;
+                                              return (
+                                                  <button
+                                                      key={`${m.id}:${page.route}`}
+                                                      type="button"
+                                                      onClick={() =>
+                                                          onOpen(m, page.route, pageTitle)
+                                                      }
+                                                      className="flex min-w-0 items-center rounded-md px-2 py-1.5 pl-7 text-left text-xs text-text-secondary hover:bg-bg-muted hover:text-text-primary"
+                                                  >
+                                                      <span className="truncate">{pageTitle}</span>
+                                                  </button>
+                                              );
+                                          })
+                                        : null}
                                 </div>
                             );
                         })}
-                        {g.items.flatMap((m) =>
-                            (m.pages ?? []).map((page) => {
-                                const pageTitle =
-                                    lang === 'en' && page.title_en ? page.title_en : page.title;
-                                return (
-                                    <button
-                                        key={`${m.id}:${page.route}`}
-                                        type="button"
-                                        onClick={() => onOpen(m, page.route, pageTitle)}
-                                        className="flex min-w-0 items-center rounded-md px-2 py-1.5 pl-6 text-left text-xs text-text-secondary hover:bg-bg-muted hover:text-text-primary"
-                                    >
-                                        <span className="truncate">
-                                            {moduleTitle(m, lang)} · {pageTitle}
-                                        </span>
-                                    </button>
-                                );
-                            })
-                        )}
                     </div>
                 ))}
                 {groups.length === 0 ? (

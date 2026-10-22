@@ -14,6 +14,8 @@ Shell host implemented (issues #1-#7 plus PRD/UI-spec gap items):
 - Bilingual chrome (menu/tabs/login) via `t()` with `title_en` support and a language toggle
 - Desktop TabStrip: crashed/interrupted/error badges + close confirmation for tabs with active tasks; mobile drawer tabs are closeable
 - Sidebar "+" opens a second instance of an open module; manifest loads auto-retry with backoff ("retry attempt N"); /users route is lazy-loaded
+- Two-level sidebar (issue #46): level 1 = product accordion row (click opens its default page), level 2 = its manifest `pages` expanded one at a time; the active product auto-expands on tab focus; mobile drawer renders the same nested tree
+- Honest degradation (issue #46): a 404/501 on a not-yet-shipped gateway surface (adapters/connectors/roles/menu-permissions/audit/config) marks it pending for the session (sessionStorage) — one muted badge, no repeat requests; notification sources answering 502/503 mark their module unreachable, stopping the 30s poll loop against stale registrations
 - Dev server port 11430 (complies with the repo-wide 11400-11499 rule, registered in `architecture/port-registry.yaml`)
 
 Gateway-side APIs (session, RBAC, manifest registry, static hosting) live in `fusion-gateway` per PRD R-1 and are required for end-to-end runs.

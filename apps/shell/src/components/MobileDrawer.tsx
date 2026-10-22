@@ -79,45 +79,44 @@ export function MobileDrawer({ open, onClose, onOpenModule, onLogout }: Props) {
                         {g.items.map((m) => {
                             const unreachable = unreachableIds.has(m.id);
                             return (
-                                <button
-                                    key={m.id}
-                                    type="button"
-                                    onClick={() => {
-                                        onOpenModule(m);
-                                        onClose();
-                                    }}
-                                    className={`flex min-h-[44px] w-full items-center justify-between text-left text-sm ${m.id === activeTabId ? 'text-brand' : 'text-text-primary'} ${unreachable ? 'opacity-40' : ''}`}
-                                >
-                                    <span>{moduleTitle(m, lang)}</span>
-                                    {unreachable ? (
-                                        <span className="text-xs text-offline">
-                                            {t('离线', 'Offline')}
-                                        </span>
-                                    ) : null}
-                                </button>
-                            );
-                        })}
-                        {g.items.flatMap((m) =>
-                            (m.pages ?? []).map((page) => {
-                                const pageTitle =
-                                    lang === 'en' && page.title_en ? page.title_en : page.title;
-                                return (
+                                <div key={m.id}>
                                     <button
-                                        key={`${m.id}:${page.route}`}
                                         type="button"
                                         onClick={() => {
-                                            onOpenModule(m, page.route, pageTitle);
+                                            onOpenModule(m);
                                             onClose();
                                         }}
-                                        className="flex min-h-[44px] w-full items-center rounded-md pl-6 text-left text-sm text-text-secondary"
+                                        className={`flex min-h-[44px] w-full items-center justify-between text-left text-sm ${m.id === activeTabId ? 'text-brand' : 'text-text-primary'} ${unreachable ? 'opacity-40' : ''}`}
                                     >
-                                        <span className="truncate">
-                                            {moduleTitle(m, lang)} · {pageTitle}
-                                        </span>
+                                        <span>{moduleTitle(m, lang)}</span>
+                                        {unreachable ? (
+                                            <span className="text-xs text-offline">
+                                                {t('离线', 'Offline')}
+                                            </span>
+                                        ) : null}
                                     </button>
-                                );
-                            })
-                        )}
+                                    {(m.pages ?? []).map((page) => {
+                                        const pageTitle =
+                                            lang === 'en' && page.title_en
+                                                ? page.title_en
+                                                : page.title;
+                                        return (
+                                            <button
+                                                key={`${m.id}:${page.route}`}
+                                                type="button"
+                                                onClick={() => {
+                                                    onOpenModule(m, page.route, pageTitle);
+                                                    onClose();
+                                                }}
+                                                className="flex min-h-[44px] w-full items-center rounded-md pl-8 text-left text-sm text-text-secondary"
+                                            >
+                                                <span className="truncate">{pageTitle}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            );
+                        })}
                     </div>
                 ))}
                 <div className="flex items-center justify-between border-t border-border px-4 py-3 text-sm">

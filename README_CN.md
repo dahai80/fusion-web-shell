@@ -14,6 +14,8 @@ Fusion 统一前端宿主（union-web host）—— fusion-* 系列模块的统�
 - 菜单/标签页/登录页双语（`t()`，`title_en` 支持，语言切换按钮）
 - 桌面 TabStrip：崩溃/中断/错误徽标 + 活跃任务关闭确认（forceClose）；移动抽屉可关标签
 - 侧边栏 "+" 多实例打开；manifests 加载指数退避自动重试（"第 N 次重试中"）；/users 路由懒加载
+- 两级侧边栏（issue #46）：一级 = 模块手风琴行（点击开默认页），二级 = manifest `pages` 页面列表，同时只展开一个模块；活跃模块随标签聚焦自动展开；移动抽屉同款嵌套树
+- 诚实降级（issue #46）：未上线网关面（adapters/connectors/roles/menu-permissions/audit/config）首次 404/501 即标记本会话待定（sessionStorage），只显示一个静默徽标、不再重复请求；通知源 502/503 将模块标记为不可达，停止对过期注册的 30 秒轮询
 - dev server 端口 11430（符合全仓 11400-11499 段规则，已登记 `architecture/port-registry.yaml`）
 
 网关侧 API（登录/RBAC/Manifest 注册中心/静态托管）在 `fusion-gateway` 仓内实现（PRD R-1），端到端联调依赖其就绪。

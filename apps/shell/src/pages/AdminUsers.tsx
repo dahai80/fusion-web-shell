@@ -1,6 +1,7 @@
 import * as api from '@/api/endpoints';
 import { isGatewayPending } from '@/api/endpoints';
 import { pushToast } from '@/components/ToastHost';
+import { guardedLoad } from '@/lib/pendingSurfaces';
 import {
     type MenuPermissionsDoc,
     type RoleRow,
@@ -69,15 +70,13 @@ export function AdminUsersPage() {
 
     useEffect(() => {
         if (!isAdmin) return;
-        api.listRoles()
-            .then((d) => {
-                const parsed = sanitizeRoles(d);
-                if (parsed.roles.length > 0) setRoleNames(parsed.roles.map((r) => r.name));
+        guardedLoad('roles', () => api.listRoles())
+            .then((r) => {
+                if (r.pending) return;
+                const parsed = sanitizeRoles(r.data);
+                if (parsed.roles.length > 0) setRoleNames(parsed.roles.map((x) => x.name));
             })
-            .catch((err) => {
-                if (!isGatewayPending(err))
-                    console.warn('[admin] roles list failed for user tab', err);
-            });
+            .catch((err) => console.warn('[admin] roles list failed for user tab', err));
     }, [isAdmin]);
 
     const createUser = () => {
@@ -491,16 +490,20 @@ function RolesPanel() {
     const [ok, setOk] = useState(true);
 
     const reload = useCallback(async () => {
-        try {
-            const d = await api.listRoles();
-            const parsed = sanitizeRoles(d);
-            setRoles(parsed.roles);
-            setWriteClasses(parsed.writeClasses);
-            setPending(false);
-        } catch (err) {
-            if (isGatewayPending(err)) setPending(true);
-            else console.warn('[admin] roles list failed', err);
+        // Issue #46: one 404 marks the surface pending for the session.
+        const r = await guardedLoad('roles', () => api.listRoles()).catch((err) => {
+            console.warn('[admin] roles list failed', err);
+            return null;
+        });
+        if (!r) return;
+        if (r.pending) {
+            setPending(true);
+            return;
         }
+        const parsed = sanitizeRoles(r.data);
+        setRoles(parsed.roles);
+        setWriteClasses(parsed.writeClasses);
+        setPending(false);
     }, []);
 
     useEffect(() => {
@@ -729,23 +732,29 @@ function MenuPermissionsPanel() {
     const [newHref, setNewHref] = useState('');
 
     const reload = useCallback(async () => {
-        try {
-            const [permDoc, rolesDoc] = await Promise.all([
-                api.loadMenuPermissions(),
-                api.listRoles(),
-            ]);
-            const doc = effectiveMenus(permDoc);
-            const parsed = sanitizeRoles(rolesDoc);
-            setMenus(doc.menus);
-            setAllRoles(parsed.roles.map((r) => r.name));
-            const next = new Set<string>();
-            doc.menus.forEach((m) => m.roles.forEach((r) => next.add(cell(r, m.id))));
-            setGrid(next);
-            setPending(false);
-        } catch (err) {
-            if (isGatewayPending(err)) setPending(true);
-            else console.warn('[admin] menu permissions load failed', err);
+        const [permRes, rolesRes] = await Promise.all([
+            guardedLoad('menu-permissions', () => api.loadMenuPermissions()).catch((err) => {
+                console.warn('[admin] menu permissions load failed', err);
+                return null;
+            }),
+            guardedLoad('roles', () => api.listRoles()).catch((err) => {
+                console.warn('[admin] roles list failed', err);
+                return null;
+            }),
+        ]);
+        if (!permRes || !rolesRes) return;
+        if (permRes.pending || rolesRes.pending) {
+            setPending(true);
+            return;
         }
+        const doc = effectiveMenus(permRes.data);
+        const parsed = sanitizeRoles(rolesRes.data);
+        setMenus(doc.menus);
+        setAllRoles(parsed.roles.map((r) => r.name));
+        const next = new Set<string>();
+        doc.menus.forEach((m) => m.roles.forEach((r) => next.add(cell(r, m.id))));
+        setGrid(next);
+        setPending(false);
     }, []);
 
     useEffect(() => {
