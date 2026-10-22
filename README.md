@@ -13,7 +13,7 @@ Shell host implemented (issues #1-#7 plus PRD/UI-spec gap items):
 - Gateway error envelope `{code,message,module_id,retryable}`: retryable/5xx raises a toast + transient error strip on the active tab (A5)
 - Bilingual chrome (menu/tabs/login) via `t()` with `title_en` support and a language toggle
 - Desktop TabStrip: crashed/interrupted/error badges + close confirmation for tabs with active tasks; mobile drawer tabs are closeable
-- Sidebar "+" opens a second instance of an open module; manifest loads auto-retry with backoff ("retry attempt N"); /admin/users route is lazy-loaded
+- Sidebar "+" opens a second instance of an open module; manifest loads auto-retry with backoff ("retry attempt N"); /users route is lazy-loaded
 - Dev server port 11430 (complies with the repo-wide 11400-11499 rule, registered in `architecture/port-registry.yaml`)
 
 Gateway-side APIs (session, RBAC, manifest registry, static hosting) live in `fusion-gateway` per PRD R-1 and are required for end-to-end runs.
@@ -88,7 +88,7 @@ The Home message box is a shell-level delegation entry with phase-1 rule routing
 Host pages migrated from f-ecommerce (settings/users/audit) with the same layout and interactions, generalized and rendered with the shell design tokens. Backend contracts live in [`docs/f-ecommerce-migration-e6.md`](docs/f-ecommerce-migration-e6.md); until the gateway ships a surface its section degrades to a gateway-pending notice.
 
 - **Settings** (`/settings`, admin): three sections below API keys — Platform Adapters (encrypted credential vault: save encrypted, masked projection, test connection; pairs with the gateway KeyService line), Third-Party Connectors (config-first onboarding with the sync-example loader, validation badges, test-first-operation), Policy Overrides (JSON editor merged over template defaults at runtime).
-- **Users** (`/admin/users`, admin): three tabs — the existing Users CRUD/grants, plus Roles (builtin fixed, custom roles grant write classes) and Menu Permissions (role ↔ menu matrix editor with add-menu / reset-to-defaults), backed by the E5 identity contract (fusion-identity#12).
+- **Users** (`/users`, admin): three tabs — the existing Users CRUD/grants, plus Roles (builtin fixed, custom roles grant write classes) and Menu Permissions (role ↔ menu matrix editor with add-menu / reset-to-defaults), backed by the E5 identity contract (fusion-identity#12).
 - **Audit** (`/audit`, admin/auditor, sidebar ☰ entry): read-only hash-chained trail with user/class filters; `tampered` rows mark log modification outside the system.
 
 - PRD: `~/fusion/architecture/fusion-union-web-prd-1015.md`

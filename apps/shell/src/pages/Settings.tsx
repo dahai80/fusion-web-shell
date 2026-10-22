@@ -5,6 +5,7 @@ import {
     type AdapterRow,
     type ConnectorRow,
     SYNC_EXAMPLE,
+    formatAdminError,
     parseJsonInput,
     sanitizeAdapters,
     sanitizeConnectors,
@@ -26,7 +27,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
  * gateway ships K2 (fusion-gateway#262) instead of an error wall.
  */
 export function SettingsPage() {
-    const isAdmin = useAuth((s) => s.user?.roles.includes('admin') ?? false);
+    const roles = useAuth((s) => s.user?.roles ?? []);
+    const isAdmin = roles.includes('admin') || roles.includes('ops_lead');
     const items = useKeys((s) => s.items);
     const loading = useKeys((s) => s.loading);
     const error = useKeys((s) => s.error);
@@ -279,8 +281,8 @@ export function SettingsPage() {
             ) : (
                 <div className="mt-6 rounded-card border border-border bg-bg-elevated px-4 py-3 text-xs text-text-muted">
                     {t(
-                        '平台适配器 / 第三方连接器 / 策略覆盖需要管理员角色。',
-                        'Platform adapters / connectors / policy overrides require the admin role.'
+                        '平台适配器 / 第三方连接器 / 策略覆盖需要 ops_lead 或管理员角色。',
+                        'Platform adapters / connectors / policy overrides require the ops_lead or admin role.'
                     )}
                 </div>
             )}
@@ -427,6 +429,11 @@ function PlatformAdaptersSection() {
             setMsg(t('凭据必须是 JSON', 'Credentials must be JSON'));
             return;
         }
+        if (!platform.trim()) {
+            setOk(false);
+            setMsg(t('平台名不能为空。', 'Platform name is required.'));
+            return;
+        }
         api.saveAdapter(platform.trim(), {
             credentials: parsed.value as Record<string, string>,
             rate_limit_rps: Number.parseFloat(rate) || 0,
@@ -444,7 +451,11 @@ function PlatformAdaptersSection() {
                 setMsg(
                     isGatewayPending(err)
                         ? t('网关面未上线。', 'Gateway surface not shipped yet.')
-                        : t('保存失败（仅管理员）。', 'Save failed (admin only).')
+                        : formatAdminError(err) ||
+                              t(
+                                  '保存失败（仅 ops_lead/管理员）。',
+                                  'Save failed (ops_lead/admin only).'
+                              )
                 );
             });
     };
@@ -459,9 +470,11 @@ function PlatformAdaptersSection() {
                 );
                 reload();
             })
-            .catch(() => {
+            .catch((err) => {
                 setOk(false);
-                setMsg(`${p}: ${t('测试请求失败', 'test request failed')}`);
+                setMsg(
+                    `${p}: ${t('失败 — ', 'failed — ')}${formatAdminError(err) || t('测试请求失败', 'test request failed')}`
+                );
             });
     };
 
@@ -649,10 +662,15 @@ function ConnectorsSection() {
     }, [reload]);
 
     const save = () => {
-        const parsed = parseJsonInput(doc);
+        const parsed = parseJsonInput(doc, { requireNonEmpty: true });
         if (!parsed.ok) {
             setOk(false);
             setMsg(t('连接器文档必须是合法 JSON', 'Connector document must be valid JSON'));
+            return;
+        }
+        if (!id.trim()) {
+            setOk(false);
+            setMsg(t('连接器 ID 不能为空。', 'Connector id is required.'));
             return;
         }
         api.saveConnector(id.trim(), parsed.value)
@@ -666,9 +684,17 @@ function ConnectorsSection() {
                 );
                 reload();
             })
-            .catch(() => {
+            .catch((err) => {
                 setOk(false);
-                setMsg(t('保存失败（仅管理员）。', 'Save failed (admin only).'));
+                setMsg(
+                    isGatewayPending(err)
+                        ? t('网关面未上线。', 'Gateway surface not shipped yet.')
+                        : formatAdminError(err) ||
+                              t(
+                                  '保存失败（仅 ops_lead/管理员）。',
+                                  'Save failed (ops_lead/admin only).'
+                              )
+                );
             });
     };
 
@@ -690,9 +716,9 @@ function ConnectorsSection() {
                         : r.detail || r.reason || r.error_code || t('测试失败', 'test failed')
                 );
             })
-            .catch(() => {
+            .catch((err) => {
                 setOk(false);
-                setMsg(t('测试请求失败', 'test request failed'));
+                setMsg(formatAdminError(err) || t('测试请求失败', 'test request failed'));
             });
     };
 
@@ -707,6 +733,12 @@ function ConnectorsSection() {
                     )}
                 </span>
             </h2>
+            <p className="mt-1 text-xs text-text-muted">
+                {t(
+                    '连接器 JSON 使 REST+JSON 第三方无需写代码即可接入。通过下方编辑器上传。',
+                    'A connector JSON makes a REST+JSON third party onboardable without code. Upload via the editor below.'
+                )}
+            </p>
             {pending ? (
                 <div className="mt-2">
                     <PendingNote />
@@ -766,7 +798,10 @@ function ConnectorsSection() {
                                 {rows.length === 0 ? (
                                     <tr>
                                         <td colSpan={5} className="px-3 py-3 text-text-muted">
-                                            {t('暂无连接器配置', 'No connectors configured')}
+                                            {t(
+                                                '暂无连接器配置 — 契约见 docs/f-ecommerce-migration-e6.md',
+                                                'No connectors configured — contract in docs/f-ecommerce-migration-e6.md'
+                                            )}
                                         </td>
                                     </tr>
                                 ) : null}
@@ -874,10 +909,15 @@ function PolicyOverridesSection() {
     };
 
     const save = () => {
-        const parsed = parseJsonInput(doc);
+        const parsed = parseJsonInput(doc, { requireNonEmpty: true });
         if (!parsed.ok) {
             setOk(false);
             setMsg(t('JSON 不合法', 'Invalid JSON'));
+            return;
+        }
+        if (!key.trim()) {
+            setOk(false);
+            setMsg(t('策略键不能为空。', 'Policy key is required.'));
             return;
         }
         api.saveConfig(key.trim(), parsed.value)
@@ -886,9 +926,17 @@ function PolicyOverridesSection() {
                 setMsg(t('覆盖已保存（立即生效）。', 'Override saved (effective immediately).'));
                 console.log('[settings] policy override saved:', key);
             })
-            .catch(() => {
+            .catch((err) => {
                 setOk(false);
-                setMsg(t('保存失败（仅管理员）。', 'Save failed (admin only).'));
+                setMsg(
+                    isGatewayPending(err)
+                        ? t('网关面未上线。', 'Gateway surface not shipped yet.')
+                        : formatAdminError(err) ||
+                              t(
+                                  '保存失败（仅 ops_lead/管理员）。',
+                                  'Save failed (ops_lead/admin only).'
+                              )
+                );
             });
     };
 
@@ -900,6 +948,12 @@ function PolicyOverridesSection() {
                     {t('运行时合并到模板默认值之上', 'merged over template defaults at runtime')}
                 </span>
             </h2>
+            <p className="mt-1 text-xs text-text-muted">
+                {t(
+                    '策略立即生效：模块在运行时读取覆盖值（合并到模板默认值之上）。',
+                    'Policies take effect immediately: modules read overrides merged over template defaults at runtime.'
+                )}
+            </p>
             {pending ? (
                 <div className="mt-2">
                     <PendingNote />

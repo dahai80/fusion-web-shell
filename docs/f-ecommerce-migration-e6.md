@@ -74,7 +74,9 @@ role once E5 lands (fusion-identity#12).
 ## Hosting notes
 
 - Pages are shell host routes: `/settings` (three E6 sections below API keys),
-  `/admin/users` (Users / Roles / Menu Permissions tabs), `/audit`.
+  `/users` (Users / Roles / Menu Permissions tabs), `/audit`. Users lives at
+  `/users`, not `/admin/users`: the gateway reserves `/admin/*` for its own
+  embedded admin SPA, which would shadow the shell route.
 - The f-ecommerce GUI is migrated unchanged: same tables, columns, `<details>`
   configure forms, test buttons, and honest badge semantics — rendered with the
   shell design tokens instead of app.css.
