@@ -87,6 +87,35 @@ Cards with `chip: true` render as suggested chips; clicking one prefills the
 Home message box and deep-links `${entry}#${route}` into the module. Absent
 `home` = no contribution.
 
+## home.projects — Projects/Spaces section (shell#41)
+
+`home.projects` is an optional list of poll sources declaring the module's
+spaces/projects for the Home "项目 / 空间" section (organization dimension).
+Same contract family as notifications (gateway #273 passes them through):
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `home.projects[].id` | string | yes | Source key, unique within the module |
+| `home.projects[].label` | string | yes | zh label |
+| `home.projects[].label_en` | string | no | en label |
+| `home.projects[].endpoint` | string | yes | Gateway-absolute `/...` path polled for `{"items": [...]}` |
+
+Poll contract: `GET ${endpoint}` returns `{"items": [...]}` with per-item
+fields:
+
+| Item field | Type | Required | Description |
+|---|---|---|---|
+| `id` | string | yes | Stable item id (not a fresh UUID per poll) |
+| `title` | string | yes | Space/project name |
+| `description` | string | no | One-line description (row tooltip) |
+| `updated_at` | string | no | Rendered as-is |
+| `route` | string | yes | Module-relative `/...`, no `#`; row deep-links `${entry}#${route}` into the space view |
+
+Items without a valid `route` are dropped (a space without a deep link is
+not actionable). The section groups entries by module, greys unreachable
+modules, and stays hidden when no module declares `home.projects`.
+Per-source failure isolation matches the task feed.
+
 ## kind: tasks — Home task feed + inline approvals (shell#33)
 
 A `notifications` source with `kind: "tasks"` feeds the Home running /
@@ -103,6 +132,8 @@ recently completed / scheduled sections instead of the bell. Poll contract:
 | `artifacts` | number | no | Artifact count badge |
 | `updated_at` | string | no | Rendered as-is |
 | `route` | string | no | Module-relative `/...`; card click deep-links into the module |
+| `space` | string | no | Owning space/project display name — rendered as a chip on the card (shell#41) |
+| `space_route` | string | no | Module-relative `/...`; chip click deep-links into the owning space view |
 
 Approval wire contract: the host `POST`s to `pending_approval.endpoint` with
 `{"id": <item id>, "action": "reject" | "allow_once" | "always_allow"}`; any
@@ -119,7 +150,7 @@ re-sanitizes on load — modules must satisfy the strictest of the two:
 - Endpoints and page routes: gateway-absolute `/...`, no `..` traversal.
 - Page routes and home card routes must not contain `#` (the deep-link form is `#${route}`).
 - `kind` is restricted to `approvals|runs|engine|tasks`.
-- Each ext array caps at 32 entries (`home.cards` included).
+- Each ext array caps at 32 entries (`home.cards` / `home.projects` included).
 
 ## Copy-paste example
 
@@ -147,6 +178,9 @@ re-sanitizes on load — modules must satisfy the strictest of the two:
   "home": {
     "cards": [
       { "id": "monthly-close", "title": "月度对账", "title_en": "Monthly close", "description": "对账并生成报告", "route": "/workflows/monthly-close", "chip": true }
+    ],
+    "projects": [
+      { "id": "spaces", "label": "空间", "label_en": "Spaces", "endpoint": "/api/v1/cowork/spaces" }
     ]
   }
 }
@@ -158,3 +192,7 @@ re-sanitizes on load — modules must satisfy the strictest of the two:
 2. Re-register (or restart the module's registration on boot).
 3. Verify on :11432: ⌘K query hits the provider, bell lists items, sidebar
    lists sub-pages.
+4. For `home.projects` (shell#41): serve `GET ${endpoint}` with
+   `{"items": [{id, title, route, description?, updated_at?}]}` and stamp
+   task items with `space`/`space_route` so Home task cards show the
+   owning-space chip.

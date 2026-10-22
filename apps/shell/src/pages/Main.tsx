@@ -8,6 +8,7 @@ import { pushToast } from '@/components/ToastHost';
 import { t } from '@/stores/lang';
 import { useManifests } from '@/stores/manifests';
 import { useNotifications } from '@/stores/notifications';
+import { useProjects } from '@/stores/projects';
 import { getDevModules, restorePersistedTabs, useTabs } from '@/stores/tabs';
 import { useTasks } from '@/stores/tasks';
 import type { ModuleManifest } from '@/types/manifest';
@@ -19,6 +20,7 @@ interface Props {
 }
 
 const NOTIFICATIONS_POLL_MS = 30000;
+const PROJECTS_POLL_MS = 60000;
 
 /**
  * Shell main layout (PRD §8.1): desktop sidebar + tab strip + multi-tab area;
@@ -71,6 +73,16 @@ export function MainPage({ onLogout }: Props) {
         if (!store.polling) void store.start(NOTIFICATIONS_POLL_MS);
         else void store.pollNow();
         return () => useTasks.getState().stop();
+    }, [manifestsLoaded]);
+
+    // Home projects/spaces feed (issue #41): slower cadence — spaces change
+    // rarely; same per-source isolation contract as the task feed.
+    useEffect(() => {
+        if (!manifestsLoaded) return;
+        const store = useProjects.getState();
+        if (!store.polling) void store.start(PROJECTS_POLL_MS);
+        else void store.pollNow();
+        return () => useProjects.getState().stop();
     }, [manifestsLoaded]);
 
     const handleOpen = (m: ModuleManifest, route?: string, pageTitle?: string) => {

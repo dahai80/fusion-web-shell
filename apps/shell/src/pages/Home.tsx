@@ -8,8 +8,10 @@ import {
     useDelegation,
 } from '@/stores/delegation';
 import { t, useLang } from '@/stores/lang';
+import type { Lang } from '@/stores/lang';
 import { moduleTitle, useManifests } from '@/stores/manifests';
 import { type Effort, usePrefs } from '@/stores/prefs';
+import { type ProjectItem, useProjects } from '@/stores/projects';
 import { type ApprovalAction, type TaskItem, taskBucket, useTasks } from '@/stores/tasks';
 import type { ModuleManifest } from '@/types/manifest';
 import { EmptyState } from '@fusion/web-ui';
@@ -228,12 +230,14 @@ function TaskRow({
     task,
     moduleLabel,
     onOpen,
+    onOpenSpace,
     onApprove,
     approveBusy,
 }: {
     task: TaskItem;
     moduleLabel: string;
     onOpen(task: TaskItem): void;
+    onOpenSpace(task: TaskItem): void;
     onApprove(taskId: string, action: ApprovalAction): void;
     approveBusy: boolean;
 }) {
@@ -248,6 +252,16 @@ function TaskRow({
                 >
                     {task.title}
                 </button>
+                {task.space ? (
+                    <button
+                        type="button"
+                        onClick={() => onOpenSpace(task)}
+                        title={t('所属项目/空间', 'Owning project/space')}
+                        className="shrink-0 rounded-full border border-border bg-bg-muted px-2 py-0.5 text-xs text-text-secondary hover:border-brand hover:text-brand"
+                    >
+                        {task.space}
+                    </button>
+                ) : null}
                 <span className="shrink-0 text-xs text-text-muted">{moduleLabel}</span>
                 {typeof task.progress === 'number' ? (
                     <span className="shrink-0 font-mono text-xs tabular-nums text-text-secondary">
@@ -306,6 +320,70 @@ function TaskSection({
     );
 }
 
+// SECTION: projects/spaces
+
+/** Projects/spaces section (issue #41): module-declared sources grouped by
+ *  module, greyed when unreachable, deep-linking into the space view. */
+function ProjectsSection({
+    manifests,
+    unreachableIds,
+    itemsByModule,
+    lang,
+    onOpen,
+}: {
+    manifests: ModuleManifest[];
+    unreachableIds: Set<string>;
+    itemsByModule: Map<string, ProjectItem[]>;
+    lang: Lang;
+    onOpen(m: ModuleManifest, route: string): void;
+}) {
+    const sources = manifests.filter((m) => (m.homeProjects ?? []).length > 0);
+    if (sources.length === 0) return null;
+    return (
+        <section className="rounded-card border border-border bg-bg-elevated">
+            <h2 className="flex items-center gap-2 border-b border-border px-4 py-3 text-sm font-medium text-text-primary">
+                <span aria-hidden>🗂</span>
+                {t('项目 / 空间', 'Projects / Spaces')}
+            </h2>
+            {sources.map((m) => {
+                const items = itemsByModule.get(m.id) ?? [];
+                const unreachable = unreachableIds.has(m.id);
+                return (
+                    <div
+                        key={m.id}
+                        className={`border-b border-border px-4 py-3 last:border-b-0 ${unreachable ? 'opacity-40' : ''}`}
+                    >
+                        <div className="mb-1 text-xs text-text-muted">{moduleTitle(m, lang)}</div>
+                        {unreachable ? (
+                            <div className="text-xs text-text-muted">
+                                {t('模块暂不可达', 'Module unreachable')}
+                            </div>
+                        ) : items.length === 0 ? (
+                            <div className="text-xs text-text-muted">
+                                {t('该模块暂无项目/空间', 'No projects in this module')}
+                            </div>
+                        ) : (
+                            <div className="flex flex-wrap gap-2">
+                                {items.map((p) => (
+                                    <button
+                                        key={p.id}
+                                        type="button"
+                                        onClick={() => onOpen(m, p.route!)}
+                                        title={p.description ?? p.title}
+                                        className="rounded-full border border-border px-3 py-1.5 text-xs text-text-secondary hover:border-brand hover:text-brand"
+                                    >
+                                        {p.title}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                );
+            })}
+        </section>
+    );
+}
+
 // SECTION: page
 
 /** Home landing (issue #32/#33): greeting + status strip + delegation message
@@ -318,6 +396,7 @@ export function HomePage({ onOpen }: Props) {
     const lang = useLang((l) => l.lang);
     const tasks = useTasks((s) => s.items);
     const approve = useTasks((s) => s.approve);
+    const projectItems = useProjects((s) => s.items);
     const [approveBusyId, setApproveBusyId] = useState<string | null>(null);
     const [draft, setDraft] = useState('');
     const byId = new Map(manifests.map((m) => [m.id, m]));
@@ -333,6 +412,17 @@ export function HomePage({ onOpen }: Props) {
             return;
         }
         onOpen(m, task.route, task.title.slice(0, 24));
+    };
+
+    // Space chip deep link (issue #41): jump into the owning space view when
+    // the module declared one; fall back to the plain module entry.
+    const openTaskSpace = (task: TaskItem) => {
+        const m = byId.get(task.moduleId);
+        if (!m) {
+            console.warn('[home] task space module missing:', task.moduleId);
+            return;
+        }
+        onOpen(m, task.spaceRoute ?? undefined, task.space?.slice(0, 24));
     };
 
     const handleApprove = async (taskId: string, action: ApprovalAction) => {
@@ -359,6 +449,7 @@ export function HomePage({ onOpen }: Props) {
                 return m ? moduleTitle(m, lang) : task.moduleId;
             })()}
             onOpen={openTask}
+            onOpenSpace={openTaskSpace}
             onApprove={(id, action) => void handleApprove(id, action)}
             approveBusy={approveBusyId === task.id}
         />
@@ -559,6 +650,22 @@ export function HomePage({ onOpen }: Props) {
                         renderRow={renderRow}
                     />
                 </div>
+
+                <ProjectsSection
+                    manifests={manifests}
+                    unreachableIds={unreachableIds}
+                    itemsByModule={(() => {
+                        const map = new Map<string, ProjectItem[]>();
+                        for (const p of projectItems) {
+                            const list = map.get(p.moduleId) ?? [];
+                            list.push(p);
+                            map.set(p.moduleId, list);
+                        }
+                        return map;
+                    })()}
+                    lang={lang}
+                    onOpen={(m, route) => onOpen(m, route)}
+                />
             </div>
         </div>
     );
