@@ -1,5 +1,9 @@
 import { NotificationBell } from '@/components/NotificationBell';
-import { syncExpandedWithActive, toggleExpanded } from '@/lib/sidebarTree';
+import {
+    syncExpandedWithActive,
+    rowClickIntent,
+    toggleExpanded,
+} from '@/lib/sidebarTree';
 import { useAuth } from '@/stores/auth';
 import { t, useLang } from '@/stores/lang';
 import { menuGroups, moduleTitle, useManifests } from '@/stores/manifests';
@@ -101,7 +105,13 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                                     <div className="flex items-center">
                                         <button
                                             type="button"
-                                            onClick={() => onOpen(m)}
+                                            onClick={() => {
+                                                const intent = rowClickIntent(expanded, m.id);
+                                                if (intent.navigate) onOpen(m);
+                                                setExpanded((prev) =>
+                                                    intent.expand ? m.id : toggleExpanded(prev, m.id)
+                                                );
+                                            }}
                                             className={`flex min-w-0 flex-1 items-center justify-between rounded-md px-2 py-2 text-left text-sm ${active ? 'bg-brand/15 text-brand' : 'text-text-primary hover:bg-bg-muted'} ${unreachable ? 'opacity-40' : ''}`}
                                         >
                                             <span className="truncate">{moduleTitle(m, lang)}</span>
