@@ -71,13 +71,13 @@ The Home message box is a shell-level delegation entry with phase-1 rule routing
 
 ## Settings: API keys (issue #35)
 
-`/settings` (sidebar `⚙ Settings`): self-serve API keys for scripts/CI against the gateway.
+`/settings` (sidebar `⚙ Settings`): manage gateway user keys (`fk-` credentials for scripts/CI) through the session-gated admin surface `GET/POST /api/v1/shell/keys`, `POST /api/v1/shell/keys/{name}/rotate`, `DELETE /api/v1/shell/keys/{name}` (fusion-gateway#272; the master-gated `/api/v1/keys` control plane stays as-is — the master key never reaches a browser).
 
-- **Create** — key name + scope matrix driven by registered manifests (`<module>:read|write|execute`, all unchecked by default). The plaintext is revealed exactly once in a copy dialog (never logged, never persisted client-side); the list surface only carries the last 4 chars.
-- **Rotate** — confirmation notes the grace window for the old key; the new plaintext uses the same one-time reveal.
-- **Revoke** — confirmation with the key name; immediate and irreversible.
-- **Usage** — per key: scopes, created/last-used dates, recent call count.
-- **Degradation** — until the gateway ships the key service (K2, fusion-gateway#262) the page shows a gateway-pending notice instead of an error wall; it becomes fully usable the moment the endpoint exists.
+- **Create** — key name + scope matrix driven by registered manifests (`<module>:read|write|execute`, all unchecked by default). The plaintext (`raw_key`) is revealed exactly once in a copy dialog (never logged, never persisted client-side); the list surface only carries the `fk-…tail4` prefix.
+- **Rotate** — confirmation notes the dual-active grace window for the old key; the new plaintext uses the same one-time reveal.
+- **Revoke** — confirmation with the key name; soft-revoked server-side (row kept for audit), shown with a status badge.
+- **Usage** — per key: scopes, created/updated dates, quota when configured.
+- **Degradation** — until the gateway ships the session-gated key surface (fusion-gateway#271) the page shows a gateway-pending notice instead of an error wall; it becomes fully usable the moment the endpoint exists.
 
 - PRD: `~/fusion/architecture/fusion-union-web-prd-1015.md`
 - UI Spec: `~/fusion/architecture/fusion-web-ui-spec-1015.md`
