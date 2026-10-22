@@ -8,7 +8,15 @@ function errWithStatus(status: number): Error {
 
 describe('pending surface guard (issue #46)', () => {
     beforeEach(() => {
+        sessionStorage.removeItem('fusion.shell.pendingSurfaces');
         resetPendingSurfaces();
+    });
+
+    it('pending marks survive a page reload via sessionStorage', async () => {
+        await guardedLoad('adapters', async () => {
+            throw errWithStatus(404);
+        });
+        expect(sessionStorage.getItem('fusion.shell.pendingSurfaces')).toContain('adapters');
     });
 
     it('404 marks the surface pending and later calls skip the network entirely', async () => {
