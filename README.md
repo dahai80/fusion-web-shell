@@ -83,6 +83,14 @@ The Home message box is a shell-level delegation entry with phase-1 rule routing
 - **Usage** — per key: scopes, created/updated dates, quota when configured.
 - **Degradation** — until the gateway ships the session-gated key surface (fusion-gateway#271) the page shows a gateway-pending notice instead of an error wall; it becomes fully usable the moment the endpoint exists.
 
+## Migration E6: platform settings, users & roles, audit (issue #42)
+
+Host pages migrated from f-ecommerce (settings/users/audit) with the same layout and interactions, generalized and rendered with the shell design tokens. Backend contracts live in [`docs/f-ecommerce-migration-e6.md`](docs/f-ecommerce-migration-e6.md); until the gateway ships a surface its section degrades to a gateway-pending notice.
+
+- **Settings** (`/settings`, admin): three sections below API keys — Platform Adapters (encrypted credential vault: save encrypted, masked projection, test connection; pairs with the gateway KeyService line), Third-Party Connectors (config-first onboarding with the sync-example loader, validation badges, test-first-operation), Policy Overrides (JSON editor merged over template defaults at runtime).
+- **Users** (`/admin/users`, admin): three tabs — the existing Users CRUD/grants, plus Roles (builtin fixed, custom roles grant write classes) and Menu Permissions (role ↔ menu matrix editor with add-menu / reset-to-defaults), backed by the E5 identity contract (fusion-identity#12).
+- **Audit** (`/audit`, admin/auditor, sidebar ☰ entry): read-only hash-chained trail with user/class filters; `tampered` rows mark log modification outside the system.
+
 - PRD: `~/fusion/architecture/fusion-union-web-prd-1015.md`
 - UI Spec: `~/fusion/architecture/fusion-web-ui-spec-1015.md`
 
