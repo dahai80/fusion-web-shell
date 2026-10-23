@@ -43,6 +43,8 @@ Manifest schema v1 ext (all optional, sanitized on load; gateway pass-through of
 
 `permissions_policy` (issue #66) delegates iframe Permissions-Policy features — tokens restricted to `microphone | camera`, each scoped to the frame's own origin (`allow="microphone 'src'"`). AV modules need it for `getUserMedia` inside the shell iframe; absent field = no `allow` attribute, existing modules unchanged.
 
+Module onboarding (any repo, user/roles read, SSE-in-iframe constraints): `docs/module-integration-notes.md`.
+
 Full schema addendum with copy-paste manifest example and both-sides validation vocabulary: [`docs/manifest-ext-schema.md`](docs/manifest-ext-schema.md) (#26).
 
 ## Home (issue #32)
