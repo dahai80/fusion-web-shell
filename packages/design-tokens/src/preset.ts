@@ -1,5 +1,5 @@
 import type { Config } from 'tailwindcss';
-import { cssVarName, palette, radius, typography } from './tokens';
+import { cssVarName, palette, radius, shadow, typography, zIndex } from './tokens';
 
 /**
  * Tailwind preset generated from the token source (G5): every fusion web UI
@@ -35,8 +35,14 @@ export const fusionPreset: Partial<Config> = {
                 xl: typography.fontSize.xl,
             },
             boxShadow: {
-                overlay: '0 8px 24px rgb(0 0 0 / 0.35)',
+                overlay: shadow.elev1,
+                modal: shadow.elev2,
             },
+            // z-index ladder (issue #56): consumers pick z-dropdown/z-overlay/
+            // z-toast — never ad-hoc z-50/z-[60] values.
+            zIndex: Object.fromEntries(
+                Object.keys(zIndex).map((key) => [key, `var(--fs-z-${key})`])
+            ),
         },
     },
 };

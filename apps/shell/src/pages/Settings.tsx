@@ -117,14 +117,14 @@ export function SettingsPage() {
                     <button
                         type="button"
                         onClick={() => navigateShell('/')}
-                        className="rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary"
+                        className="fs-btn fs-btn-secondary"
                     >
                         {t('← 返回', '← Back')}
                     </button>
                     <button
                         type="button"
                         onClick={() => void refresh()}
-                        className="rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary"
+                        className="fs-btn fs-btn-secondary"
                     >
                         {t('刷新', 'Refresh')}
                     </button>
@@ -183,7 +183,7 @@ export function SettingsPage() {
                     type="button"
                     disabled={!name.trim() || selectedScopes.length === 0 || busy}
                     onClick={() => void onCreate()}
-                    className="mt-3 rounded-md bg-brand px-4 py-2 text-sm text-white disabled:opacity-40"
+                    className="mt-3 fs-btn fs-btn-primary disabled:opacity-40"
                 >
                     {t('创建密钥', 'Create key')}
                     {selectedScopes.length > 0
@@ -255,14 +255,14 @@ export function SettingsPage() {
                                         <button
                                             type="button"
                                             onClick={() => setRotateTarget(k)}
-                                            className="rounded-md border border-border px-3 py-1.5 text-xs text-text-primary"
+                                            className="fs-btn fs-btn-secondary text-xs"
                                         >
                                             {t('轮换', 'Rotate')}
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => setRevokeTarget(k)}
-                                            className="rounded-md border border-error/60 px-3 py-1.5 text-xs text-error"
+                                            className="fs-btn fs-btn-danger text-xs"
                                         >
                                             {t('吊销', 'Revoke')}
                                         </button>
@@ -328,10 +328,10 @@ function PlaintextDialog({ issued, onClose }: { issued: IssuedKey; onClose(): vo
     const [copied, setCopied] = useState(false);
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            className="fixed inset-0 z-overlay flex items-center justify-center bg-black/50 p-4"
             onMouseDown={(e) => e.target === e.currentTarget && onClose()}
         >
-            <div className="w-full max-w-md rounded-card border border-border bg-bg-elevated p-4">
+            <div className="fs-elev-2 w-full max-w-md rounded-card border border-border bg-bg-elevated p-4">
                 <div className="text-base text-text-primary">
                     {t('密钥已创建（仅显示一次）', 'Key created (shown once)')}
                 </div>
@@ -366,7 +366,7 @@ function PlaintextDialog({ issued, onClose }: { issued: IssuedKey; onClose(): vo
                     <button
                         type="button"
                         onClick={onClose}
-                        className="rounded-md bg-brand px-4 py-2 text-sm text-white"
+                        className="fs-btn fs-btn-primary"
                     >
                         {t('我已保存', 'Saved')}
                     </button>
@@ -550,7 +550,7 @@ function PlatformAdaptersSection() {
                                             <button
                                                 type="button"
                                                 onClick={() => test(a.platform)}
-                                                className="rounded-md border border-border px-2 py-1 text-text-primary hover:border-brand"
+                                                className="fs-btn fs-btn-secondary px-2 py-1"
                                             >
                                                 {t('测试', 'Test')}
                                             </button>
@@ -617,7 +617,7 @@ function PlatformAdaptersSection() {
                                 <button
                                     type="button"
                                     onClick={save}
-                                    className="rounded-md bg-brand px-3 py-1.5 text-white"
+                                    className="fs-btn fs-btn-primary"
                                 >
                                     {t('保存（加密）', 'Save (encrypted)')}
                                 </button>
@@ -791,7 +791,7 @@ function ConnectorsSection() {
                                                 <button
                                                     type="button"
                                                     onClick={() => test(c.id, c.operations[0])}
-                                                    className="rounded-md border border-border px-2 py-1 text-text-primary hover:border-brand"
+                                                    className="fs-btn fs-btn-secondary px-2 py-1"
                                                 >
                                                     {t('测试', 'Test')} {c.operations[0]}
                                                 </button>
@@ -845,7 +845,7 @@ function ConnectorsSection() {
                                         setId(SYNC_EXAMPLE.id);
                                         setDoc(JSON.stringify(SYNC_EXAMPLE, null, 2));
                                     }}
-                                    className="rounded-md border border-border px-3 py-1.5 text-xs text-text-secondary hover:border-brand"
+                                    className="fs-btn fs-btn-secondary text-xs"
                                 >
                                     {t('载入同步示例', 'Load sync example')}
                                 </button>
@@ -860,14 +860,14 @@ function ConnectorsSection() {
                                 <button
                                     type="button"
                                     onClick={save}
-                                    className="rounded-md bg-brand px-3 py-1.5 text-sm text-white"
+                                    className="fs-btn fs-btn-primary"
                                 >
                                     {t('保存连接器', 'Save Connector')}
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => test(id.trim())}
-                                    className="rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary hover:border-brand"
+                                    className="fs-btn fs-btn-secondary"
                                 >
                                     {t('测试首个操作', 'Test first operation')}
                                 </button>
@@ -980,14 +980,14 @@ function PolicyOverridesSection() {
                         <button
                             type="button"
                             onClick={() => load(key)}
-                            className="rounded-md border border-border px-3 py-1.5 text-xs text-text-secondary hover:border-brand"
+                            className="fs-btn fs-btn-secondary text-xs"
                         >
                             {t('加载', 'Load')}
                         </button>
                         <button
                             type="button"
                             onClick={save}
-                            className="rounded-md bg-brand px-3 py-1.5 text-xs text-white"
+                            className="fs-btn fs-btn-primary text-xs"
                         >
                             {t('保存覆盖', 'Save Override')}
                         </button>

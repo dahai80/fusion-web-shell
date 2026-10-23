@@ -1,1 +1,69 @@
 @import "@fusion/design-tokens/tokens.css";
+
+/* Interaction-layer contract (issue #56): elevation tiers + button levels.
+   Consumers use these classes so no surface picks off-scale shadows,
+   radii, or z-index values. */
+
+.fs-elev-1 {
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
+}
+
+.fs-elev-2 {
+    box-shadow: 0 16px 48px rgb(0 0 0 / 0.45);
+}
+
+/* Button levels: ONE radius token (--fs-radius-card) + ONE padding step
+   per level. Sizes: inline = fs-btn-sm, toolbar = fs-btn (default),
+   full-width = add w-full. */
+.fs-btn {
+    border-radius: var(--fs-radius-card);
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.fs-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.fs-btn-primary {
+    background: var(--fs-brand);
+    color: #ffffff;
+}
+
+.fs-btn-primary:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--fs-brand) 85%, #ffffff);
+}
+
+.fs-btn-secondary {
+    background: var(--fs-bg-muted);
+    color: var(--fs-text-primary);
+    border: 1px solid var(--fs-border);
+}
+
+.fs-btn-secondary:hover:not(:disabled) {
+    border-color: var(--fs-brand);
+}
+
+.fs-btn-ghost {
+    background: transparent;
+    color: var(--fs-text-secondary);
+}
+
+.fs-btn-ghost:hover:not(:disabled) {
+    background: var(--fs-bg-muted);
+    color: var(--fs-text-primary);
+}
+
+.fs-btn-danger {
+    background: transparent;
+    color: var(--fs-error);
+    border: 1px solid color-mix(in srgb, var(--fs-error) 60%, transparent);
+}
+
+.fs-btn-danger:hover:not(:disabled) {
+    background: var(--fs-error);
+    color: #ffffff;
+}

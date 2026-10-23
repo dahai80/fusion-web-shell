@@ -40,13 +40,13 @@ export function ToastHost() {
     }, []);
     return (
         <div
-            className="pointer-events-none fixed right-4 top-4 z-[60] flex w-80 flex-col gap-2"
+            className="pointer-events-none fixed right-4 top-4 z-toast flex w-80 flex-col gap-2"
             role="status"
         >
             {items.map((t) => (
                 <div
                     key={t.id}
-                    className={`pointer-events-auto rounded-card border bg-bg-elevated px-3 py-2 text-sm shadow-overlay ${LEVEL_STYLE[t.level]}`}
+                    className={`fs-elev-1 pointer-events-auto rounded-card border bg-bg-elevated px-3 py-2 text-sm ${LEVEL_STYLE[t.level]}`}
                 >
                     {t.message}
                 </div>

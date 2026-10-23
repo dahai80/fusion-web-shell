@@ -90,3 +90,19 @@ export const typography = {
         xl: '1.25rem',
     },
 } as const;
+
+/** z-index ladder (issue #56): base < dropdown < overlay < toast — replaces
+ *  ad-hoc z-50/z-[60]; toast must render above every dropdown and modal. */
+export const zIndex = {
+    base: '0',
+    dropdown: '50',
+    overlay: '60',
+    toast: '70',
+} as const;
+
+/** Elevation tiers (issue #56): elev1 = dropdown/popover, elev2 = modal.
+ *  Flat inline panels stay border-only (elev-0, no class needed). */
+export const shadow = {
+    elev1: '0 8px 24px rgb(0 0 0 / 0.35)',
+    elev2: '0 16px 48px rgb(0 0 0 / 0.45)',
+} as const;

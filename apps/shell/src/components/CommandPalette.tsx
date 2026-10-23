@@ -146,7 +146,7 @@ export function CommandPalette() {
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 pt-24"
+            className="fixed inset-0 z-overlay flex items-start justify-center bg-black/50 pt-24"
             onClick={(e) => {
                 if (e.target === e.currentTarget) close();
             }}
@@ -161,7 +161,7 @@ export function CommandPalette() {
                 aria-modal="true"
                 onKeyDown={onDialogKey}
                 aria-label={t('命令面板', 'Command palette')}
-                className="w-full max-w-lg rounded-card border border-bg bg-bg-elevated shadow-overlay"
+                className="fs-elev-2 w-full max-w-lg rounded-card border border-bg bg-bg-elevated"
             >
                 <input
                     ref={inputRef}

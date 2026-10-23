@@ -16,6 +16,16 @@
     --fs-error: #ef4444;
     --fs-offline: #6b7488;
     --fs-brand: #4f7cff;
+    /* Interaction layer (issue #56) — theme-independent. */
+    --fs-z-base: 0;
+    --fs-z-dropdown: 50;
+    --fs-z-overlay: 60;
+    --fs-z-toast: 70;
+    --fs-radius-sm: 0.25rem;
+    --fs-radius-md: 0.5rem;
+    --fs-radius-card: 0.5rem;
+    --fs-radius-lg: 0.75rem;
+    --fs-radius-full: 9999px;
     color-scheme: dark;
 }
 
