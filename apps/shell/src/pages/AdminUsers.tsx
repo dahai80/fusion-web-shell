@@ -7,6 +7,7 @@ import {
     type RoleRow,
     collectMenuMatrix,
     effectiveMenus,
+    effectiveModuleAccess,
     formatAdminError,
     sanitizeRoles,
 } from '@/lib/settingsOps';
@@ -253,7 +254,14 @@ export function AdminUsersPage() {
                                             )}
                                         </div>
                                         <div className="text-xs text-text-muted">
-                                            已授权 {u.permissions.length} 个模块
+                                            {(() => {
+                                                const src = effectiveModuleAccess(u);
+                                                if (src.source === 'admin')
+                                                    return 'admin 角色 · 全部模块';
+                                                if (src.source === 'wildcard')
+                                                    return '通配授权 * · 全部模块';
+                                                return `已授权 ${src.count} 个模块`;
+                                            })()}
                                             {u.created_at
                                                 ? ` · ${new Date(u.created_at * 1000).toLocaleDateString()}`
                                                 : ''}
@@ -380,7 +388,7 @@ export function AdminUsersPage() {
     );
 }
 
-function GrantDialog({
+export function GrantDialog({
     user,
     onClose,
     onSaved,
@@ -394,10 +402,18 @@ function GrantDialog({
         'dev',
     ];
     const catLabel = { platform: '平台', domain: '领域', infra: '基础设施', dev: '开发' };
+    const isAdmin = user.roles.includes('admin');
+    const wildcard = selected.has('*');
+
+    const toggleAll = () => {
+        setSelected((prev) => (prev.has('*') ? new Set() : new Set(['*'])));
+    };
 
     const toggle = (id: string) => {
         setSelected((prev) => {
-            const next = new Set(prev);
+            // Toggling one module under a wildcard expands it: drop '*', keep
+            // every other module, then apply the toggle to the target.
+            const next = prev.has('*') ? new Set(manifests.map((m) => m.id)) : new Set(prev);
             if (next.has(id)) next.delete(id);
             else next.add(id);
             return next;
@@ -411,43 +427,58 @@ function GrantDialog({
         >
             <div className="fs-elev-2 max-h-[80vh] w-full max-w-md overflow-y-auto rounded-card border border-border bg-bg-elevated p-4">
                 <div className="text-base text-text-primary">授权: {user.display_name}</div>
-                <div className="mt-3 space-y-3">
-                    {cats.map((cat) => {
-                        const items = manifests.filter((m) => m.category === cat);
-                        if (items.length === 0) return null;
-                        return (
-                            <div key={cat}>
-                                <div className="pb-1 text-xs text-text-muted">{catLabel[cat]}</div>
-                                {items.map((m) => (
-                                    <label
-                                        key={m.id}
-                                        className="flex min-h-[36px] items-center gap-2 text-sm text-text-primary"
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            checked={selected.has(m.id)}
-                                            onChange={() => toggle(m.id)}
-                                        />
-                                        {m.title}
-                                        <span className="font-mono text-xs text-text-muted">
-                                            {m.id}
-                                        </span>
-                                    </label>
-                                ))}
-                            </div>
-                        );
-                    })}
-                </div>
+                {isAdmin ? (
+                    <div className="mt-3 rounded-card border border-border bg-bg-muted px-3 py-2 text-xs text-text-secondary">
+                        admin 角色已含全部模块，无需单独授权。
+                    </div>
+                ) : (
+                    <div className="mt-3 space-y-3">
+                        <label className="flex min-h-[36px] items-center gap-2 border-b border-border/60 text-sm font-medium text-text-primary">
+                            <input
+                                type="checkbox"
+                                checked={wildcard}
+                                onChange={toggleAll}
+                                aria-label="全部模块（通配 *）"
+                            />
+                            全部模块
+                            <span className="font-mono text-xs text-text-muted">*</span>
+                        </label>
+                        {cats.map((cat) => {
+                            const items = manifests.filter((m) => m.category === cat);
+                            if (items.length === 0) return null;
+                            return (
+                                <div key={cat}>
+                                    <div className="pb-1 text-xs text-text-muted">
+                                        {catLabel[cat]}
+                                    </div>
+                                    {items.map((m) => (
+                                        <label
+                                            key={m.id}
+                                            className="flex min-h-[36px] items-center gap-2 text-sm text-text-primary"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={wildcard || selected.has(m.id)}
+                                                onChange={() => toggle(m.id)}
+                                            />
+                                            {m.title}
+                                            <span className="font-mono text-xs text-text-muted">
+                                                {m.id}
+                                            </span>
+                                        </label>
+                                    ))}
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
                 <div className="mt-4 flex justify-end gap-2">
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="fs-btn fs-btn-secondary"
-                    >
+                    <button type="button" onClick={onClose} className="fs-btn fs-btn-secondary">
                         取消
                     </button>
                     <button
                         type="button"
+                        disabled={isAdmin}
                         onClick={() => {
                             void api
                                 .updateUser(user.user_id, { permissions: [...selected] })
@@ -942,11 +973,7 @@ function MenuPermissionsPanel() {
                         </table>
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <button
-                            type="button"
-                            onClick={save}
-                            className="fs-btn fs-btn-primary"
-                        >
+                        <button type="button" onClick={save} className="fs-btn fs-btn-primary">
                             {t('保存菜单权限', 'Save Menu Permissions')}
                         </button>
                         <button

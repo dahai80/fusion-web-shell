@@ -53,6 +53,10 @@ export const useAuth = create<AuthState>((set, get) => ({
     canView(manifestId) {
         const user = get().user;
         if (!user) return false;
-        return user.roles.includes('admin') || user.permissions.includes(manifestId);
+        return (
+            user.roles.includes('admin') ||
+            user.permissions.includes('*') ||
+            user.permissions.includes(manifestId)
+        );
     },
 }));
