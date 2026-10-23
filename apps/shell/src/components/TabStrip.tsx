@@ -3,11 +3,17 @@ import { useTabs } from '@/stores/tabs';
 import { TriangleAlert } from 'lucide-react';
 import { TabCloseButton } from './TabCloseButton';
 
+interface Props {
+    /** Called on tab click (issue #51): lets the host leave an admin page even
+     *  when the clicked tab was already active (no activeTabId change). */
+    onActivate?(): void;
+}
+
 /**
  * Desktop tab strip (PRD §8.1): per-tab title + status badges (crashed /
  * interrupted / transient error) + close guard. Mobile uses the drawer list.
  */
-export function TabStrip() {
+export function TabStrip({ onActivate }: Props) {
     const tabs = useTabs((s) => s.tabs);
     const activeTabId = useTabs((s) => s.activeTabId);
     const activateTab = useTabs((s) => s.activateTab);
@@ -24,7 +30,10 @@ export function TabStrip() {
                     >
                         <button
                             type="button"
-                            onClick={() => activateTab(tab.id)}
+                            onClick={() => {
+                                activateTab(tab.id);
+                                onActivate?.();
+                            }}
                             className="flex min-w-0 flex-1 items-center gap-1 py-1.5 text-left"
                         >
                             <span className="truncate">{tab.title}</span>

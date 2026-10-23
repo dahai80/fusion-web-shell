@@ -1,4 +1,5 @@
 import { fetchAudit } from '@/api/endpoints';
+import { navigateShell } from '@/lib/adminRoute';
 import { guardedLoad } from '@/lib/pendingSurfaces';
 import {
     AUDIT_CLASSES,
@@ -69,7 +70,7 @@ export function AuditPage() {
                 </div>
                 <button
                     type="button"
-                    onClick={() => window.location.assign('/')}
+                    onClick={() => navigateShell('/')}
                     className="rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary"
                 >
                     {t('← 返回', '← Back')}
