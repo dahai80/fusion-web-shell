@@ -1,6 +1,11 @@
 import { NotificationBell } from '@/components/NotificationBell';
 import { navigateShell, pathForAdminPage } from '@/lib/adminRoute';
-import { rowClickIntent, syncExpandedWithActive, toggleExpanded } from '@/lib/sidebarTree';
+import {
+    isPageActive,
+    rowClickIntent,
+    syncExpandedWithActive,
+    toggleExpanded,
+} from '@/lib/sidebarTree';
 import { useAuth } from '@/stores/auth';
 import { t, useLang } from '@/stores/lang';
 import { menuGroups, moduleTitle, useManifests } from '@/stores/manifests';
@@ -14,6 +19,26 @@ interface Props {
     onOpen(manifest: ModuleManifest, route?: string, pageTitle?: string): void;
     onLogout(): void;
 }
+
+/**
+ * Sidebar type scale (issue #53): one tier per hierarchy level, all
+ * token-driven. L2 pages are 13px with a single gray for idle and a brand
+ * active state; affix buttons share one size; offline uses the offline
+ * token instead of opacity graying.
+ */
+const TYPE_SCALE = {
+    brand: 'text-lg font-medium text-text-primary',
+    iconBtn: 'rounded p-1 text-xs text-text-muted hover:bg-bg-muted',
+    groupLabel: 'px-2 pb-1 text-xs text-text-muted',
+    l1: 'text-sm',
+    l1Idle: 'text-text-primary hover:bg-bg-muted',
+    l1Active: 'bg-brand/15 text-brand',
+    l2: 'text-[13px] hover:bg-bg-muted hover:text-text-primary',
+    l2Idle: 'text-text-secondary',
+    l2Active: 'text-brand hover:text-brand',
+    affix: 'text-xs text-text-muted hover:bg-bg-muted hover:text-brand',
+    offline: 'text-offline',
+} as const;
 
 /**
  * Desktop sidebar menu (>= md), two-level per issue #46: level 1 = product
@@ -37,7 +62,8 @@ export function Sidebar({ onOpen, onLogout }: Props) {
     const setLang = useLang((s) => s.setLang);
     const openPalette = usePalette((s) => s.open);
     const groups = menuGroups(manifests, canView, false, lang);
-    const activeManifestId = tabs.find((tb) => tb.id === activeTabId)?.manifestId ?? null;
+    const activeTab = tabs.find((tb) => tb.id === activeTabId) ?? null;
+    const activeManifestId = activeTab?.manifestId ?? null;
     const [expanded, setExpanded] = useState<string | null>(null);
 
     useEffect(() => {
@@ -47,12 +73,12 @@ export function Sidebar({ onOpen, onLogout }: Props) {
     return (
         <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-bg-elevated md:flex">
             <div className="flex items-center justify-between px-4 py-4">
-                <span className="text-lg font-medium text-text-primary">Fusion Shell</span>
+                <span className={TYPE_SCALE.brand}>Fusion Shell</span>
                 <span className="flex gap-1">
                     <button
                         type="button"
                         onClick={openPalette}
-                        className="rounded p-1 text-xs text-text-muted hover:bg-bg-muted"
+                        className={TYPE_SCALE.iconBtn}
                         aria-label={t('打开命令面板 (⌘K)', 'Open command palette (⌘K)')}
                         title="⌘K"
                     >
@@ -95,7 +121,7 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                 </button>
                 {groups.map((g) => (
                     <div key={g.category} className="mb-3">
-                        <div className="px-2 pb-1 text-xs text-text-muted">{g.label}</div>
+                        <div className={TYPE_SCALE.groupLabel}>{g.label}</div>
                         {g.items.map((m) => {
                             const unreachable = unreachableIds.has(m.id);
                             const active = activeManifestId === m.id;
@@ -116,9 +142,13 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                                                         : toggleExpanded(prev, m.id)
                                                 );
                                             }}
-                                            className={`flex min-w-0 flex-1 items-center justify-between rounded-md px-2 py-2 text-left text-sm ${active ? 'bg-brand/15 text-brand' : 'text-text-primary hover:bg-bg-muted'} ${unreachable ? 'opacity-40' : ''}`}
+                                            className={`flex min-w-0 flex-1 items-center justify-between rounded-md px-2 py-2 text-left ${TYPE_SCALE.l1} ${active ? TYPE_SCALE.l1Active : TYPE_SCALE.l1Idle}`}
                                         >
-                                            <span className="truncate">{moduleTitle(m, lang)}</span>
+                                            <span
+                                                className={`truncate ${unreachable ? TYPE_SCALE.offline : ''}`}
+                                            >
+                                                {moduleTitle(m, lang)}
+                                            </span>
                                             {unreachable ? (
                                                 <span className="ml-2 shrink-0 text-xs text-offline">
                                                     {t('离线', 'Offline')}
@@ -135,7 +165,7 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                                                         toggleExpanded(prev, m.id)
                                                     )
                                                 }
-                                                className={`ml-1 shrink-0 rounded p-1 text-xs text-text-muted hover:bg-bg-muted hover:text-brand ${open ? 'rotate-90' : ''}`}
+                                                className={`ml-1 shrink-0 rounded p-1 ${TYPE_SCALE.affix} ${open ? 'rotate-90' : ''}`}
                                             >
                                                 ▸
                                             </button>
@@ -153,7 +183,7 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                                                             m.id
                                                         );
                                                 }}
-                                                className="ml-1 shrink-0 rounded px-1.5 text-sm text-text-muted hover:bg-bg-muted hover:text-brand"
+                                                className={`ml-1 shrink-0 rounded px-1.5 ${TYPE_SCALE.affix}`}
                                             >
                                                 +
                                             </button>
@@ -165,6 +195,11 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                                                   lang === 'en' && page.title_en
                                                       ? page.title_en
                                                       : page.title;
+                                              const pageActive = isPageActive(
+                                                  activeTab,
+                                                  m.id,
+                                                  page.route
+                                              );
                                               return (
                                                   <button
                                                       key={`${m.id}:${page.route}`}
@@ -172,7 +207,7 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                                                       onClick={() =>
                                                           onOpen(m, page.route, pageTitle)
                                                       }
-                                                      className="flex min-w-0 items-center rounded-md px-2 py-1.5 pl-7 text-left text-xs text-text-secondary hover:bg-bg-muted hover:text-text-primary"
+                                                      className={`flex min-w-0 items-center rounded-md px-2 py-1.5 pl-7 text-left ${TYPE_SCALE.l2} ${pageActive ? TYPE_SCALE.l2Active : TYPE_SCALE.l2Idle}`}
                                                   >
                                                       <span className="truncate">{pageTitle}</span>
                                                   </button>

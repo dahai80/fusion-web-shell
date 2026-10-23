@@ -1,6 +1,29 @@
 import './setup';
 import { describe, expect, it } from 'bun:test';
-import { rowClickIntent, syncExpandedWithActive, toggleExpanded } from '../lib/sidebarTree';
+import {
+    isPageActive,
+    rowClickIntent,
+    syncExpandedWithActive,
+    toggleExpanded,
+} from '../lib/sidebarTree';
+
+describe('L2 page active state (issue #53)', () => {
+    const tab = (route?: string) => ({ id: 't', manifestId: 'fusion-cowork', route });
+
+    it('active when the focused tab is this exact page', () => {
+        expect(isPageActive(tab('/runs'), 'fusion-cowork', '/runs')).toBe(true);
+    });
+
+    it('inactive for another route, another module, or no tab', () => {
+        expect(isPageActive(tab('/runs'), 'fusion-cowork', '/workflows')).toBe(false);
+        expect(isPageActive(tab('/runs'), 'fusion-agent-studio', '/runs')).toBe(false);
+        expect(isPageActive(null, 'fusion-cowork', '/runs')).toBe(false);
+    });
+
+    it('a tab without a route owns no specific page', () => {
+        expect(isPageActive(tab(undefined), 'fusion-cowork', '/workflows')).toBe(false);
+    });
+});
 
 describe('sidebar accordion state (issue #46)', () => {
     it('toggling a product switches expansion to it', () => {

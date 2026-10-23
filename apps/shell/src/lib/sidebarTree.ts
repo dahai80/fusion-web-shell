@@ -30,3 +30,17 @@ export function syncExpandedWithActive(
 ): string | null {
     return activeManifestId ?? prev;
 }
+
+/**
+ * L2 page active state (issue #53): the focused tab owns a specific page
+ * when it was deep-linked with a route; a plain module tab (no route) owns
+ * none, so no L2 row highlights spuriously.
+ */
+export function isPageActive(
+    activeTab: { manifestId: string; route?: string } | null,
+    manifestId: string,
+    route: string
+): boolean {
+    if (!activeTab || !activeTab.route) return false;
+    return activeTab.manifestId === manifestId && activeTab.route === route;
+}
