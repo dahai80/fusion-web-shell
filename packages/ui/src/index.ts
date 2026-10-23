@@ -18,6 +18,11 @@ export {
     type ComposerChip,
     type ChatMessage,
     type ChatThreadProps,
+    type ChatStreamState,
+    type ChatStep,
+    type ChatDatum,
+    type ChatCitation,
+    type ChatArtifact,
 } from './components/Composer';
 export { ReadOnlyBanner } from './components/ReadOnlyBanner';
 export * from './format';

@@ -209,16 +209,54 @@ export function Composer({
     );
 }
 
+export type ChatStreamState = 'pending' | 'streaming' | 'done' | 'failed';
+
+export interface ChatStep {
+    id: string;
+    label: string;
+    /** ⚡ mutation (writes) or ◇ read-only — default read-only. */
+    kind?: 'mutation' | 'read';
+    /** Human duration, e.g. "1.2s". */
+    duration?: string;
+}
+
+export interface ChatDatum {
+    id: string;
+    label: string;
+    onClick?(): void;
+}
+
+export interface ChatCitation {
+    id: string;
+    label: string;
+    href?: string;
+}
+
+export interface ChatArtifact {
+    id: string;
+    label: string;
+    href?: string;
+}
+
 export interface ChatMessage {
     id: string;
     role: 'user' | 'agent' | 'system' | 'error';
     body: string;
     /** Streaming agent message: rendered via the shared StreamingMarkdown. */
     streaming?: boolean;
+    /** Streaming lifecycle (#57): pending = typing indicator, streaming =
+     *  markdown + cursor, failed = error block (error token, monospace). */
+    state?: ChatStreamState;
+    steps?: ChatStep[];
+    data?: ChatDatum[];
+    citations?: ChatCitation[];
+    artifacts?: ChatArtifact[];
 }
 
 export interface ChatThreadProps {
     messages: ChatMessage[];
+    onCitationClick?(citation: ChatCitation): void;
+    onArtifactClick?(artifact: ChatArtifact): void;
     emptyState?: ReactNode;
     /** Scrollable container label (a11y). */
     ariaLabel?: string;
@@ -228,8 +266,17 @@ export interface ChatThreadProps {
  * Shared chat thread (issue #55) — f-ecommerce bubble geometry: user right
  * (bg-muted, radius 16/16/4/16, max-w 82%), agent left (panel bg + border,
  * radius 4/16/16/16, max-w 88%). Agent bodies stream via StreamingMarkdown.
+ * Issue #57 adds the output contract: tool-call step rows (⚡/◇ markers +
+ * duration), scrollable step-data result lists, citation chips, artifact
+ * cards, and the pending/streaming/done/failed lifecycle.
  */
-export function ChatThread({ messages, emptyState, ariaLabel }: ChatThreadProps) {
+export function ChatThread({
+    messages,
+    onCitationClick,
+    onArtifactClick,
+    emptyState,
+    ariaLabel,
+}: ChatThreadProps) {
     if (messages.length === 0 && emptyState) {
         return <div className="text-sm text-text-secondary">{emptyState}</div>;
     }
@@ -241,7 +288,7 @@ export function ChatThread({ messages, emptyState, ariaLabel }: ChatThreadProps)
             aria-live="polite"
         >
             {messages.map((m) => {
-                if (m.role === 'error') {
+                if (m.role === 'error' || (m.role === 'agent' && m.state === 'failed')) {
                     return (
                         <div
                             key={m.id}
@@ -277,7 +324,81 @@ export function ChatThread({ messages, emptyState, ariaLabel }: ChatThreadProps)
                         key={m.id}
                         className="max-w-[88%] self-start rounded-[4px_16px_16px_16px] border border-border bg-bg px-3.5 py-2 text-sm text-text-secondary"
                     >
-                        {m.streaming ? <StreamBody text={m.body} /> : m.body}
+                        {m.state === 'pending' ? (
+                            <span className="inline-flex items-center gap-1 py-1" aria-label="typing">
+                                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-text-muted" />
+                                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-text-muted [animation-delay:150ms]" />
+                                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-text-muted [animation-delay:300ms]" />
+                            </span>
+                        ) : null}
+                        {m.steps && m.steps.length > 0 ? (
+                            <div className="flex flex-col gap-0.5">
+                                {m.steps.map((s) => (
+                                    <div key={s.id} className="step flex items-center gap-1.5 text-xs text-text-secondary">
+                                        <span aria-hidden>{s.kind === 'mutation' ? '⚡' : '◇'}</span>
+                                        <span>{s.label}</span>
+                                        {s.duration ? (
+                                            <span className="text-text-muted">{s.duration}</span>
+                                        ) : null}
+                                    </div>
+                                ))}
+                            </div>
+                        ) : null}
+                        {m.body ? (
+                            m.streaming || m.state === 'streaming' ? (
+                                <>
+                                    <StreamBody text={m.body} />
+                                    <span className="animate-pulse text-text-secondary" aria-hidden>
+                                        ▍
+                                    </span>
+                                </>
+                            ) : (
+                                m.body
+                            )
+                        ) : null}
+                        {m.data && m.data.length > 0 ? (
+                            <div className="step-data mt-1 max-h-40 overflow-y-auto rounded-md border border-border bg-bg-muted">
+                                {m.data.map((d) => (
+                                    <button
+                                        key={d.id}
+                                        type="button"
+                                        onClick={d.onClick}
+                                        className="block w-full px-2.5 py-1.5 text-left text-xs text-text-secondary hover:text-brand"
+                                    >
+                                        {d.label}
+                                    </button>
+                                ))}
+                            </div>
+                        ) : null}
+                        {m.citations && m.citations.length > 0 ? (
+                            <div className="citation mt-1.5 flex flex-wrap gap-1.5">
+                                {m.citations.map((c) => (
+                                    <button
+                                        key={c.id}
+                                        type="button"
+                                        onClick={() => onCitationClick?.(c)}
+                                        className="rounded-full border border-border bg-bg-muted px-2 py-0.5 text-xs text-text-secondary hover:border-brand hover:text-brand"
+                                    >
+                                        {c.label}
+                                    </button>
+                                ))}
+                            </div>
+                        ) : null}
+                        {m.artifacts && m.artifacts.length > 0 ? (
+                            <div className="artifact mt-1.5 flex flex-wrap gap-1.5">
+                                {m.artifacts.map((a) => (
+                                    <button
+                                        key={a.id}
+                                        type="button"
+                                        onClick={() => onArtifactClick?.(a)}
+                                        className="flex items-center gap-1.5 rounded-md border border-border bg-bg-muted px-2.5 py-1.5 text-xs text-text-primary hover:border-brand"
+                                    >
+                                        <span aria-hidden>📄</span>
+                                        {a.label}
+                                    </button>
+                                ))}
+                            </div>
+                        ) : null}
                     </div>
                 );
             })}
