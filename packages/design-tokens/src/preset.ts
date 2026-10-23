@@ -19,6 +19,7 @@ export const fusionPreset: Partial<Config> = {
             borderRadius: {
                 sm: radius.sm,
                 DEFAULT: radius.md,
+                md: radius.md,
                 card: radius.card,
                 lg: radius.lg,
                 full: radius.full,
