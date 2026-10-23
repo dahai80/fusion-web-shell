@@ -12,10 +12,11 @@ import { t, useLang } from '@/stores/lang';
 import type { Lang } from '@/stores/lang';
 import { moduleTitle, useManifests } from '@/stores/manifests';
 import { type Effort, usePrefs } from '@/stores/prefs';
+import type { ComposerChip } from '@fusion/web-ui';
 import { type ProjectItem, useProjects } from '@/stores/projects';
 import { type ApprovalAction, type TaskItem, taskBucket, useTasks } from '@/stores/tasks';
 import type { ModuleManifest } from '@/types/manifest';
-import { EmptyState } from '@fusion/web-ui';
+import { ChatThread, Composer, EmptyState } from '@fusion/web-ui';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 interface Props {
@@ -350,163 +351,6 @@ function ProjectsSection({
     );
 }
 
-// SECTION: composer (issue #50, f-ecommerce agent.html structure generalized)
-
-function Kbd({ children }: { children: ReactNode }) {
-    return (
-        <kbd className="rounded bg-bg-muted px-1.5 py-0.5 text-[11px] text-text-secondary">
-            {children}
-        </kbd>
-    );
-}
-
-/**
- * Delegation composer, restyled after f-ecommerce's AI Assistant composer
- * (issue #50): bordered 14px-radius box with brand focus ring, borderless
- * textarea, action row (+ popover / model / thinking / Send), Enter-to-send
- * hint, suggestion chips attached below. E-commerce semantics (CSV upload,
- * SKU chips) dropped; ACTIONS omitted — the shell has no attachments yet.
- */
-function Composer({
-    draft,
-    setDraft,
-    onSend,
-    busy,
-    models,
-    capabilities,
-    textareaRef,
-}: {
-    draft: string;
-    setDraft(v: string): void;
-    onSend(): void;
-    busy: boolean;
-    models: string[];
-    capabilities: ReturnType<typeof composerCapabilities>;
-    textareaRef: React.Ref<HTMLTextAreaElement>;
-}) {
-    const [popOpen, setPopOpen] = useState(false);
-    const popRef = useRef<HTMLDivElement | null>(null);
-
-    // Close the capabilities popover on any click outside it (agent.html UX).
-    useEffect(() => {
-        if (!popOpen) return;
-        const onDown = (e: MouseEvent) => {
-            if (popRef.current && !popRef.current.contains(e.target as Node)) setPopOpen(false);
-        };
-        document.addEventListener('mousedown', onDown);
-        return () => document.removeEventListener('mousedown', onDown);
-    }, [popOpen]);
-
-    const model = usePrefs((s) => s.model);
-    const setModel = usePrefs((s) => s.setModel);
-    const effort = usePrefs((s) => s.effort);
-    const setEffort = usePrefs((s) => s.setEffort);
-
-    return (
-        <div className="mx-auto w-full max-w-[640px] text-left">
-            <div className="rounded-[14px] border border-border bg-bg-elevated px-3 pb-2 pt-2.5 focus-within:border-brand">
-                <textarea
-                    ref={textareaRef}
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            onSend();
-                        }
-                    }}
-                    rows={2}
-                    placeholder={t(
-                        '用自然语言描述任务，引擎会自动决定执行方式… (Enter 发送，Shift+Enter 换行)',
-                        'Ask in natural language — the engine handles how… (Enter to send, Shift+Enter for a new line)'
-                    )}
-                    aria-label={t('委托输入框', 'Delegation message box')}
-                    className="block max-h-[120px] min-h-[40px] w-full resize-none border-none bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
-                />
-                <div className="mt-1.5 flex items-center gap-2">
-                    <div className="relative" ref={popRef}>
-                        <button
-                            type="button"
-                            onClick={() => setPopOpen((v) => !v)}
-                            aria-expanded={popOpen}
-                            aria-label={t('能力列表', 'Agent capabilities')}
-                            title={t('能力列表', 'Agent capabilities')}
-                            className="flex h-[30px] w-[30px] items-center justify-center rounded-full border border-border bg-bg-elevated p-0 text-base leading-none text-text-secondary hover:border-brand hover:text-brand"
-                        >
-                            +
-                        </button>
-                        {popOpen ? (
-                            <div
-                                role="dialog"
-                                aria-label="AGENT CAPABILITIES"
-                                className="fs-elev-1 absolute bottom-[38px] left-0 z-dropdown max-h-[260px] w-[300px] overflow-y-auto rounded-xl border border-border bg-bg-elevated p-2.5"
-                            >
-                                <div className="px-1.5 pb-2 pt-0.5 text-xs text-text-secondary">
-                                    AGENT CAPABILITIES
-                                </div>
-                                {capabilities.length === 0 ? (
-                                    <div className="px-1.5 text-xs text-text-muted">
-                                        {t('暂无可用的能力入口', 'No capability entries yet')}
-                                    </div>
-                                ) : (
-                                    capabilities.map((c) => (
-                                        <div
-                                            key={`${c.moduleId}:${c.route}`}
-                                            className="px-1.5 py-1 text-xs text-text-secondary"
-                                        >
-                                            {c.title}
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-                        ) : null}
-                    </div>
-                    <span className="flex-1" />
-                    <select
-                        value={model}
-                        onChange={(e) => setModel(e.target.value)}
-                        aria-label={t('全局模型', 'Global model')}
-                        className="rounded-lg border border-border bg-bg-elevated px-1.5 py-1 text-xs text-text-secondary"
-                    >
-                        <option value="">{t('模型：默认', 'Model: default')}</option>
-                        {models.map((id) => (
-                            <option key={id} value={id}>
-                                {id}
-                            </option>
-                        ))}
-                        {model && !models.includes(model) ? (
-                            <option value={model}>{model}</option>
-                        ) : null}
-                    </select>
-                    <select
-                        value={effort}
-                        onChange={(e) => setEffort(e.target.value as Effort)}
-                        aria-label={t('思考力度', 'Thinking level')}
-                        className="rounded-lg border border-border bg-bg-elevated px-1.5 py-1 text-xs text-text-secondary"
-                    >
-                        <option value="default">{t('思考：默认', 'Thinking: auto')}</option>
-                        <option value="low">{t('思考：低', 'Thinking: low')}</option>
-                        <option value="medium">{t('思考：中', 'Thinking: medium')}</option>
-                        <option value="high">{t('思考：高', 'Thinking: high')}</option>
-                    </select>
-                    <button
-                        type="button"
-                        onClick={onSend}
-                        disabled={busy}
-                        className="shrink-0 fs-btn fs-btn-primary px-3.5 text-xs font-semibold"
-                    >
-                        {busy ? t('回答中…', 'Thinking…') : t('发送', 'Send')}
-                    </button>
-                </div>
-            </div>
-            <div className="mt-1.5 text-center text-[11.5px] text-text-secondary">
-                <Kbd>Enter</Kbd> {t('发送', 'to send')} · <Kbd>Shift+Enter</Kbd>{' '}
-                {t('换行', 'new line')}
-            </div>
-        </div>
-    );
-}
-
 // SECTION: page
 
 /** Home landing (issue #32/#33): greeting + status strip + delegation message
@@ -593,6 +437,36 @@ export function HomePage({ onOpen }: Props) {
         (m.home ?? []).filter((c) => c.chip).map((c) => ({ manifest: m, card: c }))
     );
 
+    // Global model/effort prefs feed the shared Composer selects (#55); the
+    // same store remains the handoff contract for module iframes (#34).
+    const model = usePrefs((s) => s.model);
+    const setModel = usePrefs((s) => s.setModel);
+    const effort = usePrefs((s) => s.effort);
+    const setEffort = usePrefs((s) => s.setEffort);
+    const modelOptions = [
+        { value: '', label: t('模型：默认', 'Model: default') },
+        ...engineModels.map((id) => ({ value: id, label: id })),
+        ...(model && !engineModels.includes(model)
+            ? [{ value: model, label: model }]
+            : []),
+    ];
+
+    // Suggestion chips render inside the shared Composer (#55); static chips
+    // prefill only, module-declared chips keep their deep link.
+    const suggestionChips: ComposerChip[] = [
+        ...STATIC_CHIPS.map((c) => ({
+            key: c.key,
+            label: lang === 'en' ? c.labelEn : c.label,
+            onClick: () => prefillChip(c.prefill),
+        })),
+        ...manifestChips.map(({ manifest, card }) => ({
+            key: `${manifest.id}:${card.id}`,
+            label: lang === 'en' && card.title_en ? card.title_en : card.title,
+            onClick: () => jumpChip(manifest.id, card.route, card.title),
+            muted: unreachableIds.has(manifest.id),
+        })),
+    ];
+
     const jumpChip = (moduleId: string, route: string, prefill: string) => {
         const m = byId.get(moduleId);
         setDraft(prefill);
@@ -655,45 +529,44 @@ export function HomePage({ onOpen }: Props) {
                 </header>
 
                 <Composer
-                    draft={draft}
-                    setDraft={setDraft}
-                    onSend={send}
+                    value={draft}
+                    onChange={setDraft}
+                    onSubmit={send}
                     busy={chatBusy}
-                    models={engineModels}
-                    capabilities={composerCapabilities(manifests, lang)}
+                    placeholder={t(
+                        '用自然语言描述任务，引擎会自动决定执行方式… (Enter 发送，Shift+Enter 换行)',
+                        'Ask in natural language — the engine handles how… (Enter to send, Shift+Enter for a new line)'
+                    )}
+                    ariaLabel={t('委托输入框', 'Delegation message box')}
+                    hint={t('Enter 发送 · Shift+Enter 换行', 'Enter to send · Shift+Enter new line')}
+                    sendLabel={t('发送', 'Send')}
+                    busyLabel={t('回答中…', 'Thinking…')}
                     textareaRef={textareaRef}
+                    model={{
+                        value: model,
+                        onChange: setModel,
+                        options: modelOptions,
+                    }}
+                    effort={{
+                        value: effort,
+                        onChange: (v) => setEffort(v as Effort),
+                        options: [
+                            { value: 'default', label: t('思考：默认', 'Thinking: auto') },
+                            { value: 'low', label: t('思考：低', 'Thinking: low') },
+                            { value: 'medium', label: t('思考：中', 'Thinking: medium') },
+                            { value: 'high', label: t('思考：高', 'Thinking: high') },
+                        ],
+                    }}
+                    actions={{
+                        popoverTitle: 'AGENT CAPABILITIES',
+                        emptyLabel: t('暂无可用的能力入口', 'No capability entries yet'),
+                        items: composerCapabilities(manifests, lang).map((c) => ({
+                            key: `${c.moduleId}:${c.route}`,
+                            label: c.title,
+                        })),
+                    }}
+                    chips={suggestionChips}
                 />
-
-                <div
-                    className="mx-auto flex w-full max-w-[640px] flex-wrap justify-center gap-2"
-                    aria-label={t('建议任务', 'Suggested tasks')}
-                >
-                    {STATIC_CHIPS.map((c) => (
-                        <button
-                            key={c.key}
-                            type="button"
-                            onClick={() => prefillChip(c.prefill)}
-                            className="rounded-full border border-border bg-bg-muted px-3 py-1.5 text-xs text-text-secondary hover:border-brand hover:text-brand"
-                        >
-                            {lang === 'en' ? c.labelEn : c.label}
-                        </button>
-                    ))}
-                    {manifestChips.map(({ manifest, card }) => {
-                        const unreachable = unreachableIds.has(manifest.id);
-                        const title = lang === 'en' && card.title_en ? card.title_en : card.title;
-                        return (
-                            <button
-                                key={`${manifest.id}:${card.id}`}
-                                type="button"
-                                onClick={() => jumpChip(manifest.id, card.route, card.title)}
-                                title={moduleTitle(manifest, lang)}
-                                className={`rounded-full border border-border bg-bg-muted px-3 py-1.5 text-xs text-text-secondary hover:border-brand hover:text-brand ${unreachable ? 'opacity-40' : ''}`}
-                            >
-                                {title}
-                            </button>
-                        );
-                    })}
-                </div>
 
                 {lastDecision ? (
                     <div
@@ -712,22 +585,29 @@ export function HomePage({ onOpen }: Props) {
 
                 {chatMessages.length > 0 || chatError ? (
                     <section
-                        className="flex max-h-80 flex-col gap-1 overflow-y-auto rounded-card border border-border bg-bg-elevated px-4 py-3"
+                        className="max-h-80 overflow-y-auto rounded-card border border-border bg-bg-elevated px-4 py-3"
                         aria-label={t('壳级问答', 'Shell chat')}
                     >
-                        {chatMessages.map((m, i) => (
-                            <div
-                                key={i}
-                                className={`max-w-[82%] whitespace-pre-wrap break-words px-3.5 py-2 text-sm ${m.role === 'user' ? 'self-end rounded-[16px_16px_4px_16px] bg-bg-muted text-text-primary' : 'self-start rounded-[4px_16px_16px_16px] border border-border bg-bg text-text-secondary'}`}
-                            >
-                                {m.content}
-                            </div>
-                        ))}
-                        {chatError ? (
-                            <div className="text-xs text-error" role="alert">
-                                {t('问答失败', 'Chat failed')}: {chatError}
-                            </div>
-                        ) : null}
+                        <ChatThread
+                            messages={[
+                                ...chatMessages.map((m, i) => ({
+                                    id: String(i),
+                                    role: (m.role === 'user' ? 'user' : 'agent') as
+                                        | 'user'
+                                        | 'agent',
+                                    body: m.content,
+                                })),
+                                ...(chatError
+                                    ? [
+                                          {
+                                              id: 'error',
+                                              role: 'error' as const,
+                                              body: `${t('问答失败', 'Chat failed')}: ${chatError}`,
+                                          },
+                                      ]
+                                    : []),
+                            ]}
+                        />
                     </section>
                 ) : null}
 

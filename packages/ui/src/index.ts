@@ -8,6 +8,17 @@ export { MetricChart, type MetricPoint, type MetricSeries } from './components/M
 export { DataTable, type DataTableColumn, type DataTableProps } from './components/DataTable';
 export { KVPanel } from './components/KVPanel';
 export { StreamingMarkdown } from './components/StreamingMarkdown';
+export {
+    Composer,
+    ChatThread,
+    type ComposerProps,
+    type ComposerOption,
+    type ComposerSelectProps,
+    type ComposerActionItem,
+    type ComposerChip,
+    type ChatMessage,
+    type ChatThreadProps,
+} from './components/Composer';
 export { ReadOnlyBanner } from './components/ReadOnlyBanner';
 export * from './format';
 export { fusionPreset } from './preset';
