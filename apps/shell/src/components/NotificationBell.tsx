@@ -42,7 +42,7 @@ export function NotificationBell() {
                 ) : null}
             </button>
             {open ? (
-                <div className="absolute top-full right-0 z-50 mt-1 w-72 rounded-card border border-border bg-bg-elevated shadow-overlay">
+                <div className="fs-elev-1 absolute top-full right-0 z-dropdown mt-1 w-72 rounded-card border border-border bg-bg-elevated">
                     <div className="flex items-center justify-between border-b border-border px-3 py-2 text-xs text-text-muted">
                         <span>{t('通知', 'Notifications')}</span>
                         <button

@@ -111,7 +111,7 @@ export function LoginPage({ onAuthed }: { onAuthed(user: api.SessionUser, token:
                     type="button"
                     disabled={busy}
                     onClick={() => (mustChange ? void changePw() : void submit())}
-                    className="mt-4 min-h-[44px] w-full rounded-md bg-brand text-sm text-white disabled:opacity-50"
+                    className="fs-btn fs-btn-primary mt-4 min-h-[44px] w-full"
                 >
                     {busy
                         ? t('登录中…', 'Signing in…')

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { cssVarName, palette, preset, radius, spacing, typography } from '../src';
+import { cssVarName, palette, preset, radius, shadow, spacing, typography, zIndex } from '../src';
 
 const SEMANTIC_KEYS = [
     'bg',
@@ -64,5 +64,37 @@ describe('@fusion/design-tokens css + preset', () => {
         const colors = preset.theme?.extend?.colors as Record<string, string> | undefined;
         expect(colors?.bg).toBe('var(--fs-bg)');
         expect(colors?.brand).toBe('var(--fs-brand)');
+    });
+});
+
+describe('@fusion/design-tokens interaction layer (issue #56)', () => {
+    const css = readFileSync(join(import.meta.dir, '..', 'src', 'tokens.css'), 'utf8');
+    it('z-index ladder is strictly increasing and declared in tokens.css', () => {
+        const steps = ['base', 'dropdown', 'overlay', 'toast'] as const;
+        for (let i = 1; i < steps.length; i++) {
+            expect(Number(zIndex[steps[i]!])).toBeGreaterThan(Number(zIndex[steps[i - 1]!]));
+        }
+        for (const [key, value] of Object.entries(zIndex)) {
+            expect(css).toContain(`--fs-z-${key}: ${value}`);
+        }
+    });
+    it('elevation shadows: elev1 for dropdowns, elev2 for modals', () => {
+        expect(shadow.elev1).toBe('0 8px 24px rgb(0 0 0 / 0.35)');
+        expect(shadow.elev2).toBe('0 16px 48px rgb(0 0 0 / 0.45)');
+    });
+    it('preset maps z-index and shadows to tokens', () => {
+        const z = preset.theme?.extend?.zIndex as Record<string, string> | undefined;
+        expect(z?.base).toBe('var(--fs-z-base)');
+        expect(z?.dropdown).toBe('var(--fs-z-dropdown)');
+        expect(z?.overlay).toBe('var(--fs-z-overlay)');
+        expect(z?.toast).toBe('var(--fs-z-toast)');
+        const boxShadow = preset.theme?.extend?.boxShadow as Record<string, string> | undefined;
+        expect(boxShadow?.overlay).toBe(shadow.elev1);
+        expect(boxShadow?.modal).toBe(shadow.elev2);
+    });
+    it('radius vars declared in tokens.css for button-level pinning', () => {
+        for (const [key, value] of Object.entries(radius)) {
+            expect(css).toContain(`--fs-radius-${key}: ${value}`);
+        }
     });
 });
