@@ -14,7 +14,7 @@ import { getDevModules, restorePersistedTabs, useTabs } from '@/stores/tabs';
 import { useTasks } from '@/stores/tasks';
 import type { ModuleManifest } from '@/types/manifest';
 import { ErrorState, useAutoRetry } from '@fusion/web-ui';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 
 interface Props {
     onLogout(): void;
@@ -94,12 +94,12 @@ export function MainPage({ onLogout, adminPage = null, adminNode }: Props) {
     // Issue #51: any intent to view tabs/home leaves an open admin page.
     // The activeTabId effect covers state changes; exitAdminView covers the
     // no-change case (clicking the already-active tab / re-opening it).
-    const exitAdminView = () => {
+    const exitAdminView = useCallback(() => {
         if (adminPage) {
             console.log('[main] leaving admin page:', adminPage);
             navigateShell('/');
         }
-    };
+    }, [adminPage]);
 
     const handleOpen = (m: ModuleManifest, route?: string, pageTitle?: string) => {
         const id = openTab(m, { route, pageTitle });
@@ -110,7 +110,7 @@ export function MainPage({ onLogout, adminPage = null, adminNode }: Props) {
     useEffect(() => {
         if (adminPage && prevTabRef.current !== activeTabId) exitAdminView();
         prevTabRef.current = activeTabId;
-    }, [activeTabId, adminPage]);
+    }, [activeTabId, adminPage, exitAdminView]);
 
     // First-load failure / retry UX (spec 6.1): show "第 N 次重试中" during
     // backoff, and the manual retry button once auto-retry is exhausted.

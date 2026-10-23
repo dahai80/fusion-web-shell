@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
+import { type ReactNode, type Ref, useEffect, useRef, useState } from 'react';
 import { StreamingMarkdown } from './StreamingMarkdown';
 
 export interface ComposerOption {
@@ -281,12 +281,7 @@ export function ChatThread({
         return <div className="text-sm text-text-secondary">{emptyState}</div>;
     }
     return (
-        <div
-            className="flex flex-col gap-1"
-            aria-label={ariaLabel}
-            role="log"
-            aria-live="polite"
-        >
+        <div className="flex flex-col gap-1" aria-label={ariaLabel} role="log" aria-live="polite">
             {messages.map((m) => {
                 if (m.role === 'error' || (m.role === 'agent' && m.state === 'failed')) {
                     return (
@@ -301,10 +296,7 @@ export function ChatThread({
                 }
                 if (m.role === 'system') {
                     return (
-                        <div
-                            key={m.id}
-                            className="self-center text-xs text-text-muted"
-                        >
+                        <div key={m.id} className="self-center text-xs text-text-muted">
                             {m.body}
                         </div>
                     );
@@ -325,7 +317,10 @@ export function ChatThread({
                         className="max-w-[88%] self-start rounded-[4px_16px_16px_16px] border border-border bg-bg px-3.5 py-2 text-sm text-text-secondary"
                     >
                         {m.state === 'pending' ? (
-                            <span className="inline-flex items-center gap-1 py-1" aria-label="typing">
+                            <span
+                                className="inline-flex items-center gap-1 py-1"
+                                aria-label="typing"
+                            >
                                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-text-muted" />
                                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-text-muted [animation-delay:150ms]" />
                                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-text-muted [animation-delay:300ms]" />
@@ -334,8 +329,13 @@ export function ChatThread({
                         {m.steps && m.steps.length > 0 ? (
                             <div className="flex flex-col gap-0.5">
                                 {m.steps.map((s) => (
-                                    <div key={s.id} className="step flex items-center gap-1.5 text-xs text-text-secondary">
-                                        <span aria-hidden>{s.kind === 'mutation' ? '⚡' : '◇'}</span>
+                                    <div
+                                        key={s.id}
+                                        className="step flex items-center gap-1.5 text-xs text-text-secondary"
+                                    >
+                                        <span aria-hidden>
+                                            {s.kind === 'mutation' ? '⚡' : '◇'}
+                                        </span>
                                         <span>{s.label}</span>
                                         {s.duration ? (
                                             <span className="text-text-muted">{s.duration}</span>

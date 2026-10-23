@@ -5,7 +5,7 @@ import { type AdminPageName, ROUTE_EVENT, adminPageForPath } from '@/lib/adminRo
 import { LoginPage } from '@/pages/Login';
 import { MainPage } from '@/pages/Main';
 import { useAuth } from '@/stores/auth';
-import { Suspense, lazy, useEffect, useState, type ReactNode } from 'react';
+import { type ReactNode, Suspense, lazy, useEffect, useState } from 'react';
 
 // Route-level code split (admin console is rarely the landing view).
 const AdminUsersPage = lazy(() =>
