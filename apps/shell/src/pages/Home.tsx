@@ -1,5 +1,6 @@
 import { fetchEngineModels } from '@/api/endpoints';
 import { pushToast } from '@/components/ToastHost';
+import { composerCapabilities } from '@/lib/composerCapabilities';
 import { useAuth } from '@/stores/auth';
 import {
     type DelegationDecision,
@@ -15,7 +16,7 @@ import { type ProjectItem, useProjects } from '@/stores/projects';
 import { type ApprovalAction, type TaskItem, taskBucket, useTasks } from '@/stores/tasks';
 import type { ModuleManifest } from '@/types/manifest';
 import { EmptyState } from '@fusion/web-ui';
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 interface Props {
     onOpen(manifest: ModuleManifest, route?: string, pageTitle?: string): void;
@@ -111,7 +112,13 @@ function StatusDot({ online, label }: { online: boolean; label: string }) {
 function StatusStrip({
     manifests,
     unreachableIds,
-}: { manifests: ModuleManifest[]; unreachableIds: Set<string> }) {
+    models,
+}: {
+    manifests: ModuleManifest[];
+    unreachableIds: Set<string>;
+    /** Engine model ids, fetched once by HomePage and shared with the composer. */
+    models: string[];
+}) {
     const engine = manifests.find((m) => m.id === ENGINE_ID);
     const node = manifests.find((m) => m.id === NODE_ID);
     // Global model/effort selector (issue #34): shell-level persistence, handed
@@ -120,13 +127,6 @@ function StatusStrip({
     const setModel = usePrefs((s) => s.setModel);
     const effort = usePrefs((s) => s.effort);
     const setEffort = usePrefs((s) => s.setEffort);
-    const [models, setModels] = useState<string[]>([]);
-    useEffect(() => {
-        void fetchEngineModels().then((ids) => {
-            console.log('[home] engine models:', ids.length);
-            setModels(ids);
-        });
-    }, []);
     return (
         <div className="flex flex-wrap items-center gap-4">
             <StatusDot
@@ -384,6 +384,163 @@ function ProjectsSection({
     );
 }
 
+// SECTION: composer (issue #50, f-ecommerce agent.html structure generalized)
+
+function Kbd({ children }: { children: ReactNode }) {
+    return (
+        <kbd className="rounded bg-bg-muted px-1.5 py-0.5 text-[11px] text-text-secondary">
+            {children}
+        </kbd>
+    );
+}
+
+/**
+ * Delegation composer, restyled after f-ecommerce's AI Assistant composer
+ * (issue #50): bordered 14px-radius box with brand focus ring, borderless
+ * textarea, action row (+ popover / model / thinking / Send), Enter-to-send
+ * hint, suggestion chips attached below. E-commerce semantics (CSV upload,
+ * SKU chips) dropped; ACTIONS omitted — the shell has no attachments yet.
+ */
+function Composer({
+    draft,
+    setDraft,
+    onSend,
+    busy,
+    models,
+    capabilities,
+    textareaRef,
+}: {
+    draft: string;
+    setDraft(v: string): void;
+    onSend(): void;
+    busy: boolean;
+    models: string[];
+    capabilities: ReturnType<typeof composerCapabilities>;
+    textareaRef: React.Ref<HTMLTextAreaElement>;
+}) {
+    const [popOpen, setPopOpen] = useState(false);
+    const popRef = useRef<HTMLDivElement | null>(null);
+
+    // Close the capabilities popover on any click outside it (agent.html UX).
+    useEffect(() => {
+        if (!popOpen) return;
+        const onDown = (e: MouseEvent) => {
+            if (popRef.current && !popRef.current.contains(e.target as Node)) setPopOpen(false);
+        };
+        document.addEventListener('mousedown', onDown);
+        return () => document.removeEventListener('mousedown', onDown);
+    }, [popOpen]);
+
+    const model = usePrefs((s) => s.model);
+    const setModel = usePrefs((s) => s.setModel);
+    const effort = usePrefs((s) => s.effort);
+    const setEffort = usePrefs((s) => s.setEffort);
+
+    return (
+        <div className="mx-auto w-full max-w-[640px] text-left">
+            <div className="rounded-[14px] border border-border bg-bg-elevated px-3 pb-2 pt-2.5 focus-within:border-brand">
+                <textarea
+                    ref={textareaRef}
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            onSend();
+                        }
+                    }}
+                    rows={2}
+                    placeholder={t(
+                        '用自然语言描述任务，引擎会自动决定执行方式… (Enter 发送，Shift+Enter 换行)',
+                        'Ask in natural language — the engine handles how… (Enter to send, Shift+Enter for a new line)'
+                    )}
+                    aria-label={t('委托输入框', 'Delegation message box')}
+                    className="block max-h-[120px] min-h-[40px] w-full resize-none border-none bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
+                />
+                <div className="mt-1.5 flex items-center gap-2">
+                    <div className="relative" ref={popRef}>
+                        <button
+                            type="button"
+                            onClick={() => setPopOpen((v) => !v)}
+                            aria-expanded={popOpen}
+                            aria-label={t('能力列表', 'Agent capabilities')}
+                            title={t('能力列表', 'Agent capabilities')}
+                            className="flex h-[30px] w-[30px] items-center justify-center rounded-full border border-border bg-bg-elevated p-0 text-base leading-none text-text-secondary hover:border-brand hover:text-brand"
+                        >
+                            +
+                        </button>
+                        {popOpen ? (
+                            <div
+                                role="dialog"
+                                aria-label="AGENT CAPABILITIES"
+                                className="absolute bottom-[38px] left-0 z-30 max-h-[260px] w-[300px] overflow-y-auto rounded-xl border border-border bg-bg-elevated p-2.5 shadow-[0_8px_28px_rgba(0,0,0,0.18)]"
+                            >
+                                <div className="px-1.5 pb-2 pt-0.5 text-xs text-text-secondary">
+                                    AGENT CAPABILITIES
+                                </div>
+                                {capabilities.length === 0 ? (
+                                    <div className="px-1.5 text-xs text-text-muted">
+                                        {t('暂无可用的能力入口', 'No capability entries yet')}
+                                    </div>
+                                ) : (
+                                    capabilities.map((c) => (
+                                        <div
+                                            key={`${c.moduleId}:${c.route}`}
+                                            className="px-1.5 py-1 text-xs text-text-secondary"
+                                        >
+                                            {c.title}
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        ) : null}
+                    </div>
+                    <span className="flex-1" />
+                    <select
+                        value={model}
+                        onChange={(e) => setModel(e.target.value)}
+                        aria-label={t('全局模型', 'Global model')}
+                        className="rounded-lg border border-border bg-bg-elevated px-1.5 py-1 text-xs text-text-secondary"
+                    >
+                        <option value="">{t('模型：默认', 'Model: default')}</option>
+                        {models.map((id) => (
+                            <option key={id} value={id}>
+                                {id}
+                            </option>
+                        ))}
+                        {model && !models.includes(model) ? (
+                            <option value={model}>{model}</option>
+                        ) : null}
+                    </select>
+                    <select
+                        value={effort}
+                        onChange={(e) => setEffort(e.target.value as Effort)}
+                        aria-label={t('思考力度', 'Thinking level')}
+                        className="rounded-lg border border-border bg-bg-elevated px-1.5 py-1 text-xs text-text-secondary"
+                    >
+                        <option value="default">{t('思考：默认', 'Thinking: auto')}</option>
+                        <option value="low">{t('思考：低', 'Thinking: low')}</option>
+                        <option value="medium">{t('思考：中', 'Thinking: medium')}</option>
+                        <option value="high">{t('思考：高', 'Thinking: high')}</option>
+                    </select>
+                    <button
+                        type="button"
+                        onClick={onSend}
+                        disabled={busy}
+                        className="shrink-0 rounded-lg bg-brand px-3.5 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                    >
+                        {busy ? t('回答中…', 'Thinking…') : t('发送', 'Send')}
+                    </button>
+                </div>
+            </div>
+            <div className="mt-1.5 text-center text-[11.5px] text-text-secondary">
+                <Kbd>Enter</Kbd> {t('发送', 'to send')} · <Kbd>Shift+Enter</Kbd>{' '}
+                {t('换行', 'new line')}
+            </div>
+        </div>
+    );
+}
+
 // SECTION: page
 
 /** Home landing (issue #32/#33): greeting + status strip + delegation message
@@ -399,7 +556,18 @@ export function HomePage({ onOpen }: Props) {
     const projectItems = useProjects((s) => s.items);
     const [approveBusyId, setApproveBusyId] = useState<string | null>(null);
     const [draft, setDraft] = useState('');
+    const [engineModels, setEngineModels] = useState<string[]>([]);
+    const textareaRef = useRef<HTMLTextAreaElement | null>(null);
     const byId = new Map(manifests.map((m) => [m.id, m]));
+
+    // Engine model list (issue #50): fetched once, shared by the status strip
+    // and the composer's model select — one source of truth.
+    useEffect(() => {
+        void fetchEngineModels().then((ids) => {
+            console.log('[home] engine models:', ids.length);
+            setEngineModels(ids);
+        });
+    }, []);
 
     const running = tasks.filter((x) => taskBucket(x) === 'running');
     const recent = tasks.filter((x) => taskBucket(x) === 'recent');
@@ -466,6 +634,13 @@ export function HomePage({ onOpen }: Props) {
         else console.warn('[home] chip target module not registered:', moduleId);
     };
 
+    // Static chips (issue #50): data-fill prefill only — the composer's
+    // delegation routing decides where the instruction goes on send.
+    const prefillChip = (text: string) => {
+        setDraft(text);
+        textareaRef.current?.focus();
+    };
+
     // Delegation (issue #34): phase-1 rule routing; the decision is shown,
     // never silent, and every send is audit-logged.
     const chatMessages = useDelegation((s) => s.messages);
@@ -510,35 +685,52 @@ export function HomePage({ onOpen }: Props) {
                     <h1 className="text-xl font-medium text-text-primary">
                         {greetingText(new Date().getHours(), user?.display_name, lang)}
                     </h1>
-                    <StatusStrip manifests={manifests} unreachableIds={unreachableIds} />
+                    <StatusStrip
+                        manifests={manifests}
+                        unreachableIds={unreachableIds}
+                        models={engineModels}
+                    />
                 </header>
 
-                <div className="flex items-end gap-2">
-                    <textarea
-                        value={draft}
-                        onChange={(e) => setDraft(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                                e.preventDefault();
-                                send();
-                            }
-                        }}
-                        rows={2}
-                        placeholder={t(
-                            '问点什么，或直接把活交出来…',
-                            'Ask something, or hand over a task…'
-                        )}
-                        aria-label={t('委托输入框', 'Delegation message box')}
-                        className="min-h-[56px] flex-1 resize-none rounded-card border border-border bg-bg-elevated px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand focus:outline-none"
-                    />
-                    <button
-                        type="button"
-                        onClick={send}
-                        disabled={chatBusy}
-                        className="h-10 shrink-0 rounded-card bg-brand px-4 text-sm text-white disabled:opacity-50"
-                    >
-                        {chatBusy ? t('回答中…', 'Thinking…') : t('发送', 'Send')}
-                    </button>
+                <Composer
+                    draft={draft}
+                    setDraft={setDraft}
+                    onSend={send}
+                    busy={chatBusy}
+                    models={engineModels}
+                    capabilities={composerCapabilities(manifests, lang)}
+                    textareaRef={textareaRef}
+                />
+
+                <div
+                    className="mx-auto flex w-full max-w-[640px] flex-wrap justify-center gap-2"
+                    aria-label={t('建议任务', 'Suggested tasks')}
+                >
+                    {STATIC_CHIPS.map((c) => (
+                        <button
+                            key={c.key}
+                            type="button"
+                            onClick={() => prefillChip(c.prefill)}
+                            className="rounded-full border border-border bg-bg-muted px-3 py-1.5 text-xs text-text-secondary hover:border-brand hover:text-brand"
+                        >
+                            {lang === 'en' ? c.labelEn : c.label}
+                        </button>
+                    ))}
+                    {manifestChips.map(({ manifest, card }) => {
+                        const unreachable = unreachableIds.has(manifest.id);
+                        const title = lang === 'en' && card.title_en ? card.title_en : card.title;
+                        return (
+                            <button
+                                key={`${manifest.id}:${card.id}`}
+                                type="button"
+                                onClick={() => jumpChip(manifest.id, card.route, card.title)}
+                                title={moduleTitle(manifest, lang)}
+                                className={`rounded-full border border-border bg-bg-muted px-3 py-1.5 text-xs text-text-secondary hover:border-brand hover:text-brand ${unreachable ? 'opacity-40' : ''}`}
+                            >
+                                {title}
+                            </button>
+                        );
+                    })}
                 </div>
 
                 {lastDecision ? (
@@ -558,17 +750,14 @@ export function HomePage({ onOpen }: Props) {
 
                 {chatMessages.length > 0 || chatError ? (
                     <section
-                        className="flex max-h-80 flex-col gap-2 overflow-y-auto rounded-card border border-border bg-bg-elevated px-4 py-3"
+                        className="flex max-h-80 flex-col gap-1 overflow-y-auto rounded-card border border-border bg-bg-elevated px-4 py-3"
                         aria-label={t('壳级问答', 'Shell chat')}
                     >
                         {chatMessages.map((m, i) => (
                             <div
                                 key={i}
-                                className={`text-sm ${m.role === 'user' ? 'text-text-primary' : 'text-text-secondary'}`}
+                                className={`max-w-[82%] whitespace-pre-wrap break-words px-3.5 py-2 text-sm ${m.role === 'user' ? 'self-end rounded-[16px_16px_4px_16px] bg-bg-muted text-text-primary' : 'self-start rounded-[4px_16px_16px_16px] border border-border bg-bg text-text-secondary'}`}
                             >
-                                <span className="mr-2 font-mono text-xs text-text-muted">
-                                    {m.role === 'user' ? t('你', 'You') : t('Fusion', 'Fusion')}
-                                </span>
                                 {m.content}
                             </div>
                         ))}
@@ -579,38 +768,6 @@ export function HomePage({ onOpen }: Props) {
                         ) : null}
                     </section>
                 ) : null}
-
-                <div className="flex flex-wrap gap-2" aria-label={t('建议任务', 'Suggested tasks')}>
-                    {STATIC_CHIPS.map((c) => {
-                        const m = byId.get(c.moduleId);
-                        const unreachable = !!m && unreachableIds.has(m.id);
-                        return (
-                            <button
-                                key={c.key}
-                                type="button"
-                                onClick={() => jumpChip(c.moduleId, c.route, c.prefill)}
-                                className={`rounded-full border border-border px-3 py-1.5 text-xs text-text-secondary hover:border-brand hover:text-brand ${unreachable ? 'opacity-40' : ''}`}
-                            >
-                                {lang === 'en' ? c.labelEn : c.label}
-                            </button>
-                        );
-                    })}
-                    {manifestChips.map(({ manifest, card }) => {
-                        const unreachable = unreachableIds.has(manifest.id);
-                        const title = lang === 'en' && card.title_en ? card.title_en : card.title;
-                        return (
-                            <button
-                                key={`${manifest.id}:${card.id}`}
-                                type="button"
-                                onClick={() => jumpChip(manifest.id, card.route, card.title)}
-                                title={moduleTitle(manifest, lang)}
-                                className={`rounded-full border border-border px-3 py-1.5 text-xs text-text-secondary hover:border-brand hover:text-brand ${unreachable ? 'opacity-40' : ''}`}
-                            >
-                                {title}
-                            </button>
-                        );
-                    })}
-                </div>
 
                 <div className="flex flex-col gap-4">
                     <TaskSection
