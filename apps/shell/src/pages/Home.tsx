@@ -112,21 +112,12 @@ function StatusDot({ online, label }: { online: boolean; label: string }) {
 function StatusStrip({
     manifests,
     unreachableIds,
-    models,
 }: {
     manifests: ModuleManifest[];
     unreachableIds: Set<string>;
-    /** Engine model ids, fetched once by HomePage and shared with the composer. */
-    models: string[];
 }) {
     const engine = manifests.find((m) => m.id === ENGINE_ID);
     const node = manifests.find((m) => m.id === NODE_ID);
-    // Global model/effort selector (issue #34): shell-level persistence, handed
-    // off to modules via the documented same-origin localStorage keys.
-    const model = usePrefs((s) => s.model);
-    const setModel = usePrefs((s) => s.setModel);
-    const effort = usePrefs((s) => s.effort);
-    const setEffort = usePrefs((s) => s.setEffort);
     return (
         <div className="flex flex-wrap items-center gap-4">
             <StatusDot
@@ -145,31 +136,6 @@ function StatusStrip({
                         : t('常驻节点未注册', 'Node not registered')
                 }
             />
-            <select
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                aria-label={t('全局模型', 'Global model')}
-                className="rounded-md border border-border bg-bg-elevated px-2 py-1 text-xs text-text-secondary"
-            >
-                <option value="">{t('模型：默认', 'Model: default')}</option>
-                {models.map((id) => (
-                    <option key={id} value={id}>
-                        {id}
-                    </option>
-                ))}
-                {model && !models.includes(model) ? <option value={model}>{model}</option> : null}
-            </select>
-            <select
-                value={effort}
-                onChange={(e) => setEffort(e.target.value as Effort)}
-                aria-label={t('推理力度', 'Effort')}
-                className="rounded-md border border-border bg-bg-elevated px-2 py-1 text-xs text-text-secondary"
-            >
-                <option value="default">{t('力度：默认', 'Effort: default')}</option>
-                <option value="low">{t('力度：低', 'Effort: low')}</option>
-                <option value="medium">{t('力度：中', 'Effort: medium')}</option>
-                <option value="high">{t('力度：高', 'Effort: high')}</option>
-            </select>
         </div>
     );
 }
@@ -560,8 +526,8 @@ export function HomePage({ onOpen }: Props) {
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
     const byId = new Map(manifests.map((m) => [m.id, m]));
 
-    // Engine model list (issue #50): fetched once, shared by the status strip
-    // and the composer's model select — one source of truth.
+    // Engine model list (issue #50): fetched once, fed to the composer's
+    // model select — one source of truth (strip selects removed, issue #59).
     useEffect(() => {
         void fetchEngineModels().then((ids) => {
             console.log('[home] engine models:', ids.length);
@@ -685,11 +651,7 @@ export function HomePage({ onOpen }: Props) {
                     <h1 className="text-xl font-medium text-text-primary">
                         {greetingText(new Date().getHours(), user?.display_name, lang)}
                     </h1>
-                    <StatusStrip
-                        manifests={manifests}
-                        unreachableIds={unreachableIds}
-                        models={engineModels}
-                    />
+                    <StatusStrip manifests={manifests} unreachableIds={unreachableIds} />
                 </header>
 
                 <Composer
