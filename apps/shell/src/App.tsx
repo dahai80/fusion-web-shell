@@ -1,10 +1,11 @@
 import { ApiClient, setSharedClient, sharedClient } from '@/api/client';
 import * as api from '@/api/endpoints';
 import { ToastHost, pushToast } from '@/components/ToastHost';
+import { type AdminPageName, ROUTE_EVENT, adminPageForPath } from '@/lib/adminRoute';
 import { LoginPage } from '@/pages/Login';
 import { MainPage } from '@/pages/Main';
 import { useAuth } from '@/stores/auth';
-import { Suspense, lazy, useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState, type ReactNode } from 'react';
 
 // Route-level code split (admin console is rarely the landing view).
 const AdminUsersPage = lazy(() =>
@@ -15,15 +16,39 @@ const SettingsPage = lazy(() =>
 );
 const AuditPage = lazy(() => import('@/pages/Audit').then((m) => ({ default: m.AuditPage })));
 
-type Route = { name: 'main' } | { name: 'admin-users' } | { name: 'settings' } | { name: 'audit' };
+type Route = { name: 'main' } | { name: AdminPageName };
 
 function readRoute(): Route {
     // /users, not /admin/users: the gateway reserves /admin/* for its own
     // embedded admin SPA, which would shadow this route (#42 followup).
-    if (window.location.pathname === '/users') return { name: 'admin-users' };
-    if (window.location.pathname === '/settings') return { name: 'settings' };
-    if (window.location.pathname === '/audit') return { name: 'audit' };
-    return { name: 'main' };
+    const page = adminPageForPath(window.location.pathname);
+    return page ? { name: page } : { name: 'main' };
+}
+
+/** Admin page content for the current route, rendered inside the shell (issue #51). */
+function adminNodeFor(route: Route): ReactNode {
+    if (route.name === 'admin-users') {
+        return (
+            <Suspense fallback={null}>
+                <AdminUsersPage />
+            </Suspense>
+        );
+    }
+    if (route.name === 'settings') {
+        return (
+            <Suspense fallback={null}>
+                <SettingsPage />
+            </Suspense>
+        );
+    }
+    if (route.name === 'audit') {
+        return (
+            <Suspense fallback={null}>
+                <AuditPage />
+            </Suspense>
+        );
+    }
+    return null;
 }
 
 /** Shell root (PRD §4.1): unknown session renders login; 401 anywhere kicks back here. */
@@ -33,9 +58,15 @@ export function App() {
     const [route, setRoute] = useState<Route>(readRoute);
 
     useEffect(() => {
-        const onPop = () => setRoute(readRoute());
-        window.addEventListener('popstate', onPop);
-        return () => window.removeEventListener('popstate', onPop);
+        // popstate covers browser back/forward; ROUTE_EVENT covers in-shell
+        // navigateShell() calls (issue #51 SPA admin navigation).
+        const sync = () => setRoute(readRoute());
+        window.addEventListener('popstate', sync);
+        window.addEventListener(ROUTE_EVENT, sync);
+        return () => {
+            window.removeEventListener('popstate', sync);
+            window.removeEventListener(ROUTE_EVENT, sync);
+        };
     }, []);
 
     const onAuthed = (u: api.SessionUser, token: string) => {
@@ -51,21 +82,11 @@ export function App() {
     return (
         <>
             <ToastHost />
-            {route.name === 'admin-users' ? (
-                <Suspense fallback={null}>
-                    <AdminUsersPage />
-                </Suspense>
-            ) : route.name === 'settings' ? (
-                <Suspense fallback={null}>
-                    <SettingsPage />
-                </Suspense>
-            ) : route.name === 'audit' ? (
-                <Suspense fallback={null}>
-                    <AuditPage />
-                </Suspense>
-            ) : (
-                <MainPage onLogout={logoutAll} />
-            )}
+            <MainPage
+                onLogout={logoutAll}
+                adminPage={route.name === 'main' ? null : route.name}
+                adminNode={adminNodeFor(route)}
+            />
         </>
     );
 }

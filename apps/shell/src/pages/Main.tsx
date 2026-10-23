@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/Sidebar';
 import { TabManager } from '@/components/TabManager';
 import { TabStrip } from '@/components/TabStrip';
 import { pushToast } from '@/components/ToastHost';
+import { type AdminPageName, navigateShell } from '@/lib/adminRoute';
 import { t } from '@/stores/lang';
 import { useManifests } from '@/stores/manifests';
 import { useNotifications } from '@/stores/notifications';
@@ -13,10 +14,13 @@ import { getDevModules, restorePersistedTabs, useTabs } from '@/stores/tabs';
 import { useTasks } from '@/stores/tasks';
 import type { ModuleManifest } from '@/types/manifest';
 import { ErrorState, useAutoRetry } from '@fusion/web-ui';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 interface Props {
     onLogout(): void;
+    /** Admin page active (issue #51): content area shows it, shell chrome stays. */
+    adminPage?: AdminPageName | null;
+    adminNode?: ReactNode;
 }
 
 const NOTIFICATIONS_POLL_MS = 30000;
@@ -27,11 +31,13 @@ const PROJECTS_POLL_MS = 60000;
  * mobile bottom nav + drawer. Manifest load uses auto-retry (spec §6.1);
  * persisted tabs restore once manifests arrive (PRD §6.1).
  */
-export function MainPage({ onLogout }: Props) {
+export function MainPage({ onLogout, adminPage = null, adminNode }: Props) {
     const openTab = useTabs((s) => s.openTab);
+    const activeTabId = useTabs((s) => s.activeTabId);
     const manifestsLoaded = useManifests((s) => s.loaded);
     const [drawerOpen, setDrawerOpen] = useState(false);
     const restoredRef = useRef(false);
+    const prevTabRef = useRef(activeTabId);
 
     // Auto-retry manifest load with visible attempt count (gap #7).
     const { error, attempt, loading, manualRetry } = useAutoRetry(
@@ -85,10 +91,26 @@ export function MainPage({ onLogout }: Props) {
         return () => useProjects.getState().stop();
     }, [manifestsLoaded]);
 
+    // Issue #51: any intent to view tabs/home leaves an open admin page.
+    // The activeTabId effect covers state changes; exitAdminView covers the
+    // no-change case (clicking the already-active tab / re-opening it).
+    const exitAdminView = () => {
+        if (adminPage) {
+            console.log('[main] leaving admin page:', adminPage);
+            navigateShell('/');
+        }
+    };
+
     const handleOpen = (m: ModuleManifest, route?: string, pageTitle?: string) => {
         const id = openTab(m, { route, pageTitle });
         if (!id) console.warn('[main] openTab refused (limit?):', m.id);
+        exitAdminView();
     };
+
+    useEffect(() => {
+        if (adminPage && prevTabRef.current !== activeTabId) exitAdminView();
+        prevTabRef.current = activeTabId;
+    }, [activeTabId, adminPage]);
 
     // First-load failure / retry UX (spec 6.1): show "第 N 次重试中" during
     // backoff, and the manual retry button once auto-retry is exhausted.
@@ -108,12 +130,22 @@ export function MainPage({ onLogout }: Props) {
         <div className="flex h-screen overflow-hidden bg-bg text-text-primary">
             <Sidebar onOpen={handleOpen} onLogout={onLogout} />
             <div className="flex min-w-0 flex-1 flex-col">
-                <TabStrip />
-                <TabManager onOpen={handleOpen} />
+                <TabStrip onActivate={exitAdminView} />
+                {/* TabManager stays mounted while an admin page shows (issue #51):
+                    display:none only, KeepAlive iframe state survives (PRD §6). */}
+                <div className={`min-h-0 min-w-0 flex-1 ${adminPage ? 'hidden' : 'flex'}`}>
+                    <TabManager onOpen={handleOpen} />
+                </div>
+                {adminNode ? (
+                    <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">{adminNode}</div>
+                ) : null}
                 <BottomNav
                     onOpen={handleOpen}
                     onMore={() => setDrawerOpen(true)}
-                    onHome={() => useTabs.getState().goHome()}
+                    onHome={() => {
+                        useTabs.getState().goHome();
+                        exitAdminView();
+                    }}
                 />
             </div>
             <MobileDrawer

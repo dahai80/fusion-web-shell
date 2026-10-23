@@ -1,4 +1,5 @@
 import { NotificationBell } from '@/components/NotificationBell';
+import { navigateShell, pathForAdminPage } from '@/lib/adminRoute';
 import { rowClickIntent, syncExpandedWithActive, toggleExpanded } from '@/lib/sidebarTree';
 import { useAuth } from '@/stores/auth';
 import { t, useLang } from '@/stores/lang';
@@ -79,7 +80,12 @@ export function Sidebar({ onOpen, onLogout }: Props) {
             <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
                 <button
                     type="button"
-                    onClick={() => useTabs.getState().goHome()}
+                    onClick={() => {
+                        useTabs.getState().goHome();
+                        // Also leaves an open admin page (issue #51): goHome
+                        // alone is a no-op when no tab was active.
+                        navigateShell('/');
+                    }}
                     className={`mb-3 flex w-full items-center rounded-md px-2 py-2 text-left text-sm ${activeTabId === null ? 'bg-brand/15 text-brand' : 'text-text-primary hover:bg-bg-muted'}`}
                 >
                     <span aria-hidden className="mr-2">
@@ -192,7 +198,7 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                 <div className="mt-1 flex items-center gap-3">
                     <button
                         type="button"
-                        onClick={() => window.location.assign('/settings')}
+                        onClick={() => navigateShell(pathForAdminPage('settings'))}
                         className="text-text-muted hover:text-brand"
                     >
                         {t('⚙ 设置', '⚙ Settings')}
@@ -200,7 +206,7 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                     {user?.roles.includes('admin') ? (
                         <button
                             type="button"
-                            onClick={() => window.location.assign('/users')}
+                            onClick={() => navigateShell(pathForAdminPage('admin-users'))}
                             className="text-text-muted hover:text-brand"
                         >
                             {t('👥 用户', '👥 Users')}
@@ -209,7 +215,7 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                     {user?.roles.includes('admin') || user?.roles.includes('auditor') ? (
                         <button
                             type="button"
-                            onClick={() => window.location.assign('/audit')}
+                            onClick={() => navigateShell(pathForAdminPage('audit'))}
                             className="text-text-muted hover:text-brand"
                         >
                             {t('☰ 审计', '☰ Audit')}

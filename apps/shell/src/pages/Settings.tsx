@@ -1,6 +1,7 @@
 import * as api from '@/api/endpoints';
 import { isGatewayPending } from '@/api/endpoints';
 import { pushToast } from '@/components/ToastHost';
+import { navigateShell } from '@/lib/adminRoute';
 import { guardedLoad } from '@/lib/pendingSurfaces';
 import {
     type AdapterRow,
@@ -115,7 +116,7 @@ export function SettingsPage() {
                 <div className="flex gap-2">
                     <button
                         type="button"
-                        onClick={() => window.location.assign('/')}
+                        onClick={() => navigateShell('/')}
                         className="rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary"
                     >
                         {t('← 返回', '← Back')}
