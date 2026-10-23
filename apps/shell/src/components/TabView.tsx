@@ -2,7 +2,7 @@ import { type ErrorEnvelope, sharedClient } from '@/api/client';
 import { pushToast } from '@/components/ToastHost';
 import { useViewport } from '@/hooks/useViewport';
 import { t, useLang } from '@/stores/lang';
-import { isReadonlyOnMobile } from '@/stores/manifests';
+import { iframeAllowPolicy, isReadonlyOnMobile } from '@/stores/manifests';
 import type { ShellTab } from '@/stores/tabs';
 import { useTabs } from '@/stores/tabs';
 import { useTheme } from '@/stores/theme';
@@ -291,6 +291,10 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
                     }}
                     className={`h-full w-full border-0 ${readonly ? 'pointer-events-none' : ''}`}
                     sandbox="allow-scripts allow-same-origin allow-forms allow-downloads"
+                    // Permissions-Policy delegation (issue #66): opt-in per module
+                    // via manifest permissions_policy; undeclared modules get no
+                    // allow attribute (no behavior change).
+                    allow={manifest ? iframeAllowPolicy(manifest) : undefined}
                 />
             ) : null}
         </div>

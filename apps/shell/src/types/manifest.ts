@@ -50,6 +50,8 @@ export interface ModuleManifest {
     notifications?: NotificationSource[];
     home?: HomeCard[];
     homeProjects?: HomeProjectSource[];
+    /** Permissions-Policy features the module's iframe needs (issue #66). */
+    permissions_policy?: string[];
 }
 
 /**
