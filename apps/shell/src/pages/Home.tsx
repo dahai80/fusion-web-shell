@@ -167,7 +167,7 @@ function ApprovalCard({
                     type="button"
                     disabled={busy}
                     onClick={() => onAction(task.id, 'reject')}
-                    className="rounded-md border border-border px-3 py-1.5 text-xs text-text-secondary hover:border-error hover:text-error disabled:opacity-50"
+                    className="fs-btn fs-btn-secondary text-xs hover:border-error hover:text-error"
                 >
                     {t('拒绝', 'Reject')}
                 </button>
@@ -175,7 +175,7 @@ function ApprovalCard({
                     type="button"
                     disabled={busy}
                     onClick={() => onAction(task.id, 'allow_once')}
-                    className="rounded-md bg-brand px-3 py-1.5 text-xs text-white disabled:opacity-50"
+                    className="fs-btn fs-btn-primary text-xs"
                 >
                     {t('仅本次允许', 'Allow once')}
                 </button>
@@ -183,7 +183,7 @@ function ApprovalCard({
                     type="button"
                     disabled={busy}
                     onClick={() => onAction(task.id, 'always_allow')}
-                    className="rounded-md border border-border px-3 py-1.5 text-xs text-text-secondary hover:border-brand hover:text-brand disabled:opacity-50"
+                    className="fs-btn fs-btn-secondary text-xs hover:text-brand"
                 >
                     {t('始终允许', 'Always allow')}
                 </button>
@@ -439,7 +439,7 @@ function Composer({
                             <div
                                 role="dialog"
                                 aria-label="AGENT CAPABILITIES"
-                                className="absolute bottom-[38px] left-0 z-30 max-h-[260px] w-[300px] overflow-y-auto rounded-xl border border-border bg-bg-elevated p-2.5 shadow-[0_8px_28px_rgba(0,0,0,0.18)]"
+                                className="fs-elev-1 absolute bottom-[38px] left-0 z-dropdown max-h-[260px] w-[300px] overflow-y-auto rounded-xl border border-border bg-bg-elevated p-2.5"
                             >
                                 <div className="px-1.5 pb-2 pt-0.5 text-xs text-text-secondary">
                                     AGENT CAPABILITIES
@@ -493,7 +493,7 @@ function Composer({
                         type="button"
                         onClick={onSend}
                         disabled={busy}
-                        className="shrink-0 rounded-lg bg-brand px-3.5 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                        className="shrink-0 fs-btn fs-btn-primary px-3.5 text-xs font-semibold"
                     >
                         {busy ? t('回答中…', 'Thinking…') : t('发送', 'Send')}
                     </button>

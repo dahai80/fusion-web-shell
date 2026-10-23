@@ -35,7 +35,7 @@ export function MobileDrawer({ open, onClose, onOpenModule, onLogout }: Props) {
     if (!open) return null;
     return (
         <div
-            className="fixed inset-0 z-50 flex flex-col justify-end bg-black/50 md:hidden"
+            className="fixed inset-0 z-overlay flex flex-col justify-end bg-black/50 md:hidden"
             onMouseDown={(e) => e.target === e.currentTarget && onClose()}
         >
             <div className="max-h-[80vh] overflow-y-auto rounded-t-xl border-t border-border bg-bg-elevated pb-[env(safe-area-inset-bottom)]">

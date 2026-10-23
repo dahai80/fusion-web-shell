@@ -133,7 +133,7 @@ export function AdminUsersPage() {
                 <button
                     type="button"
                     onClick={() => void reload()}
-                    className="rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary"
+                    className="fs-btn fs-btn-secondary"
                 >
                     刷新
                 </button>
@@ -199,7 +199,7 @@ export function AdminUsersPage() {
                             <button
                                 type="button"
                                 onClick={createUser}
-                                className="rounded-md bg-brand px-3 py-2 text-xs text-white"
+                                className="fs-btn fs-btn-primary text-xs"
                             >
                                 创建
                             </button>
@@ -288,7 +288,7 @@ export function AdminUsersPage() {
                                         <button
                                             type="button"
                                             onClick={() => setGrantUser(u)}
-                                            className="rounded-md border border-border px-3 py-1.5 text-xs text-text-primary"
+                                            className="fs-btn fs-btn-secondary text-xs"
                                         >
                                             授权
                                         </button>
@@ -307,7 +307,7 @@ export function AdminUsersPage() {
                                                         pushToast('error', (err as Error).message)
                                                     )
                                             }
-                                            className="rounded-md border border-border px-3 py-1.5 text-xs text-text-primary"
+                                            className="fs-btn fs-btn-secondary text-xs"
                                         >
                                             重置密码
                                         </button>
@@ -323,14 +323,14 @@ export function AdminUsersPage() {
                                                         pushToast('error', (err as Error).message)
                                                     )
                                             }
-                                            className="rounded-md border border-border px-3 py-1.5 text-xs text-text-primary"
+                                            className="fs-btn fs-btn-secondary text-xs"
                                         >
                                             {u.disabled ? '启用' : '禁用'}
                                         </button>
                                         <button
                                             type="button"
                                             onClick={() => setConfirmDelete(u)}
-                                            className="rounded-md border border-error/60 px-3 py-1.5 text-xs text-error"
+                                            className="fs-btn fs-btn-danger text-xs"
                                         >
                                             删除
                                         </button>
@@ -406,10 +406,10 @@ function GrantDialog({
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            className="fixed inset-0 z-overlay flex items-center justify-center bg-black/50 p-4"
             onMouseDown={(e) => e.target === e.currentTarget && onClose()}
         >
-            <div className="max-h-[80vh] w-full max-w-md overflow-y-auto rounded-card border border-border bg-bg-elevated p-4">
+            <div className="fs-elev-2 max-h-[80vh] w-full max-w-md overflow-y-auto rounded-card border border-border bg-bg-elevated p-4">
                 <div className="text-base text-text-primary">授权: {user.display_name}</div>
                 <div className="mt-3 space-y-3">
                     {cats.map((cat) => {
@@ -442,7 +442,7 @@ function GrantDialog({
                     <button
                         type="button"
                         onClick={onClose}
-                        className="rounded-md border border-border px-4 py-2 text-sm text-text-secondary"
+                        className="fs-btn fs-btn-secondary"
                     >
                         取消
                     </button>
@@ -454,7 +454,7 @@ function GrantDialog({
                                 .then(onSaved)
                                 .catch((err) => pushToast('error', (err as Error).message));
                         }}
-                        className="rounded-md bg-brand px-4 py-2 text-sm text-white"
+                        className="fs-btn fs-btn-primary"
                     >
                         保存授权
                     </button>
@@ -630,7 +630,7 @@ function RolesPanel() {
                                                 <button
                                                     type="button"
                                                     onClick={() => remove(r.name)}
-                                                    className="rounded-md border border-error/60 px-2 py-1 text-error"
+                                                    className="fs-btn fs-btn-danger px-2 py-1"
                                                 >
                                                     {t('删除', 'Delete')}
                                                 </button>
@@ -690,7 +690,7 @@ function RolesPanel() {
                                 <button
                                     type="button"
                                     onClick={create}
-                                    className="rounded-md bg-brand px-3 py-1.5 text-white"
+                                    className="fs-btn fs-btn-primary"
                                 >
                                     {t('创建角色', 'Create Role')}
                                 </button>
@@ -917,7 +917,7 @@ function MenuPermissionsPanel() {
                                             <button
                                                 type="button"
                                                 onClick={() => deleteMenu(m.id)}
-                                                className="rounded-md border border-error/60 px-2 py-1 text-error"
+                                                className="fs-btn fs-btn-danger px-2 py-1"
                                                 aria-label={t(
                                                     `移除菜单 ${m.id}`,
                                                     `Remove menu ${m.id}`
@@ -945,14 +945,14 @@ function MenuPermissionsPanel() {
                         <button
                             type="button"
                             onClick={save}
-                            className="rounded-md bg-brand px-3 py-1.5 text-sm text-white"
+                            className="fs-btn fs-btn-primary"
                         >
                             {t('保存菜单权限', 'Save Menu Permissions')}
                         </button>
                         <button
                             type="button"
                             onClick={() => void reset()}
-                            className="rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary hover:border-brand"
+                            className="fs-btn fs-btn-secondary"
                         >
                             {t('重置为默认', 'Reset to Defaults')}
                         </button>
@@ -1000,7 +1000,7 @@ function MenuPermissionsPanel() {
                             <button
                                 type="button"
                                 onClick={addMenu}
-                                className="rounded-md border border-border px-3 py-1.5 text-sm text-text-primary hover:border-brand"
+                                className="fs-btn fs-btn-secondary"
                             >
                                 {t('添加', 'Add')}
                             </button>

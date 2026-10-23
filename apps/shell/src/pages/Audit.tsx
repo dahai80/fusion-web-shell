@@ -71,7 +71,7 @@ export function AuditPage() {
                 <button
                     type="button"
                     onClick={() => navigateShell('/')}
-                    className="rounded-md border border-border px-3 py-1.5 text-sm text-text-secondary"
+                    className="fs-btn fs-btn-secondary"
                 >
                     {t('← 返回', '← Back')}
                 </button>
@@ -101,7 +101,7 @@ export function AuditPage() {
                 <button
                     type="button"
                     onClick={() => void load(user, cls)}
-                    className="rounded-md border border-border px-3 py-1.5 text-text-secondary hover:border-brand"
+                    className="fs-btn fs-btn-secondary"
                 >
                     {t('查询', 'Apply')}
                 </button>

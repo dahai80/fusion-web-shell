@@ -42,12 +42,12 @@ export function ConfirmDialog({
     const nameOk = !confirmName || typed === confirmName;
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            className="fixed inset-0 z-overlay flex items-center justify-center bg-black/50 p-4"
             role="dialog"
             aria-modal="true"
             onMouseDown={(e) => e.target === e.currentTarget && onCancel()}
         >
-            <div className="w-full max-w-sm rounded-card border border-border bg-bg-elevated p-4 shadow-overlay">
+            <div className="fs-elev-2 w-full max-w-sm rounded-card border border-border bg-bg-elevated p-4">
                 <div className={`text-base ${danger ? 'text-error' : 'text-text-primary'}`}>
                     {title}
                 </div>
@@ -67,7 +67,7 @@ export function ConfirmDialog({
                     <button
                         type="button"
                         onClick={onCancel}
-                        className="rounded-md border border-border px-4 py-2 text-sm text-text-secondary hover:bg-bg-muted"
+                        className="fs-btn fs-btn-secondary"
                     >
                         {cancelLabel}
                     </button>
@@ -75,7 +75,7 @@ export function ConfirmDialog({
                         type="button"
                         disabled={!nameOk}
                         onClick={onConfirm}
-                        className={`rounded-md px-4 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-40 ${danger ? 'bg-error' : 'bg-brand'}`}
+                        className={`fs-btn ${danger ? 'fs-btn-danger' : 'fs-btn-primary'}`}
                     >
                         {confirmLabel}
                     </button>
