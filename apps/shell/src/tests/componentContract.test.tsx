@@ -130,3 +130,95 @@ describe('@fusion/web-ui ChatThread (issue #55)', () => {
         expect(html).toContain('nothing yet');
     });
 });
+
+describe('@fusion/web-ui ChatThread output contract (issue #57)', () => {
+    it('tool-call steps render ⚡ mutation / ◇ read markers with label and duration', () => {
+        const html = renderToStaticMarkup(
+            <ChatThread
+                messages={[
+                    {
+                        id: '1',
+                        role: 'agent',
+                        body: '',
+                        steps: [
+                            { id: 's1', label: 'write file', kind: 'mutation', duration: '1.2s' },
+                            { id: 's2', label: 'read kb', kind: 'read', duration: '0.4s' },
+                        ],
+                    },
+                ]}
+            />
+        );
+        expect(html).toContain('class="step');
+        expect(html).toContain('⚡');
+        expect(html).toContain('◇');
+        expect(html).toContain('write file');
+        expect(html).toContain('1.2s');
+    });
+    it('step-data renders a scrollable clickable result list', () => {
+        const html = renderToStaticMarkup(
+            <ChatThread
+                messages={[
+                    {
+                        id: '1',
+                        role: 'agent',
+                        body: '',
+                        data: [
+                            { id: 'd1', label: 'row one' },
+                            { id: 'd2', label: 'row two' },
+                        ],
+                    },
+                ]}
+            />
+        );
+        expect(html).toContain('class="step-data');
+        expect(html).toContain('overflow-y-auto');
+        expect(html).toContain('max-h-');
+        expect(html).toContain('row one');
+        expect(html).toContain('<button');
+    });
+    it('citation chips and artifact cards render with click handlers wired', () => {
+        const html = renderToStaticMarkup(
+            <ChatThread
+                messages={[
+                    {
+                        id: '1',
+                        role: 'agent',
+                        body: 'done',
+                        citations: [{ id: 'c1', label: 'spec §5.1' }],
+                        artifacts: [{ id: 'a1', label: 'report.md' }],
+                    },
+                ]}
+                onCitationClick={() => {}}
+                onArtifactClick={() => {}}
+            />
+        );
+        expect(html).toContain('spec §5.1');
+        expect(html).toContain('report.md');
+        expect(html).toContain('citation');
+        expect(html).toContain('artifact');
+    });
+    it('pending agent message shows a typing indicator, not an empty bubble body', () => {
+        const html = renderToStaticMarkup(
+            <ChatThread messages={[{ id: '1', role: 'agent', body: '', state: 'pending' }]} />
+        );
+        expect(html).toContain('animate-pulse');
+        expect(html).not.toContain('whitespace-pre-wrap');
+    });
+    it('streaming agent message shows the cursor and markdown body', () => {
+        const html = renderToStaticMarkup(
+            <ChatThread
+                messages={[{ id: '1', role: 'agent', body: 'partial **bo', state: 'streaming' }]}
+            />
+        );
+        expect(html).toContain('▍');
+        expect(html).toContain('partial');
+    });
+    it('failed agent message renders the error block contract (error token, monospace)', () => {
+        const html = renderToStaticMarkup(
+            <ChatThread messages={[{ id: '1', role: 'agent', body: 'oops', state: 'failed' }]} />
+        );
+        expect(html).toContain('text-error');
+        expect(html).toContain('font-mono');
+        expect(html).toContain('role="alert"');
+    });
+});
