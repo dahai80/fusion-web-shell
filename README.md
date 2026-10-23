@@ -43,7 +43,7 @@ Full schema addendum with copy-paste manifest example and both-sides validation 
 
 ## Home (issue #32)
 
-Home is the default landing when no tab is active: time-of-day greeting, status strip (engine `fusion-mlx` / resident node `fusion-multi-node` online dots + global model selector placeholder), delegation message box, suggested task chips, and running / recently completed / scheduled task sections (empty states until the aggregation API ships). The sidebar gains a `⌂ 首页` entry and mobile BottomNav a Home slot; both clear the active tab pointer (KeepAlive tabs stay mounted).
+Home is the default landing when no tab is active: time-of-day greeting, status strip (engine `fusion-mlx` / resident node `fusion-multi-node` online dots), delegation message box, suggested task chips, and running / recently completed / scheduled task sections (empty states until the aggregation API ships). The sidebar gains a `⌂ 首页` entry and mobile BottomNav a Home slot; both clear the active tab pointer (KeepAlive tabs stay mounted).
 
 Modules contribute Home cards via the manifest `home` section (gateway pass-through: fusion-gateway#264):
 
@@ -72,10 +72,10 @@ The Home message box is a shell-level delegation entry with phase-1 rule routing
 - **Questions** → shell-level chat: `POST /api/v1/shell/chat/completions` (session-gated LLM proxy, fusion-gateway#268) with the persisted global model; the thread renders on Home.
 - **Task-flavored prompts** → deep-link into the owning module with the prompt prefilled: cowork `/workflows?new=1&prompt=<encoded>` (task verbs), agent-studio `/canvas?run=1&prompt=<encoded>` (orchestration/agent keywords).
 - **Audit**: every delegation appends `{ts, prompt, route, reason}` to `fusion.shell.delegations` (capped 50).
-- **Global model/effort selector** in the Home status strip (options from `GET /shell/fusion-mlx/v1/models` through the module proxy). Persisted at shell level; **module handoff contract**: module iframes are same-origin, so cowork delegate / agent-studio Composer converge their per-module model keys onto reading `localStorage["fusion.shell.model"]` / `["fusion.shell.effort"]` (`''`/`default` = gateway routing default).
+- **Global model/effort selector** lives in the Home composer row only (options from `GET /shell/fusion-mlx/v1/models` through the module proxy; the duplicate status-strip selects were removed in #59). Persisted at shell level; **module handoff contract**: module iframes are same-origin, so cowork delegate / agent-studio Composer converge their per-module model keys onto reading `localStorage["fusion.shell.model"]` / `["fusion.shell.effort"]` (`''`/`default` = gateway routing default).
 - Phase 2 (model-based classification with manual override chips) is deferred; the rule layer is a single pure function (`routeDelegation`) ready to swap.
 
-Since issue #50 the message box is a full composer styled after f-ecommerce's AI Assistant: 14px-radius bordered box with brand focus ring, action row (`+` capabilities popover / model select / thinking select / Send — model and thinking bind the same `usePrefs` store as the status strip, one source of truth), `<kbd>Enter</kbd>` send hint, and the suggested chips attached under the box (static chips prefill the textarea; module-declared chips keep their deep link). The `+` popover's AGENT CAPABILITIES lists the delegation targets' manifest pages (`lib/composerCapabilities.ts`); the ACTIONS section is omitted until the shell supports attachments. Chat replies render as bubbles (user right `bg-muted` 16/16/4/16, agent left bordered 4/16/16/16).
+Since issue #50 the message box is a full composer styled after f-ecommerce's AI Assistant: 14px-radius bordered box with brand focus ring, action row (`+` capabilities popover / model select / thinking select / Send — the sole model/effort UI since #59, bound to the shared `usePrefs` store), `<kbd>Enter</kbd>` send hint, and the suggested chips attached under the box (static chips prefill the textarea; module-declared chips keep their deep link). The `+` popover's AGENT CAPABILITIES lists the delegation targets' manifest pages (`lib/composerCapabilities.ts`); the ACTIONS section is omitted until the shell supports attachments. Chat replies render as bubbles (user right `bg-muted` 16/16/4/16, agent left bordered 4/16/16/16).
 
 ## Settings: API keys (issue #35)
 
