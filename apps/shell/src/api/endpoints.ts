@@ -38,6 +38,8 @@ export interface ManifestDto {
     notifications?: unknown;
     /** Home contribution (issue #32, gateway #263): {cards: [...]}. */
     home?: unknown;
+    /** Permissions-Policy feature delegation (issue #66), sanitized by the store. */
+    permissions_policy?: string[];
 }
 
 export function login(

@@ -34,11 +34,14 @@ Manifest schema v1 ext (all optional, sanitized on load; gateway pass-through of
 {
     "searchProviders": [{ "id": "workflows", "label": "工作流", "label_en": "Workflows", "endpoint": "/api/cowork/search" }],
     "pages": [{ "route": "/runs", "title": "运行", "title_en": "Runs" }],
-    "notifications": [{ "id": "approvals", "label": "审批", "endpoint": "/api/cowork/approvals?status=pending", "kind": "approvals" }]
+    "notifications": [{ "id": "approvals", "label": "审批", "endpoint": "/api/cowork/approvals?status=pending", "kind": "approvals" }],
+    "permissions_policy": ["microphone", "camera"]
 }
 ```
 
 `notifications[].kind` is one of `approvals | runs | engine`; polled responses are `{items: [{id, title, route?, level?, ts?}]}` with `level` one of `info | warning | error`.
+
+`permissions_policy` (issue #66) delegates iframe Permissions-Policy features — tokens restricted to `microphone | camera`, each scoped to the frame's own origin (`allow="microphone 'src'"`). AV modules need it for `getUserMedia` inside the shell iframe; absent field = no `allow` attribute, existing modules unchanged.
 
 Full schema addendum with copy-paste manifest example and both-sides validation vocabulary: [`docs/manifest-ext-schema.md`](docs/manifest-ext-schema.md) (#26).
 

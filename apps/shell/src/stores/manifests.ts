@@ -155,6 +155,10 @@ function toManifest(dto: api.ManifestDto): ModuleManifest {
         notifications: pickExt(dto.notifications, toNotificationSource, (p) => p.id),
         home: home.cards,
         homeProjects: home.projects,
+        permissions_policy:
+            dto.permissions_policy && dto.permissions_policy.length > 0
+                ? dto.permissions_policy.filter((f) => POLICY_FEATURES.includes(f))
+                : undefined,
     };
 }
 
@@ -210,6 +214,21 @@ export const useManifests = create<ManifestsState>((set, get) => ({
  */
 export function isReadonlyOnMobile(devices: DeviceMode[], viewport: 'desktop' | 'mobile'): boolean {
     return viewport === 'mobile' && devices.includes('mobile-readonly');
+}
+
+/** Feature tokens a manifest may ask the host iframe to delegate (issue #66). */
+const POLICY_FEATURES: readonly string[] = ['microphone', 'camera'];
+
+/**
+ * Permissions-Policy `allow` value for a module iframe (issue #66): without
+ * it a cross-origin iframe's getUserMedia is denied outright (NotAllowedError)
+ * before any user prompt. Each declared feature is scoped to 'src' — the
+ * frame's own origin only. Undeclared manifests get no allow attribute at all.
+ */
+export function iframeAllowPolicy(m: ModuleManifest): string | undefined {
+    const features = (m.permissions_policy ?? []).filter((f) => POLICY_FEATURES.includes(f));
+    if (features.length === 0) return undefined;
+    return features.map((f) => `${f} 'src'`).join('; ');
 }
 
 /** Filter + group for menu render. desktop: all; mobile: hide desktop-only (PRD §8.1). */

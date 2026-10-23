@@ -142,6 +142,24 @@ gateway-absolute and must answer same-origin through the gateway.
 Per-source failure isolation: a broken source keeps its last good snapshot
 (offline tasks stay readable), and never breaks the rest of the feed.
 
+## permissions_policy — iframe Permissions-Policy delegation (shell#66)
+
+AV modules (voice agents, camera sessions) call `getUserMedia` inside their
+shell iframe. Permissions-Policy delegation can only come from the embedding
+frame, so a module declares what it needs and the host renders the matching
+`allow` attribute:
+
+```json
+"permissions_policy": ["microphone", "camera"]
+```
+
+- Allowed tokens: `microphone`, `camera` (anything else is dropped on load).
+- Each feature is delegated scoped to the frame's own origin — the host
+  renders `allow="microphone 'src'; camera 'src'"`, not an open wildcard.
+- Absent/empty field = no `allow` attribute at all; existing modules are
+  unchanged. Without the attribute a cross-origin iframe gets an instant
+  `NotAllowedError` on `getUserMedia` before any user prompt.
+
 ## Validation (both sides)
 
 Gateway validates at registration (fusion-gateway#252), the shell host
@@ -150,6 +168,7 @@ re-sanitizes on load — modules must satisfy the strictest of the two:
 - Endpoints and page routes: gateway-absolute `/...`, no `..` traversal.
 - Page routes and home card routes must not contain `#` (the deep-link form is `#${route}`).
 - `kind` is restricted to `approvals|runs|engine|tasks`.
+- `permissions_policy` is restricted to `microphone|camera`.
 - Each ext array caps at 32 entries (`home.cards` / `home.projects` included).
 
 ## Copy-paste example
@@ -182,7 +201,8 @@ re-sanitizes on load — modules must satisfy the strictest of the two:
     "projects": [
       { "id": "spaces", "label": "空间", "label_en": "Spaces", "endpoint": "/api/v1/cowork/spaces" }
     ]
-  }
+  },
+  "permissions_policy": ["microphone"]
 }
 ```
 
