@@ -372,7 +372,11 @@ export function HomePage({ onOpen }: Props) {
 
     // Engine model list (issue #50): fetched once, fed to the composer's
     // model select — one source of truth (strip selects removed, issue #59).
+    // Permission-gated: the probe goes through the fusion-mlx module proxy, so
+    // users without that module grant would only produce a 403 round-trip
+    // (and the shell would toast "module fusion-mlx is not in your permissions").
     useEffect(() => {
+        if (!useAuth.getState().canView('fusion-mlx')) return;
         void fetchEngineModels().then((ids) => {
             console.log('[home] engine models:', ids.length);
             setEngineModels(ids);

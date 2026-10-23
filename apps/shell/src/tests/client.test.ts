@@ -129,3 +129,35 @@ describe('ApiClient scoped 401 handling (issue #28)', () => {
         expect(useTabs.getState().tabs[0]!.transientError).toBe('模块鉴权失败 (401)');
     });
 });
+
+describe('ApiClient quiet 403 (issue #66 companion)', () => {
+    let forbidden: string[];
+    beforeEach(() => {
+        useTabs.setState({ tabs: [], activeTabId: null });
+        forbidden = [];
+    });
+
+    const mkClient = () =>
+        new ApiClient({
+            tokenProvider: () => null,
+            onUnauthorized: () => {},
+            onForbidden: (message) => {
+                forbidden.push(message);
+            },
+        });
+
+    const err403 = () =>
+        new Response(JSON.stringify({ code: 'forbidden', message: 'no grant' }), { status: 403 });
+
+    it('non-quiet 403 still surfaces the forbidden toast', async () => {
+        globalThis.fetch = (async () => err403()) as unknown as typeof fetch;
+        await expect(mkClient().get('/api/x')).rejects.toThrow('no grant');
+        expect(forbidden).toEqual(['no grant']);
+    });
+
+    it('quiet 403 (engine-model probe, polls) surfaces nothing', async () => {
+        globalThis.fetch = (async () => err403()) as unknown as typeof fetch;
+        await expect(mkClient().get('/api/x', { quiet: true })).rejects.toThrow('no grant');
+        expect(forbidden).toEqual([]);
+    });
+});

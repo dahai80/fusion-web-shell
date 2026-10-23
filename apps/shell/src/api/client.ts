@@ -80,7 +80,10 @@ export class ApiClient {
             if (res.status === 403) {
                 const env = await res.json().catch(() => null);
                 const message = (env as { message?: string } | null)?.message ?? '无权限访问该模块';
-                this.onForbidden(message);
+                // quiet calls (engine-model probes, notification polls) surface
+                // nothing — a 403 there is an expected permission boundary, not
+                // an operator-visible error (companion to shell issue #66).
+                if (!init.quiet) this.onForbidden(message);
                 throw Object.assign(new Error(message), { status: 403 });
             }
             if (!res.ok) {
