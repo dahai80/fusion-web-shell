@@ -363,11 +363,7 @@ function PlaintextDialog({ issued, onClose }: { issued: IssuedKey; onClose(): vo
                     >
                         {copied ? t('已复制', 'Copied') : t('复制', 'Copy')}
                     </button>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="fs-btn fs-btn-primary"
-                    >
+                    <button type="button" onClick={onClose} className="fs-btn fs-btn-primary">
                         {t('我已保存', 'Saved')}
                     </button>
                 </div>

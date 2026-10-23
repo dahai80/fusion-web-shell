@@ -1,10 +1,6 @@
 import './setup';
 import { beforeEach, describe, expect, it } from 'bun:test';
-import {
-    adminPageForPath,
-    navigateShell,
-    pathForAdminPage,
-} from '../lib/adminRoute';
+import { adminPageForPath, navigateShell, pathForAdminPage } from '../lib/adminRoute';
 
 // Minimal window shim (happy-dom's dispatchEvent is broken under bun test):
 // only what navigateShell touches — pathname, pushState, event listeners.
@@ -20,11 +16,17 @@ class FakeEvent {
 
 (globalThis as Record<string, unknown>).window = {
     get location() {
-        return { get pathname() { return state.path; } };
+        return {
+            get pathname() {
+                return state.path;
+            },
+        };
     },
     get history() {
         return {
-            get length() { return state.len; },
+            get length() {
+                return state.len;
+            },
             pushState(_s: unknown, _t: string, path: string) {
                 state.path = path;
                 state.len += 1;

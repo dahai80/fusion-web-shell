@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { renderToStaticMarkup } from 'react-dom/server';
 import { ChatThread, Composer } from '@fusion/web-ui';
+import { renderToStaticMarkup } from 'react-dom/server';
 
 const BASE = {
     value: 'hello',

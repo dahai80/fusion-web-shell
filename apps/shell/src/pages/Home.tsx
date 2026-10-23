@@ -12,10 +12,10 @@ import { t, useLang } from '@/stores/lang';
 import type { Lang } from '@/stores/lang';
 import { moduleTitle, useManifests } from '@/stores/manifests';
 import { type Effort, usePrefs } from '@/stores/prefs';
-import type { ComposerChip } from '@fusion/web-ui';
 import { type ProjectItem, useProjects } from '@/stores/projects';
 import { type ApprovalAction, type TaskItem, taskBucket, useTasks } from '@/stores/tasks';
 import type { ModuleManifest } from '@/types/manifest';
+import type { ComposerChip } from '@fusion/web-ui';
 import { ChatThread, Composer, EmptyState } from '@fusion/web-ui';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 
@@ -446,9 +446,7 @@ export function HomePage({ onOpen }: Props) {
     const modelOptions = [
         { value: '', label: t('模型：默认', 'Model: default') },
         ...engineModels.map((id) => ({ value: id, label: id })),
-        ...(model && !engineModels.includes(model)
-            ? [{ value: model, label: model }]
-            : []),
+        ...(model && !engineModels.includes(model) ? [{ value: model, label: model }] : []),
     ];
 
     // Suggestion chips render inside the shared Composer (#55); static chips
@@ -538,7 +536,10 @@ export function HomePage({ onOpen }: Props) {
                         'Ask in natural language — the engine handles how… (Enter to send, Shift+Enter for a new line)'
                     )}
                     ariaLabel={t('委托输入框', 'Delegation message box')}
-                    hint={t('Enter 发送 · Shift+Enter 换行', 'Enter to send · Shift+Enter new line')}
+                    hint={t(
+                        'Enter 发送 · Shift+Enter 换行',
+                        'Enter to send · Shift+Enter new line'
+                    )}
                     sendLabel={t('发送', 'Send')}
                     busyLabel={t('回答中…', 'Thinking…')}
                     textareaRef={textareaRef}

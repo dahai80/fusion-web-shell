@@ -281,3 +281,18 @@ export function formatAdminError(err: unknown): string {
 export function stripAuditPathPrefix(path: string): string {
     return path.startsWith('/api/v1/shell') ? path.slice('/api/v1/shell'.length) : path;
 }
+
+/**
+ * Effective module-access source for a shell user (issue #65): admin role and
+ * a "*" allowlist entry both mean all modules; anything else is an explicit
+ * allowlist of the listed manifest ids.
+ */
+export function effectiveModuleAccess(user: {
+    roles: string[];
+    permissions: string[];
+}): { source: 'admin' | 'wildcard' | 'explicit'; all: boolean; count: number } {
+    if (user.roles.includes('admin')) return { source: 'admin', all: true, count: 0 };
+    if (user.permissions.includes('*'))
+        return { source: 'wildcard', all: true, count: Number.POSITIVE_INFINITY };
+    return { source: 'explicit', all: false, count: user.permissions.length };
+}

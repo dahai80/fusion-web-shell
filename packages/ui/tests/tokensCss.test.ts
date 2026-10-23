@@ -22,7 +22,9 @@ describe('@fusion/web-ui interaction-layer classes (issue #56)', () => {
     it('button levels carry no hardcoded theme colors', () => {
         const btnSection = css.slice(css.indexOf('.fs-btn'));
         const hexes = btnSection.match(/#[0-9a-f]{3,8}\b/gi) ?? [];
-        expect(hexes.every((h) => h.toLowerCase() === '#ffffff' || h.toLowerCase() === '#000000')).toBe(true);
+        expect(
+            hexes.every((h) => h.toLowerCase() === '#ffffff' || h.toLowerCase() === '#000000')
+        ).toBe(true);
     });
     it('base button class defines the shared padding/typography once', () => {
         expect(css).toContain('padding: 0.375rem 0.75rem');
