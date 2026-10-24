@@ -4,15 +4,20 @@ Answers to the recurring integration questions (collected from issue #67,
 EnviPermit onboarding). Manifest field reference lives in
 `docs/manifest-ext-schema.md`; the bridge contract is `packages/sdk/src/types.ts`.
 
-## 1. Any module, any repo name
+## 1. Any module repo, `fusion-` manifest id
 
-The registry keys off the manifest `id`, not the repo name. `envipermit`
-registers exactly like a `fusion-*` module:
+The registry keys off the manifest `id`, not the repo name — but gateway
+validation requires that id to carry the `fusion-` prefix
+(`internal/shell/manifest.go` rejects anything else with
+`manifest id "<id>" must use the fusion-<name> prefix`). A repo named
+`envipermit` therefore registers as `id: "fusion-envipermit"`:
 
-1. Ship `web/manifest.json` (base schema PRD §5.1; ext fields optional).
+1. Ship `web/manifest.json` (base schema PRD §5.1; ext fields optional),
+   `id` = `fusion-<name>`.
 2. Register at `POST /api/v1/shell/manifests` (or ship via the gateway's
-   static hosting at `/shell/<id>/`).
-3. Dev mode: `FUSION_DEV_MODULES=envipermit:<vite-port>` for HMR.
+   static hosting at `/shell/<id>/`). `category` must be one of
+   `platform|domain|infra|dev`.
+3. Dev mode: `FUSION_DEV_MODULES=fusion-envipermit:<vite-port>` for HMR.
 
 Recommended fields for a domain module like EnviPermit:
 

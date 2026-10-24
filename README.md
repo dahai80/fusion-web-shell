@@ -46,7 +46,7 @@ Manifest schema v1 ext (all optional, sanitized on load; gateway pass-through of
 
 Module onboarding (any repo, user/roles read, SSE-in-iframe constraints): `docs/module-integration-notes.md`.
 
-`group` (issue #71) collapses sibling apps into one two-level sidebar menu (per-group expand state persisted; RBAC stays per-module; groups get no mobile bottom-nav slot). Gateway pass-through is fusion-gateway#297 — until it lands the shell accepts the fields but the registry does not deliver them.
+`group` (issue #71) collapses sibling apps into one two-level sidebar menu (per-group expand state persisted; RBAC stays per-module; groups get no mobile bottom-nav slot). Gateway pass-through landed in fusion-gateway#298 (issue #297) — re-registering a manifest with the fields is enough to light the menu up.
 
 Full schema addendum with copy-paste manifest example and both-sides validation vocabulary: [`docs/manifest-ext-schema.md`](docs/manifest-ext-schema.md) (#26).
 
