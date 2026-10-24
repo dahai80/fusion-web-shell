@@ -160,6 +160,34 @@ frame, so a module declares what it needs and the host renders the matching
   unchanged. Without the attribute a cross-origin iframe gets an instant
   `NotAllowedError` on `getUserMedia` before any user prompt.
 
+## group — two-level sidebar menu (shell#71)
+
+Modules that ship several sibling apps collapse into ONE top-level menu entry
+with second-level items, instead of occupying N flat sidebar slots:
+
+```json
+"group": "fusion-office",
+"group_title": "Office 套件",
+"group_title_en": "Office Suite",
+"sort": 2
+```
+
+- `group` — stable group id (`[A-Za-z0-9._-]`, ≤64 chars); all manifests
+  sharing it render under one collapsible entry inside their category.
+- `group_title` / `group_title_en` — group display name (≤64 chars), taken
+  from the members.
+- `sort` — ordering hint within the group (ascending; ties fall back to
+  title order).
+- Untouched for ungrouped modules. RBAC stays per-module: a role without a
+  member grant just does not see that level-2 item; the group header hides
+  when no member is visible. All-members-unreachable greys the header
+  (PRD §5.2), it stays expandable.
+- Groups get NO bottom-nav slot on mobile — grouped members live in the
+  drawer; bottom nav pins top-level ungrouped modules only.
+- Gateway pass-through of these fields is fusion-gateway#297; until it
+  lands the fields are accepted by the shell but not yet delivered by the
+  registry.
+
 ## Validation (both sides)
 
 Gateway validates at registration (fusion-gateway#252), the shell host
@@ -169,6 +197,7 @@ re-sanitizes on load — modules must satisfy the strictest of the two:
 - Page routes and home card routes must not contain `#` (the deep-link form is `#${route}`).
 - `kind` is restricted to `approvals|runs|engine|tasks`.
 - `permissions_policy` is restricted to `microphone|camera`.
+- `group` is `[A-Za-z0-9._-]` ≤64 chars; group titles ≤64 chars; `sort` must be finite.
 - Each ext array caps at 32 entries (`home.cards` / `home.projects` included).
 
 ## Copy-paste example

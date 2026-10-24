@@ -40,6 +40,11 @@ export interface ManifestDto {
     home?: unknown;
     /** Permissions-Policy feature delegation (issue #66), sanitized by the store. */
     permissions_policy?: string[];
+    /** Schema v2 menu grouping (issue #71), sanitized by the store. */
+    group?: string;
+    group_title?: string;
+    group_title_en?: string;
+    sort?: number;
 }
 
 export function login(

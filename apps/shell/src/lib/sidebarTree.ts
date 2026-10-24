@@ -44,3 +44,29 @@ export function isPageActive(
     if (!activeTab || !activeTab.route) return false;
     return activeTab.manifestId === manifestId && activeTab.route === route;
 }
+
+/** Group expansion is per group (issue #71) — independent of other groups. */
+export function toggleGroupExpanded(prev: Set<string>, groupId: string): Set<string> {
+    const next = new Set(prev);
+    if (next.has(groupId)) next.delete(groupId);
+    else next.add(groupId);
+    return next;
+}
+
+/**
+ * A tab focusing a group member expands its group (issue #71); every other
+ * group keeps its state. No active tab leaves the set untouched.
+ */
+export function syncGroupsWithActive(
+    prev: Set<string>,
+    activeManifestId: string | null,
+    manifests: { id: string; group?: string }[]
+): Set<string> {
+    if (!activeManifestId) return prev;
+    const active = manifests.find((m) => m.id === activeManifestId);
+    if (!active?.group) return prev;
+    if (prev.has(active.group)) return prev;
+    const next = new Set(prev);
+    next.add(active.group);
+    return next;
+}

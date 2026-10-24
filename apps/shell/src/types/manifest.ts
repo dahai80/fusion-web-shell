@@ -52,6 +52,12 @@ export interface ModuleManifest {
     homeProjects?: HomeProjectSource[];
     /** Permissions-Policy features the module's iframe needs (issue #66). */
     permissions_policy?: string[];
+    /** Schema v2 menu grouping (issue #71): sibling apps under one menu. */
+    group?: string;
+    group_title?: string;
+    group_title_en?: string;
+    /** Ordering hint within the group (issue #71). */
+    sort?: number;
 }
 
 /**
