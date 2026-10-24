@@ -184,9 +184,9 @@ with second-level items, instead of occupying N flat sidebar slots:
   (PRD §5.2), it stays expandable.
 - Groups get NO bottom-nav slot on mobile — grouped members live in the
   drawer; bottom nav pins top-level ungrouped modules only.
-- Gateway pass-through of these fields is fusion-gateway#297; until it
-  lands the fields are accepted by the shell but not yet delivered by the
-  registry.
+- Gateway pass-through landed in fusion-gateway#298 (issue #297): the
+  registry delivers `group` / `group_title` / `group_title_en` / `sort`
+  verbatim, so a re-registration is enough to light the menu up.
 
 ## Validation (both sides)
 
