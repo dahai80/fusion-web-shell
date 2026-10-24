@@ -15,6 +15,16 @@ import { create } from 'zustand';
 export const CATEGORY_ORDER = ['platform', 'domain', 'infra', 'dev'] as const;
 export type Category = (typeof CATEGORY_ORDER)[number];
 
+/** One sidebar row (issue #71): a flat module, or a collapsible group of them. */
+export interface GroupEntry {
+    kind: 'group';
+    id: string;
+    title: string;
+    titleEn: string;
+    members: ModuleManifest[];
+}
+export type MenuEntry = { kind: 'module'; m: ModuleManifest } | GroupEntry;
+
 const CATEGORY_LABEL: Record<Category, string> = {
     platform: '平台',
     domain: '领域',
@@ -159,6 +169,10 @@ function toManifest(dto: api.ManifestDto): ModuleManifest {
             dto.permissions_policy && dto.permissions_policy.length > 0
                 ? dto.permissions_policy.filter((f) => POLICY_FEATURES.includes(f))
                 : undefined,
+        group: sanitizeGroupId(dto.group),
+        group_title: sanitizeGroupTitle(dto.group_title),
+        group_title_en: sanitizeGroupTitle(dto.group_title_en),
+        sort: typeof dto.sort === 'number' && Number.isFinite(dto.sort) ? dto.sort : undefined,
     };
 }
 
@@ -241,14 +255,72 @@ export function menuGroups(
     return CATEGORY_ORDER.map((cat) => ({
         category: cat,
         label: categoryLabel(cat, lang),
-        items: manifests
-            .filter((m) => m.category === cat && canView(m.id))
-            .filter((m) => (mobile ? !m.devices.includes('desktop-only') : true))
-            .sort((a, b) =>
-                moduleTitle(a, lang).localeCompare(
-                    moduleTitle(b, lang),
-                    lang === 'en' ? 'en-US' : 'zh-CN'
-                )
-            ),
+        items: menuEntries(
+            manifests
+                .filter((m) => m.category === cat && canView(m.id))
+                .filter((m) => (mobile ? !m.devices.includes('desktop-only') : true)),
+            lang
+        ),
     })).filter((g) => g.items.length > 0);
+}
+
+/**
+ * Menu grouping (issue #71): modules sharing a sanitized group render as one
+ * group entry (members as its children); ungrouped modules stay flat. Members
+ * order by their `sort` hint, then title. Groups sort by title after the
+ * ungrouped modules of the same category.
+ */
+export function menuEntries(modules: ModuleManifest[], lang: Lang = 'zh'): MenuEntry[] {
+    const byTitle = (a: ModuleManifest, b: ModuleManifest) =>
+        moduleTitle(a, lang).localeCompare(moduleTitle(b, lang), lang === 'en' ? 'en-US' : 'zh-CN');
+    const flat = modules.filter((m) => !m.group).sort(byTitle);
+    const grouped = new Map<string, ModuleManifest[]>();
+    for (const m of modules) {
+        if (!m.group) continue;
+        const list = grouped.get(m.group) ?? [];
+        list.push(m);
+        grouped.set(m.group, list);
+    }
+    const groups: MenuEntry[] = [...grouped.entries()]
+        .map(([id, members]) => ({
+            kind: 'group' as const,
+            id,
+            title: members[0]?.group_title ?? id,
+            titleEn: members[0]?.group_title_en ?? id,
+            members: members.sort(
+                (a, b) =>
+                    (a.sort ?? Number.POSITIVE_INFINITY) - (b.sort ?? Number.POSITIVE_INFINITY) ||
+                    byTitle(a, b)
+            ),
+        }))
+        .sort((a, b) => a.title.localeCompare(b.title, lang === 'en' ? 'en-US' : 'zh-CN'));
+    return [...flat.map((m) => ({ kind: 'module' as const, m })), ...groups];
+}
+
+/** Group display name by language (issue #71); falls back to the group id. */
+export function groupTitle(group: GroupEntry, lang: Lang = 'zh'): string {
+    return lang === 'en' ? group.titleEn : group.title;
+}
+
+/** PRD §5.2 greyed-not-removed: a group greys out only when every member is offline. */
+export function groupAllUnreachable(
+    members: ModuleManifest[],
+    unreachableIds: Set<string>
+): boolean {
+    return members.length > 0 && members.every((m) => unreachableIds.has(m.id));
+}
+
+/** Group id: short identifier token, used as DOM key and in persisted prefs. */
+function sanitizeGroupId(raw: unknown): string | undefined {
+    if (typeof raw !== 'string') return undefined;
+    const id = raw.trim();
+    if (id.length === 0 || id.length > 64 || !/^[A-Za-z0-9._-]+$/.test(id)) return undefined;
+    return id;
+}
+
+function sanitizeGroupTitle(raw: unknown): string | undefined {
+    if (typeof raw !== 'string') return undefined;
+    const title = raw.trim();
+    if (title.length === 0 || title.length > 64) return undefined;
+    return title;
 }

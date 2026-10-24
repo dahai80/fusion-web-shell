@@ -18,8 +18,13 @@ export function BottomNav({ onOpen, onMore, onHome }: Props) {
     const manifests = useManifests((s) => s.manifests);
     const canView = useAuth((s) => s.canView);
     const groups = menuGroups(manifests, canView, true);
-    const items = groups.flatMap((g) => g.items).slice(0, MAX_PINNED);
-    const more = groups.flatMap((g) => g.items).length - items.length;
+    // Groups get no bottom-nav slot (issue #71) — pinned entries are
+    // top-level ungrouped modules only; grouped members live in the drawer.
+    const modules = groups.flatMap((g) =>
+        g.items.flatMap((e) => (e.kind === 'module' ? [e.m] : []))
+    );
+    const items = modules.slice(0, MAX_PINNED);
+    const more = modules.length - items.length;
     const tabs = useTabs((s) => s.tabs);
     const activeTabId = useTabs((s) => s.activeTabId);
     const activeManifestId = tabs.find((t) => t.id === activeTabId)?.manifestId;

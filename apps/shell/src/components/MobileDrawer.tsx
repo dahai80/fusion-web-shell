@@ -1,7 +1,8 @@
 import { NotificationBell } from '@/components/NotificationBell';
 import { useAuth } from '@/stores/auth';
 import { t, useLang } from '@/stores/lang';
-import { menuGroups, moduleTitle, useManifests } from '@/stores/manifests';
+import type { Lang } from '@/stores/lang';
+import { groupTitle, menuGroups, moduleTitle, useManifests } from '@/stores/manifests';
 import { useTabs } from '@/stores/tabs';
 import { useTheme } from '@/stores/theme';
 import type { ModuleManifest } from '@/types/manifest';
@@ -76,47 +77,39 @@ export function MobileDrawer({ open, onClose, onOpenModule, onLogout }: Props) {
                 {groups.map((g) => (
                     <div key={g.category} className="px-4 py-3">
                         <div className="pb-1 text-xs text-text-muted">{g.label}</div>
-                        {g.items.map((m) => {
-                            const unreachable = unreachableIds.has(m.id);
-                            return (
-                                <div key={m.id}>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            onOpenModule(m);
-                                            onClose();
-                                        }}
-                                        className={`flex min-h-[44px] w-full items-center justify-between text-left text-sm ${m.id === activeTabId ? 'text-brand' : 'text-text-primary'} ${unreachable ? 'opacity-40' : ''}`}
-                                    >
-                                        <span>{moduleTitle(m, lang)}</span>
-                                        {unreachable ? (
-                                            <span className="text-xs text-offline">
-                                                {t('离线', 'Offline')}
-                                            </span>
-                                        ) : null}
-                                    </button>
-                                    {(m.pages ?? []).map((page) => {
-                                        const pageTitle =
-                                            lang === 'en' && page.title_en
-                                                ? page.title_en
-                                                : page.title;
-                                        return (
-                                            <button
-                                                key={`${m.id}:${page.route}`}
-                                                type="button"
-                                                onClick={() => {
-                                                    onOpenModule(m, page.route, pageTitle);
-                                                    onClose();
-                                                }}
-                                                className="flex min-h-[44px] w-full items-center rounded-md pl-8 text-left text-sm text-text-secondary"
-                                            >
-                                                <span className="truncate">{pageTitle}</span>
-                                            </button>
-                                        );
-                                    })}
+                        {g.items.map((entry) =>
+                            entry.kind === 'group' ? (
+                                // Groups render as a section header + children
+                                // (issue #71); no collapse on mobile — the
+                                // drawer is already a transient surface.
+                                <div key={`group:${entry.id}`} className="py-1">
+                                    <div className="pb-1 pt-2 text-xs font-medium text-text-secondary">
+                                        {groupTitle(entry, lang)}
+                                    </div>
+                                    {entry.members.map((m) => (
+                                        <MobileModuleButton
+                                            key={m.id}
+                                            m={m}
+                                            lang={lang}
+                                            activeTabId={activeTabId}
+                                            unreachableIds={unreachableIds}
+                                            onOpenModule={onOpenModule}
+                                            onClose={onClose}
+                                        />
+                                    ))}
                                 </div>
-                            );
-                        })}
+                            ) : (
+                                <MobileModuleButton
+                                    key={entry.m.id}
+                                    m={entry.m}
+                                    lang={lang}
+                                    activeTabId={activeTabId}
+                                    unreachableIds={unreachableIds}
+                                    onOpenModule={onOpenModule}
+                                    onClose={onClose}
+                                />
+                            )
+                        )}
                     </div>
                 ))}
                 <div className="flex items-center justify-between border-t border-border px-4 py-3 text-sm">
@@ -141,6 +134,58 @@ export function MobileDrawer({ open, onClose, onOpenModule, onLogout }: Props) {
                     </span>
                 </div>
             </div>
+        </div>
+    );
+}
+
+/** One module row in the drawer (issue #71: reused for flat and grouped). */
+function MobileModuleButton({
+    m,
+    lang,
+    activeTabId,
+    unreachableIds,
+    onOpenModule,
+    onClose,
+}: {
+    m: ModuleManifest;
+    lang: Lang;
+    activeTabId: string | null;
+    unreachableIds: Set<string>;
+    onOpenModule(manifest: ModuleManifest, route?: string, pageTitle?: string): void;
+    onClose(): void;
+}) {
+    const unreachable = unreachableIds.has(m.id);
+    return (
+        <div>
+            <button
+                type="button"
+                onClick={() => {
+                    onOpenModule(m);
+                    onClose();
+                }}
+                className={`flex min-h-[44px] w-full items-center justify-between text-left text-sm ${m.id === activeTabId ? 'text-brand' : 'text-text-primary'} ${unreachable ? 'opacity-40' : ''}`}
+            >
+                <span>{moduleTitle(m, lang)}</span>
+                {unreachable ? (
+                    <span className="text-xs text-offline">{t('离线', 'Offline')}</span>
+                ) : null}
+            </button>
+            {(m.pages ?? []).map((page) => {
+                const pageTitle = lang === 'en' && page.title_en ? page.title_en : page.title;
+                return (
+                    <button
+                        key={`${m.id}:${page.route}`}
+                        type="button"
+                        onClick={() => {
+                            onOpenModule(m, page.route, pageTitle);
+                            onClose();
+                        }}
+                        className="flex min-h-[44px] w-full items-center rounded-md pl-8 text-left text-sm text-text-secondary"
+                    >
+                        <span className="truncate">{pageTitle}</span>
+                    </button>
+                );
+            })}
         </div>
     );
 }

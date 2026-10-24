@@ -31,7 +31,10 @@ describe('menuGroups', () => {
             false
         );
         expect(groups.map((g) => g.category)).toEqual(['platform', 'dev']);
-        expect(groups[0]!.items.map((i) => i.id)).toEqual(['a', 'b']);
+        expect(groups[0]!.items.map((i) => (i.kind === 'module' ? i.m.id : i.id))).toEqual([
+            'a',
+            'b',
+        ]);
     });
     it('filters by RBAC: nothing granted -> empty menu (A9)', () => {
         const groups = menuGroups([mk('a', 'platform', ['desktop'])], canNone, false);
@@ -45,12 +48,12 @@ describe('menuGroups', () => {
         expect(
             menuGroups(list, canAdmin, false)
                 .flatMap((g) => g.items)
-                .map((i) => i.id)
+                .map((i) => (i.kind === 'module' ? i.m.id : i.id))
         ).toEqual(['mlx', 'sec']);
         expect(
             menuGroups(list, canAdmin, true)
                 .flatMap((g) => g.items)
-                .map((i) => i.id)
+                .map((i) => (i.kind === 'module' ? i.m.id : i.id))
         ).toEqual(['mlx']);
     });
 });
@@ -66,7 +69,8 @@ describe('i18n (gaps #5/#6)', () => {
         const en = mk('mlx', 'platform', ['desktop']);
         const groups = menuGroups([en], () => true, false, 'en');
         expect(groups[0]!.label).toBe('Platform');
-        expect(groups[0]!.items[0]!.id).toBe('mlx');
+        const first = groups[0]!.items[0]!;
+        expect(first.kind === 'module' && first.m.id).toBe('mlx');
     });
 });
 

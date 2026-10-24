@@ -35,7 +35,8 @@ Manifest schema v1 ext (all optional, sanitized on load; gateway pass-through of
     "searchProviders": [{ "id": "workflows", "label": "工作流", "label_en": "Workflows", "endpoint": "/api/cowork/search" }],
     "pages": [{ "route": "/runs", "title": "运行", "title_en": "Runs" }],
     "notifications": [{ "id": "approvals", "label": "审批", "endpoint": "/api/cowork/approvals?status=pending", "kind": "approvals" }],
-    "permissions_policy": ["microphone", "camera"]
+    "permissions_policy": ["microphone", "camera"],
+    "group": "fusion-office", "group_title": "Office 套件", "group_title_en": "Office Suite", "sort": 2
 }
 ```
 
@@ -44,6 +45,8 @@ Manifest schema v1 ext (all optional, sanitized on load; gateway pass-through of
 `permissions_policy` (issue #66) delegates iframe Permissions-Policy features — tokens restricted to `microphone | camera`, each scoped to the frame's own origin (`allow="microphone 'src'"`). AV modules need it for `getUserMedia` inside the shell iframe; absent field = no `allow` attribute, existing modules unchanged.
 
 Module onboarding (any repo, user/roles read, SSE-in-iframe constraints): `docs/module-integration-notes.md`.
+
+`group` (issue #71) collapses sibling apps into one two-level sidebar menu (per-group expand state persisted; RBAC stays per-module; groups get no mobile bottom-nav slot). Gateway pass-through is fusion-gateway#297 — until it lands the shell accepts the fields but the registry does not deliver them.
 
 Full schema addendum with copy-paste manifest example and both-sides validation vocabulary: [`docs/manifest-ext-schema.md`](docs/manifest-ext-schema.md) (#26).
 
