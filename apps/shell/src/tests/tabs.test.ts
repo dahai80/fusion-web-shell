@@ -1,5 +1,7 @@
 import './setup';
+import './domSetup';
 import { beforeEach, describe, expect, it } from 'bun:test';
+import { useLang } from '../stores/lang';
 import {
     MAX_TABS,
     entryFor,
@@ -23,6 +25,7 @@ const mk = (id: string): ModuleManifest => ({
 beforeEach(() => {
     localStorage.clear();
     useTabs.setState({ tabs: [], activeTabId: null });
+    useLang.setState({ lang: 'zh' });
 });
 
 describe('parseDevModules', () => {
@@ -215,6 +218,55 @@ describe('tab deep-link routes (issue #24, C8)', () => {
         const after = useTabs.getState().tabs[0]!;
         expect(after.src).toBe(before.src);
         expect(useTabs.getState().activeTabId).toBe(after.id);
+    });
+});
+
+describe('tab title i18n (issue #74)', () => {
+    const mken = (id: string): ModuleManifest => ({ ...mk(id), title_en: `Module ${id}` });
+
+    it('tabTitle uses title_en when lang is en, zh title otherwise', () => {
+        expect(newTab(mken('a'), new Map(), 1).title).toBe('模块 a');
+        useLang.setState({ lang: 'en' });
+        expect(newTab(mken('a'), new Map(), 1).title).toBe('Module a');
+        expect(newTab(mken('a'), new Map(), 2).title).toBe('Module a (2)');
+    });
+
+    it('retitleTabs re-titles existing tabs for the current lang', () => {
+        useTabs.getState().openTab(mken('a'));
+        useTabs.getState().openTab(mken('b'), { multi: true });
+        useTabs.getState().openTab(mken('b'), { multi: true });
+        useLang.setState({ lang: 'en' });
+        useTabs.getState().retitleTabs([mken('a'), mken('b')]);
+        const tabs = useTabs.getState().tabs;
+        expect(tabs.find((t) => t.id === 'a')!.title).toBe('Module a');
+        expect(tabs.find((t) => t.id === 'b')!.title).toBe('Module b');
+        expect(tabs.find((t) => t.id === 'b#2')!.title).toBe('Module b (2)');
+        // Persisted titles follow the new lang too.
+        expect(JSON.parse(localStorage.getItem('fusion.shell.tabs')!)[0].title).toBe('Module a');
+        // Switching back restores zh titles.
+        useLang.setState({ lang: 'zh' });
+        useTabs.getState().retitleTabs([mken('a'), mken('b')]);
+        expect(useTabs.getState().tabs.find((t) => t.id === 'a')!.title).toBe('模块 a');
+    });
+
+    it('retitleTabs keeps deep-link pageTitle suffix and skips unknown manifests', () => {
+        useTabs.getState().openTab(mken('a'), { route: '/runs', pageTitle: 'Runs' });
+        useTabs.getState().openTab(mk('ghost'));
+        useLang.setState({ lang: 'en' });
+        useTabs.getState().retitleTabs([mken('a')]);
+        const tabs = useTabs.getState().tabs;
+        expect(tabs.find((t) => t.id === 'a')!.title).toBe('Module a · Runs');
+        expect(tabs.find((t) => t.id === 'ghost')!.title).toBe('模块 ghost');
+    });
+
+    it('restored tabs get the current-lang title, not the persisted one', () => {
+        localStorage.setItem(
+            'fusion.shell.tabs',
+            JSON.stringify([{ id: 'a', manifestId: 'a', title: '模块 a', seq: 1 }])
+        );
+        useLang.setState({ lang: 'en' });
+        expect(restorePersistedTabs([mken('a')], new Map())).toBe(1);
+        expect(useTabs.getState().tabs[0]!.title).toBe('Module a');
     });
 });
 
