@@ -1,5 +1,6 @@
 import type { ModuleManifest } from '@/types/manifest';
 import { create } from 'zustand';
+import { useLang } from './lang';
 
 export const MAX_TABS = 12;
 
@@ -45,6 +46,8 @@ export interface TabsState {
     releaseIframe(id: string): void;
     restoreIframe(manifest: ModuleManifest): string | null;
     setActiveTask(id: string, has: boolean): void;
+    /** Issue #74: rebuild open tab titles for the current host language. */
+    retitleTabs(manifests: ModuleManifest[]): void;
 }
 
 const STORAGE_KEY = 'fusion.shell.tabs';
@@ -120,7 +123,9 @@ export function srcFor(
 }
 
 export function tabTitle(manifest: ModuleManifest, seq: number, pageTitle?: string): string {
-    const base = seq === 1 ? manifest.title : `${manifest.title} (${seq})`;
+    const lang = useLang.getState().lang;
+    const name = lang === 'en' && manifest.title_en ? manifest.title_en : manifest.title;
+    const base = seq === 1 ? name : `${name} (${seq})`;
     return pageTitle ? `${base} · ${pageTitle}` : base;
 }
 
@@ -275,6 +280,22 @@ export const useTabs = create<TabsState>((set, get) => ({
         // Persist so refresh-restore knows the task was interrupted (PRD 6.1).
         persist(get().tabs);
     },
+    retitleTabs(manifests) {
+        const byId = new Map(manifests.map((m) => [m.id, m]));
+        let changed = false;
+        const tabs = get().tabs.map((tab) => {
+            const m = byId.get(tab.manifestId);
+            if (!m) return tab;
+            const title = tabTitle(m, tab.seq, tab.pageTitle);
+            if (title === tab.title) return tab;
+            changed = true;
+            return { ...tab, title };
+        });
+        if (!changed) return;
+        set({ tabs });
+        persist(get().tabs);
+        console.log('[tabs] re-titled', tabs.length, 'tabs for lang change');
+    },
 }));
 
 /**
@@ -298,7 +319,9 @@ export function restorePersistedTabs(
         restored.push({
             id: p.id,
             manifestId: p.manifestId,
-            title: p.title,
+            // Issue #74: recompute in the current lang; the persisted title
+            // may be stuck in the language the tab was opened in.
+            title: tabTitle(manifest, p.seq, p.pageTitle),
             status: 'active',
             seq: p.seq,
             src: srcFor(manifest, devModules, p.route),

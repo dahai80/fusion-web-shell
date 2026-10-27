@@ -61,6 +61,13 @@ export function MainPage({ onLogout, adminPage = null, adminNode }: Props) {
         }
     }, [manifestsLoaded]);
 
+    // Issue #74: open tabs follow host language switches (manifest title_en).
+    useEffect(() => {
+        const retitle = () => useTabs.getState().retitleTabs(useManifests.getState().manifests);
+        window.addEventListener('fusion:lang', retitle);
+        return () => window.removeEventListener('fusion:lang', retitle);
+    }, []);
+
     // Notification center (issue #24): poll manifest-declared sources over the
     // existing gateway surface. Re-poll once manifests change (new sources).
     useEffect(() => {
