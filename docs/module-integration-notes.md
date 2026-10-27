@@ -51,6 +51,25 @@ the host), `toast`, `tab.setActiveTask`, `theme`, `devices`, `visibility`,
   guard). A module whose backend route is not shipped yet should degrade
   internally from its own API responses; the shell surfaces pending state
   only for shell-owned admin surfaces.
+- **Theme lifecycle (issue #77)**: `sdk.theme.get()` is a **synchronous**
+  cached read — do not `await` it and do not hand-roll a
+  `postMessage` theme pull. On boot the SDK reads your document, then a
+  background bridge pull corrects the cache to the host's actual mode (the
+  host's mount-time push can be lost to `about:blank` before your listener
+  exists). Host theme switches arrive as push events. Consume it as:
+
+  ```ts
+  const mode = sdk.theme.get();          // 'light' | 'dark', may be stale
+  sdk.theme.subscribe((mode) => {        // fires on every real change
+      applyTheme(mode);                  // re-render/paint here
+  });
+  ```
+
+  Apply the subscribe callback immediately on mount (treat it as your
+  source of truth); `get()` is for one-off reads after that first
+  callback. The very first `subscribe` callback can arrive a few hundred
+  ms after iframe load — paint a neutral default until then rather than
+  trusting your own document's class list.
 
 ## 3. SSE inside shell iframe tabs
 
