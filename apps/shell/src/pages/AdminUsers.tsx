@@ -24,14 +24,16 @@ import { useCallback, useEffect, useState } from 'react';
 type LoadState = 'loading' | 'ready' | 'error';
 type AdminTab = 'users' | 'roles' | 'menus';
 
-/** users.html ALL_ROLES default; replaced by the roles endpoint once it answers. */
-const DEFAULT_ROLE_NAMES = ['operator', 'ops_lead', 'admin', 'auditor'];
+/** Gateway builtin roles (internal/shell/roles.go); replaced by the roles
+ *  endpoint once it answers. Never list names the gateway doesn't know —
+ *  PATCH /shell/users does not validate role existence (gateway gap). */
+export const DEFAULT_ROLE_NAMES = ['admin', 'user', 'auditor'];
 
 /** Built-in admin page (PRD §4.2, migration E6): Users / Roles / Menu
  *  Permissions tabs — Users tab is the existing user CRUD + grant tree;
  *  Roles and Menu Permissions follow the f-ecommerce users.html GUI backed
- *  by the E5 identity contract, degrading to a gateway-pending notice until
- *  the surfaces ship. */
+ *  by the gateway shell admin surfaces (#275). The pending guard stays for
+ *  old gateway binaries that predate the surfaces (404/501). */
 export function AdminUsersPage() {
     const [tab, setTab] = useState<AdminTab>('users');
     const [state, setState] = useState<LoadState>('loading');
@@ -497,10 +499,12 @@ export function GrantDialog({
 
 // SECTION: roles (migration E6, f-ecommerce users.html tab 2; E5 identity contract)
 
-const PENDING_NOTE_ZH =
-    '角色 / 菜单矩阵依赖身份服务契约（fusion-identity#12，E5）。服务就绪后本区自动可用。';
-const PENDING_NOTE_EN =
-    'Roles / menu matrix rely on the identity contract (fusion-identity#12, E5). They become usable once the surfaces ship.';
+export const ADMIN_PENDING_NOTE_ZH =
+    '网关缺少角色 / 菜单矩阵接口（本区需要较新的 fusion-gateway，含 #275 管理面）。升级网关后本区自动可用。';
+export const ADMIN_PENDING_NOTE_EN =
+    'This gateway lacks the roles / menu-matrix surfaces (requires a newer fusion-gateway with the #275 admin API). They become usable after the gateway is upgraded.';
+const PENDING_NOTE_ZH = ADMIN_PENDING_NOTE_ZH;
+const PENDING_NOTE_EN = ADMIN_PENDING_NOTE_EN;
 
 function PendingBox() {
     return (
