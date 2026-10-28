@@ -1,3 +1,4 @@
+import './domSetup';
 import { describe, expect, it } from 'bun:test';
 import type { ManifestDto } from '../api/endpoints';
 import { iframeAllowPolicy, useManifests } from '../stores/manifests';
@@ -17,6 +18,21 @@ describe('permissions_policy manifest field (issue #66)', () => {
     it('sanitizes to known feature tokens only, dropping junk', () => {
         useManifests.setState({ manifests: [], loaded: false });
         useManifests.getState().setUpstream([VOICE_DTO]);
+        const m = useManifests.getState().manifests[0];
+        expect(m?.permissions_policy).toEqual(['microphone', 'camera']);
+    });
+
+    // Issue #82: the gateway registry serves camelCase permissionsPolicy; the
+    // store used to read only snake_case, silently dropping the iframe allow.
+    it('accepts the gateway camelCase permissionsPolicy field (issue #82)', () => {
+        useManifests.setState({ manifests: [], loaded: false });
+        useManifests.getState().setUpstream([
+            {
+                ...VOICE_DTO,
+                permissions_policy: undefined,
+                permissionsPolicy: ['microphone', 'camera', 'not-a-real-feature'],
+            },
+        ]);
         const m = useManifests.getState().manifests[0];
         expect(m?.permissions_policy).toEqual(['microphone', 'camera']);
     });
@@ -59,5 +75,13 @@ describe('iframeAllowPolicy (issue #66)', () => {
         expect(iframeAllowPolicy({ ...base, permissions_policy: ['microphone', 'camera'] })).toBe(
             "microphone 'src'; camera 'src'"
         );
+    });
+
+    // Issue #82: manifests may carry the gateway camelCase field — the allow
+    // attribute must survive the field-name drift.
+    it('reads camelCase permissionsPolicy too (issue #82)', () => {
+        expect(
+            iframeAllowPolicy({ ...base, permissionsPolicy: ['microphone'] } as ModuleManifest)
+        ).toBe("microphone 'src'");
     });
 });

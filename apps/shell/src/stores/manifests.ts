@@ -165,10 +165,13 @@ function toManifest(dto: api.ManifestDto): ModuleManifest {
         notifications: pickExt(dto.notifications, toNotificationSource, (p) => p.id),
         home: home.cards,
         homeProjects: home.projects,
-        permissions_policy:
-            dto.permissions_policy && dto.permissions_policy.length > 0
-                ? dto.permissions_policy.filter((f) => POLICY_FEATURES.includes(f))
-                : undefined,
+        permissions_policy: (() => {
+            // Gateway DTO serves camelCase; older static configs used snake_case.
+            const raw = dto.permissionsPolicy ?? dto.permissions_policy;
+            return raw && raw.length > 0
+                ? raw.filter((f) => POLICY_FEATURES.includes(f))
+                : undefined;
+        })(),
         group: sanitizeGroupId(dto.group),
         group_title: sanitizeGroupTitle(dto.group_title),
         group_title_en: sanitizeGroupTitle(dto.group_title_en),
@@ -240,7 +243,12 @@ const POLICY_FEATURES: readonly string[] = ['microphone', 'camera'];
  * frame's own origin only. Undeclared manifests get no allow attribute at all.
  */
 export function iframeAllowPolicy(m: ModuleManifest): string | undefined {
-    const features = (m.permissions_policy ?? []).filter((f) => POLICY_FEATURES.includes(f));
+    // Gateway serves camelCase (permissionsPolicy); older registrations and
+    // static configs used snake_case — accept both so the delegation never
+    // silently drops on field-name drift.
+    const declared =
+        (m as { permissionsPolicy?: string[] }).permissionsPolicy ?? m.permissions_policy ?? [];
+    const features = declared.filter((f) => POLICY_FEATURES.includes(f));
     if (features.length === 0) return undefined;
     return features.map((f) => `${f} 'src'`).join('; ');
 }

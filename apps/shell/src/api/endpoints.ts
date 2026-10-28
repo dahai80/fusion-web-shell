@@ -39,6 +39,8 @@ export interface ManifestDto {
     /** Home contribution (issue #32, gateway #263): {cards: [...]}. */
     home?: unknown;
     /** Permissions-Policy feature delegation (issue #66), sanitized by the store. */
+    /** Gateway serves camelCase; older static configs used snake_case. */
+    permissionsPolicy?: string[];
     permissions_policy?: string[];
     /** Schema v2 menu grouping (issue #71), sanitized by the store. */
     group?: string;
