@@ -148,6 +148,13 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
         const setTask = useTabs.getState().setActiveTask;
         const setErr = useTabs.getState().setTransientError;
         const bridge = createHostBridge(tab.id, iframeWindow, {
+            // Explicit module origin: the bridge is created while the iframe
+            // still shows about:blank, so the SDK's origin snapshot resolves
+            // to the HOST origin — and every host->module push (theme/lang/
+            // http) into a cross-origin dev frame is then silently dropped
+            // by the browser. tab.src is authoritative; same-origin (prod)
+            // resolves to the host origin, dev override to the module origin.
+            origin: new URL(tab.src, window.location.origin).origin,
             getToken: () => sessionStorage.getItem('fusion.shell.token') ?? null,
             onToast: (input) => {
                 const level = (['info', 'success', 'warning', 'error'] as const).includes(
