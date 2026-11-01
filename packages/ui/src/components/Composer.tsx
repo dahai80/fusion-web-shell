@@ -1,4 +1,13 @@
-import { type ReactNode, type Ref, useEffect, useRef, useState } from 'react';
+import {
+    type ChangeEvent as ReactChangeEvent,
+    type ClipboardEvent as ReactClipboardEvent,
+    type KeyboardEvent as ReactKeyboardEvent,
+    type ReactNode,
+    type Ref,
+    useEffect,
+    useRef,
+    useState,
+} from 'react';
 import { StreamingMarkdown } from './StreamingMarkdown';
 
 export interface ComposerOption {
@@ -33,82 +42,121 @@ export interface ComposerChip {
     muted?: boolean;
 }
 
+/** One attachment chip (FCS-1 zone 2): label + removable. */
+export interface ComposerAttachment {
+    key: string;
+    label: string;
+}
+
+/** ⚙ params popup contents (FCS-1 §1 zone 4 right): every tunable —
+ *  model, effort/thinking, extra entries — lives here, never as loose
+ *  toolbar buttons ("凡参数一律进 popup，禁散落按钮"). */
+export interface ComposerParams {
+    model?: ComposerSelectProps;
+    effort?: ComposerSelectProps;
+    /** Extra rows below the pickers (surface-specific settings). */
+    actions?: { items: ComposerActionItem[]; title?: string; emptyLabel?: string };
+}
+
 export interface ComposerProps {
     value: string;
     onChange(value: string): void;
     onSubmit(): void;
+    /** Esc / ⏹ while generating (FCS-1 §2): turns the send button into a
+     *  stop control; without it the composer never enters the stop state. */
+    onStop?(): void;
     placeholder?: string;
     ariaLabel?: string;
-    /** Optional model picker (bottom-toolbar text button + popover). */
-    model?: ComposerSelectProps;
-    /** Optional effort/thinking picker (bottom-toolbar text button + popover). */
-    effort?: ComposerSelectProps;
-    /** Optional `+` popover entries (agent capabilities etc.). */
-    actions?: { items: ComposerActionItem[]; popoverTitle?: string; emptyLabel?: string };
-    /** Row under the box; pass a custom string or false to hide. */
+    /** Zone 1 context bar chips (optional, FCS-1 §1). */
+    contextChips?: ComposerChip[];
+    /** Zone 2 attachment chips; rendered only with a remove handler. */
+    attachments?: ComposerAttachment[];
+    onRemoveAttachment?(key: string): void;
+    /** 📎 file attach entry (bottom-left, first in fixed order). */
+    attach?: { onFiles(files: File[]): void };
+    /** 🖼 image entry + ⌘V image-paste-to-chip (multimodal surfaces only). */
+    images?: { onImage(file: File): void };
+    /** ＠ reference palette (bottom-left, last in fixed order). */
+    references?: { items: ComposerActionItem[]; emptyLabel?: string };
+    /** `/` command palette — opens on a leading slash (FCS-1 §3). */
+    slashCommands?: { items: ComposerActionItem[]; emptyLabel?: string };
+    /** ⚙ params popup (bottom-right, before send). */
+    params?: ComposerParams;
+    /** Zone 5 hint row; false hides it. */
     hint?: string | false;
+    /** Appended to the hint while generating (e.g. "· Esc 停止"). */
+    stopHint?: string;
     busy?: boolean;
     disabled?: boolean;
+    /** icon-only ⬆ (default) or home pill with a fixed label (FCS-1 §2). */
+    sendVariant?: 'icon' | 'pill';
+    /** Fixed pill text — never swaps with state (label switching forbidden). */
     sendLabel?: string;
-    busyLabel?: string;
+    stopLabel?: string;
     textareaRef?: Ref<HTMLTextAreaElement>;
 }
 
-/** Bottom-toolbar popover (issue #87): a text button that opens a floating
- *  panel above it, closing on outside mousedown or Escape. */
-function ToolbarPopover({
-    buttonLabel,
+/** FCS-1 §4 dark overrides: the design tokens are CSS-var swapped, but the
+ *  composer standard pins raw zinc/indigo scales — dark variants ride the
+ *  html.dark class the shell theme store already toggles. */
+const DARK = '[.dark_&]:';
+const BOX_DARK = `${DARK}border-zinc-700/60 ${DARK}bg-zinc-900`;
+const TOOL_DARK = `${DARK}text-zinc-400 ${DARK}hover:bg-zinc-800 ${DARK}hover:text-zinc-200`;
+const POPUP_DARK = `${DARK}border-zinc-700 ${DARK}bg-zinc-900`;
+
+/** Auto-grow bounds (FCS-1 §4): one 44px row up to eight ~22px rows. */
+const TA_MIN = 44;
+const TA_MAX = 176;
+
+/** Floating panel shared by the ⚙ params popup, slash palette and reference
+ *  palette — anchored above the tool row, closed by outside mousedown or
+ *  Escape. */
+function ComposerPopup({
     buttonAria,
-    align = 'left',
-    width = 'w-[240px]',
+    buttonContent,
+    open,
+    onOpenChange,
+    anchor = 'left',
+    width = 'w-[300px]',
     children,
 }: {
-    buttonLabel: ReactNode;
     buttonAria: string;
-    align?: 'left' | 'right';
+    buttonContent: ReactNode;
+    open: boolean;
+    onOpenChange(open: boolean): void;
+    anchor?: 'left' | 'right';
     width?: string;
     children: (close: () => void) => ReactNode;
 }) {
-    const [open, setOpen] = useState(false);
     const ref = useRef<HTMLDivElement | null>(null);
-    const close = () => setOpen(false);
+    const close = () => onOpenChange(false);
 
     useEffect(() => {
         if (!open) return;
         const onDown = (e: MouseEvent) => {
-            if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-        };
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') setOpen(false);
+            if (ref.current && !ref.current.contains(e.target as Node)) onOpenChange(false);
         };
         document.addEventListener('mousedown', onDown);
-        document.addEventListener('keydown', onKey);
-        return () => {
-            document.removeEventListener('mousedown', onDown);
-            document.removeEventListener('keydown', onKey);
-        };
-    }, [open]);
+        return () => document.removeEventListener('mousedown', onDown);
+    }, [open, onOpenChange]);
 
     return (
-        <div className="relative" ref={ref}>
+        <div ref={ref}>
             <button
                 type="button"
-                onClick={() => setOpen((v) => !v)}
+                onClick={() => onOpenChange(!open)}
                 aria-expanded={open}
                 aria-haspopup="dialog"
                 aria-label={buttonAria}
-                className="flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-text-secondary hover:bg-bg-muted hover:text-text-primary"
+                className={`flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 ${TOOL_DARK}`}
             >
-                {buttonLabel}
-                <span aria-hidden className="text-[9px] text-text-muted">
-                    ▾
-                </span>
+                {buttonContent}
             </button>
             {open ? (
                 <div
                     role="dialog"
                     aria-label={buttonAria}
-                    className={`absolute bottom-[32px] z-dropdown max-h-[280px] overflow-y-auto rounded-xl border border-border bg-bg-elevated p-1.5 shadow-overlay ${width} ${align === 'right' ? 'right-0' : 'left-0'}`}
+                    className={`absolute bottom-full z-dropdown mb-2 max-h-[280px] overflow-y-auto rounded-xl border border-zinc-200 bg-white p-1.5 shadow-overlay ${POPUP_DARK} ${width} ${anchor === 'right' ? 'right-2.5' : 'left-2.5'}`}
                 >
                     {children(close)}
                 </div>
@@ -131,18 +179,16 @@ function OptionRow({
             key={option.value}
             type="button"
             onClick={() => onPick(option.value)}
-            className={`flex w-full items-start justify-between gap-2 rounded-md px-2 py-1.5 text-left hover:bg-bg-muted ${selected ? 'text-brand' : 'text-text-secondary'}`}
+            className={`flex w-full items-start justify-between gap-2 rounded-md px-2 py-1.5 text-left hover:bg-zinc-100 ${DARK}hover:bg-zinc-800 ${selected ? 'text-indigo-600' : 'text-zinc-600'} ${DARK}text-zinc-300`}
         >
             <span className="min-w-0">
                 <span className="block truncate text-xs">{option.label}</span>
                 {option.hint ? (
-                    <span className="block truncate text-[10px] text-text-muted">
-                        {option.hint}
-                    </span>
+                    <span className="block truncate text-[10px] text-zinc-400">{option.hint}</span>
                 ) : null}
             </span>
             {selected ? (
-                <span aria-hidden className="shrink-0 text-xs text-brand">
+                <span aria-hidden className="shrink-0 text-xs text-indigo-600">
                     ✓
                 </span>
             ) : null}
@@ -150,25 +196,8 @@ function OptionRow({
     );
 }
 
-/** Model picker (issue #87): search input + curated-by-default list; a
- *  non-empty query reveals every option (raw ids included). */
-function ModelPicker({ model }: { model: ComposerSelectProps }) {
-    return (
-        <ToolbarPopover
-            buttonAria="model"
-            align="right"
-            width="w-[300px]"
-            buttonLabel={
-                model.options.find((o) => o.value === model.value)?.label ??
-                model.fallbackLabel ??
-                'Model'
-            }
-        >
-            {(close) => <ModelPickerBody model={model} close={close} />}
-        </ToolbarPopover>
-    );
-}
-
+/** Model picker body (issue #87 curation): search input + curated-by-default
+ *  list; a non-empty query reveals every option (raw ids included). */
 function ModelPickerBody({ model, close }: { model: ComposerSelectProps; close(): void }) {
     const [query, setQuery] = useState('');
     const q = query.trim().toLowerCase();
@@ -187,10 +216,10 @@ function ModelPickerBody({ model, close }: { model: ComposerSelectProps; close()
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search models…"
                 aria-label="search models"
-                className="mb-1 w-full rounded-md border border-border bg-bg px-2 py-1.5 text-xs text-text-primary outline-none focus:border-brand"
+                className={`mb-1 w-full rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs text-zinc-900 outline-none focus:border-indigo-400 ${POPUP_DARK} ${DARK}text-zinc-100`}
             />
             {visible.length === 0 ? (
-                <div className="px-2 py-1 text-xs text-text-muted">No matches</div>
+                <div className="px-2 py-1 text-xs text-zinc-400">No matches</div>
             ) : (
                 visible.map((o) => (
                     <OptionRow
@@ -208,163 +237,383 @@ function ModelPickerBody({ model, close }: { model: ComposerSelectProps; close()
     );
 }
 
+function ActionRows({
+    items,
+    emptyLabel,
+    onPick,
+}: {
+    items: ComposerActionItem[];
+    emptyLabel?: string;
+    onPick(item: ComposerActionItem): void;
+}) {
+    if (items.length === 0) {
+        return <div className="px-2 py-1 text-xs text-zinc-400">{emptyLabel ?? '—'}</div>;
+    }
+    return (
+        <>
+            {items.map((a) => (
+                <button
+                    key={a.key}
+                    type="button"
+                    onClick={() => onPick(a)}
+                    className={`block w-full rounded-md px-2 py-1.5 text-left text-xs text-zinc-600 hover:bg-zinc-100 hover:text-indigo-600 ${DARK}text-zinc-300 ${DARK}hover:bg-zinc-800`}
+                >
+                    {a.label}
+                </button>
+            ))}
+        </>
+    );
+}
+
 /**
- * Shared chat/delegation composer (issue #55, retooled #87) — claude.ai
- * input anatomy: rounded-input bordered card with brand focus ring,
- * borderless auto-grow textarea, bottom toolbar (left `+` attach slot +
- * capability pill, right model/effort text buttons + brand-blue circular
- * send button), Enter-to-send. Token-driven via @fusion/design-tokens.
+ * Shared conversation composer, FCS-1 (Fusion Composer Standard 1101)
+ * five-zone anatomy: ① context chips ② attachment chips ③ auto-grow
+ * textarea (1→8 rows) ④ tool row — bottom-left input enhancement
+ * (📎→🖼→＠, fixed order), bottom-right execution (⚙ params popup → send
+ * always rightmost) — ⑤ persistent hint row. Send is icon-only ⬆ 36×36
+ * rounded-xl with three states (empty disabled / content enabled /
+ * generating becomes ⏹ stop); label switching is forbidden — the home
+ * pill keeps one fixed label. Shortcuts (§3): Enter send, Shift+Enter
+ * newline, Esc stop-when-busy, leading `/` command palette, `@`
+ * reference palette, ⌘V image → attachment chip (multimodal only).
  */
 export function Composer({
     value,
     onChange,
     onSubmit,
+    onStop,
     placeholder,
     ariaLabel,
-    model,
-    effort,
-    actions,
+    contextChips,
+    attachments,
+    onRemoveAttachment,
+    attach,
+    images,
+    references,
+    slashCommands,
+    params,
     hint = 'Enter to send · Shift+Enter new line',
+    stopHint,
     busy = false,
     disabled = false,
+    sendVariant = 'icon',
     sendLabel = 'Send',
-    busyLabel = 'Thinking…',
+    stopLabel = 'Stop',
     textareaRef,
 }: ComposerProps) {
-    const [popOpen, setPopOpen] = useState(false);
-    const popRef = useRef<HTMLDivElement | null>(null);
+    const [paramsOpen, setParamsOpen] = useState(false);
+    const [slashOpen, setSlashOpen] = useState(false);
+    const [refOpen, setRefOpen] = useState(false);
+    const taInner = useRef<HTMLTextAreaElement | null>(null);
+    const attachInput = useRef<HTMLInputElement | null>(null);
+    const imageInput = useRef<HTMLInputElement | null>(null);
 
-    // Close the actions popover on any click outside it (agent.html UX).
+    const anyPalette = paramsOpen || slashOpen || refOpen;
+
+    // Auto-grow (FCS-1 §1 zone 3): 1→8 rows, scroll inside beyond that.
+    // `value` is the re-render trigger; the resize reads the DOM after the
+    // controlled textarea has caught up.
     useEffect(() => {
-        if (!popOpen) return;
-        const onDown = (e: MouseEvent) => {
-            if (popRef.current && !popRef.current.contains(e.target as Node)) setPopOpen(false);
-        };
-        document.addEventListener('mousedown', onDown);
-        return () => document.removeEventListener('mousedown', onDown);
-    }, [popOpen]);
+        void value;
+        const el = taInner.current;
+        if (!el) return;
+        el.style.height = 'auto';
+        el.style.height = `${Math.min(Math.max(el.scrollHeight, TA_MIN), TA_MAX)}px`;
+    }, [value]);
+
+    // Slash palette tracks a leading `/` (FCS-1 §3); reference palette opens
+    // on any `@`. Palettes only exist when their items were provided.
+    const handleChange = (e: ReactChangeEvent<HTMLTextAreaElement>) => {
+        const v = e.target.value;
+        onChange(v);
+        if (slashCommands) setSlashOpen(v.startsWith('/'));
+        if (references) setRefOpen(v.includes('@'));
+    };
+
+    const handleKeyDown = (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            if (!busy) onSubmit();
+            return;
+        }
+        if (e.key === 'Escape') {
+            if (busy && onStop) {
+                e.preventDefault();
+                onStop();
+            } else if (anyPalette) {
+                e.preventDefault();
+                setParamsOpen(false);
+                setSlashOpen(false);
+                setRefOpen(false);
+            } else {
+                taInner.current?.blur();
+            }
+        }
+        // ⌘K and every other global shortcut passes through untouched.
+    };
+
+    // ⌘V image paste → attachment chip (multimodal surfaces only, §3).
+    const handlePaste = (e: ReactClipboardEvent<HTMLTextAreaElement>) => {
+        if (!images) return;
+        const file = Array.from(e.clipboardData.files).find((f) => f.type.startsWith('image/'));
+        if (!file) return;
+        e.preventDefault();
+        images.onImage(file);
+        console.log('[composer] image pasted as attachment:', file.name || 'clipboard image');
+    };
+
+    const setTaRef = (el: HTMLTextAreaElement | null) => {
+        taInner.current = el;
+        if (typeof textareaRef === 'function') textareaRef(el);
+        else if (textareaRef && typeof textareaRef === 'object')
+            (textareaRef as { current: HTMLTextAreaElement | null }).current = el;
+    };
+
+    const canSend = value.trim().length > 0;
+    const sendColor = busy
+        ? `bg-zinc-200 text-zinc-700 hover:bg-zinc-300 ${DARK}bg-zinc-700 ${DARK}text-zinc-200 ${DARK}hover:bg-zinc-600`
+        : canSend
+          ? 'bg-indigo-600 text-white hover:bg-indigo-500'
+          : `bg-zinc-200 text-zinc-400 ${DARK}bg-zinc-700 ${DARK}text-zinc-500`;
+    const sendShape =
+        sendVariant === 'pill'
+            ? 'h-9 w-auto gap-1.5 rounded-xl px-3.5 text-sm font-medium'
+            : 'h-9 w-9 rounded-xl text-base';
+    const sendButton = busy ? (
+        <button
+            type="button"
+            onClick={onStop}
+            disabled={!onStop}
+            aria-label={stopLabel}
+            title={stopLabel}
+            className={`flex shrink-0 items-center justify-center ${sendShape} ${sendColor}`}
+        >
+            <span aria-hidden>⏹</span>
+            {sendVariant === 'pill' ? <span>{sendLabel}</span> : null}
+        </button>
+    ) : (
+        <button
+            type="button"
+            onClick={onSubmit}
+            disabled={disabled || !canSend}
+            aria-label={sendLabel}
+            title={sendLabel}
+            className={`flex shrink-0 items-center justify-center ${sendShape} ${sendColor} disabled:cursor-not-allowed`}
+        >
+            <span aria-hidden>⬆</span>
+            {sendVariant === 'pill' ? <span>{sendLabel}</span> : null}
+        </button>
+    );
+
+    const chipBase = `rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-0.5 text-xs text-zinc-600 ${DARK}border-zinc-700 ${DARK}bg-zinc-800 ${DARK}text-zinc-300`;
 
     return (
         <div className="w-full text-left">
-            <div className="rounded-input border border-border bg-bg-elevated px-3 pb-2 pt-2.5 focus-within:border-brand">
+            <div
+                className={`relative rounded-2xl border border-zinc-200/80 bg-white shadow-sm focus-within:border-indigo-400/60 focus-within:ring-2 focus-within:ring-indigo-500/30 ${BOX_DARK}`}
+            >
+                {/* ① context bar */}
+                {contextChips && contextChips.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5 px-4 pt-3">
+                        {contextChips.map((c) => (
+                            <button
+                                key={c.key}
+                                type="button"
+                                onClick={c.onClick}
+                                className={`${chipBase} hover:border-indigo-400 hover:text-indigo-600 ${c.muted ? 'opacity-40' : ''}`}
+                            >
+                                {c.label}
+                            </button>
+                        ))}
+                    </div>
+                ) : null}
+                {/* ② attachment chips */}
+                {attachments && attachments.length > 0 && onRemoveAttachment ? (
+                    <div className="flex flex-wrap gap-1.5 px-4 pt-3">
+                        {attachments.map((a) => (
+                            <span key={a.key} className={`${chipBase} flex items-center gap-1`}>
+                                <span aria-hidden>📄</span>
+                                {a.label}
+                                <button
+                                    type="button"
+                                    onClick={() => onRemoveAttachment(a.key)}
+                                    aria-label={`remove ${a.label}`}
+                                    className="text-zinc-400 hover:text-zinc-600"
+                                >
+                                    ×
+                                </button>
+                            </span>
+                        ))}
+                    </div>
+                ) : null}
+                {/* ③ textarea */}
                 <textarea
-                    ref={textareaRef}
+                    ref={setTaRef}
                     value={value}
-                    onChange={(e) => onChange(e.target.value)}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            onSubmit();
-                        }
-                    }}
-                    rows={2}
+                    onChange={handleChange}
+                    onKeyDown={handleKeyDown}
+                    onPaste={handlePaste}
                     placeholder={placeholder}
                     aria-label={ariaLabel}
                     disabled={disabled}
-                    className="block max-h-[120px] min-h-[40px] w-full resize-none border-none bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
+                    className={`block w-full resize-none border-none bg-transparent px-4 pb-2 pt-3 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 ${DARK}text-zinc-100 ${DARK}placeholder:text-zinc-500`}
+                    style={{ height: TA_MIN, maxHeight: TA_MAX }}
                 />
-                <div className="mt-1.5 flex items-center gap-1.5">
-                    {/* Attach slot: no upload pipeline yet — kept as the
-                        documented anatomy slot (issue #87). */}
-                    <button
-                        type="button"
-                        disabled
-                        aria-label="attach"
-                        title="Attach"
-                        className="flex h-[30px] w-[30px] items-center justify-center rounded-full p-0 text-base leading-none text-text-muted opacity-50"
-                    >
-                        +
-                    </button>
-                    {actions ? (
-                        <div className="relative" ref={popRef}>
+                {/* ④ tool row */}
+                <div className="flex items-center gap-1 px-2.5 pb-2.5">
+                    {attach ? (
+                        <>
+                            <input
+                                ref={attachInput}
+                                type="file"
+                                multiple
+                                className="hidden"
+                                onChange={(e) => {
+                                    attach.onFiles(Array.from(e.target.files ?? []));
+                                    e.target.value = '';
+                                }}
+                            />
                             <button
                                 type="button"
-                                onClick={() => setPopOpen((v) => !v)}
-                                aria-expanded={popOpen}
-                                aria-haspopup="dialog"
-                                aria-label="actions"
-                                className="flex items-center gap-1 rounded-full border border-border bg-bg-muted px-2.5 py-1 text-xs text-text-secondary hover:border-brand hover:text-brand"
+                                onClick={() => attachInput.current?.click()}
+                                aria-label="attach files"
+                                title="Attach"
+                                className={`flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 ${TOOL_DARK}`}
                             >
-                                <span aria-hidden>⚙</span>
-                                <span>Tools</span>
+                                <span aria-hidden>📎</span>
                             </button>
-                            {popOpen ? (
-                                <div
-                                    role="dialog"
-                                    aria-label={actions.popoverTitle ?? 'ACTIONS'}
-                                    className="absolute bottom-[38px] left-0 z-dropdown max-h-[260px] w-[300px] overflow-y-auto rounded-xl border border-border bg-bg-elevated p-2.5 shadow-overlay"
-                                >
-                                    <div className="px-1.5 pb-2 pt-0.5 text-xs text-text-secondary">
-                                        {actions.popoverTitle ?? 'ACTIONS'}
-                                    </div>
-                                    {actions.items.length === 0 ? (
-                                        <div className="px-1.5 text-xs text-text-muted">
-                                            {actions.emptyLabel ?? 'No entries yet'}
-                                        </div>
-                                    ) : (
-                                        actions.items.map((a) => (
-                                            <button
-                                                key={a.key}
-                                                type="button"
-                                                onClick={() => {
-                                                    a.onClick?.();
-                                                    setPopOpen(false);
-                                                }}
-                                                className="block w-full px-1.5 py-1 text-left text-xs text-text-secondary hover:text-brand"
-                                            >
-                                                {a.label}
-                                            </button>
-                                        ))
-                                    )}
-                                </div>
-                            ) : null}
-                        </div>
+                        </>
                     ) : null}
-                    <span className="flex-1" />
-                    {model ? <ModelPicker model={model} /> : null}
-                    {effort ? (
-                        <ToolbarPopover
-                            buttonAria="effort"
-                            align="right"
-                            buttonLabel={
-                                effort.options.find((o) => o.value === effort.value)?.label ??
-                                effort.fallbackLabel ??
-                                'Effort'
-                            }
+                    {images ? (
+                        <>
+                            <input
+                                ref={imageInput}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                    const f = (e.target.files ?? [])[0];
+                                    if (f) images.onImage(f);
+                                    e.target.value = '';
+                                }}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => imageInput.current?.click()}
+                                aria-label="attach image"
+                                title="Image"
+                                className={`flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 ${TOOL_DARK}`}
+                            >
+                                <span aria-hidden>🖼</span>
+                            </button>
+                        </>
+                    ) : null}
+                    {references ? (
+                        <ComposerPopup
+                            buttonAria="reference"
+                            buttonContent={<span aria-hidden>＠</span>}
+                            open={refOpen}
+                            onOpenChange={setRefOpen}
                         >
                             {(close) => (
+                                <ActionRows
+                                    items={references.items}
+                                    emptyLabel={references.emptyLabel}
+                                    onPick={(item) => {
+                                        item.onClick?.();
+                                        close();
+                                    }}
+                                />
+                            )}
+                        </ComposerPopup>
+                    ) : null}
+                    {slashCommands ? (
+                        <ComposerPopup
+                            buttonAria="commands"
+                            buttonContent={<span aria-hidden>/</span>}
+                            open={slashOpen}
+                            onOpenChange={setSlashOpen}
+                        >
+                            {(close) => (
+                                <ActionRows
+                                    items={slashCommands.items}
+                                    emptyLabel={slashCommands.emptyLabel}
+                                    onPick={(item) => {
+                                        item.onClick?.();
+                                        close();
+                                    }}
+                                />
+                            )}
+                        </ComposerPopup>
+                    ) : null}
+                    <span className="flex-1" />
+                    {/* ⚙ params popup: every tunable lives here (§1). */}
+                    {params ? (
+                        <ComposerPopup
+                            buttonAria="parameters"
+                            buttonContent={<span aria-hidden>⚙</span>}
+                            open={paramsOpen}
+                            onOpenChange={setParamsOpen}
+                            anchor="right"
+                            width="w-[320px]"
+                        >
+                            {() => (
                                 <>
-                                    {effort.options.map((o) => (
-                                        <OptionRow
-                                            key={o.value}
-                                            option={o}
-                                            selected={o.value === effort.value}
-                                            onPick={(v) => {
-                                                effort.onChange(v);
-                                                close();
+                                    {params.model ? (
+                                        <div className="mb-1 px-1.5 text-[10px] uppercase tracking-wide text-zinc-400">
+                                            Model
+                                        </div>
+                                    ) : null}
+                                    {params.model ? (
+                                        <ModelPickerBody
+                                            model={params.model}
+                                            close={() => setParamsOpen(false)}
+                                        />
+                                    ) : null}
+                                    {params.effort ? (
+                                        <div className="mb-1 mt-2 px-1.5 text-[10px] uppercase tracking-wide text-zinc-400">
+                                            Thinking
+                                        </div>
+                                    ) : null}
+                                    {params.effort
+                                        ? params.effort.options.map((o) => (
+                                              <OptionRow
+                                                  key={o.value}
+                                                  option={o}
+                                                  selected={o.value === params.effort?.value}
+                                                  onPick={(v) => params.effort?.onChange(v)}
+                                              />
+                                          ))
+                                        : null}
+                                    {params.actions && params.actions.items.length > 0 ? (
+                                        <div className="mb-1 mt-2 px-1.5 text-[10px] uppercase tracking-wide text-zinc-400">
+                                            {params.actions.title ?? 'Actions'}
+                                        </div>
+                                    ) : null}
+                                    {params.actions ? (
+                                        <ActionRows
+                                            items={params.actions.items}
+                                            emptyLabel={params.actions.emptyLabel}
+                                            onPick={(item) => {
+                                                item.onClick?.();
+                                                setParamsOpen(false);
                                             }}
                                         />
-                                    ))}
+                                    ) : null}
                                 </>
                             )}
-                        </ToolbarPopover>
+                        </ComposerPopup>
                     ) : null}
-                    <button
-                        type="button"
-                        onClick={onSubmit}
-                        disabled={busy || disabled || value.trim().length === 0}
-                        aria-label={busy ? busyLabel : sendLabel}
-                        title={busy ? busyLabel : sendLabel}
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-sm text-white hover:bg-brand-hover disabled:opacity-40"
-                    >
-                        <span aria-hidden className={busy ? 'animate-pulse' : ''}>
-                            ↑
-                        </span>
-                    </button>
+                    {sendButton}
                 </div>
             </div>
+            {/* ⑤ persistent hint row */}
             {hint !== false ? (
-                <div className="mt-1.5 text-center text-[11.5px] text-text-secondary">{hint}</div>
+                <div
+                    className={`mt-1.5 text-center text-[11px] text-zinc-500 ${DARK}text-zinc-400`}
+                >
+                    {busy && stopHint ? `${hint} ${stopHint}` : hint}
+                </div>
             ) : null}
         </div>
     );

@@ -55,6 +55,7 @@ bun run build       # 各 workspace typecheck + build
 bun run test        # bun test 全仓测试
 bun run lint        # biome check
 bun run typecheck   # tsc 全仓类型检查
+bun run check       # typecheck + lint + build + test 全量门禁
 ```
 
 模块 iframe Dev HMR：`VITE_SHELL_ENV=dev FUSION_DEV_MODULES=<id>:<port> bun run dev`，指定模块的 iframe src 覆写为本地 dev server。

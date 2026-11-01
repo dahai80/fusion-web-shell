@@ -99,13 +99,17 @@ export interface ChatResponse {
     choices?: Array<{ message?: { role?: string; content?: string } }>;
 }
 
-export type ChatPostFn = (body: {
-    model: string;
-    messages: ChatMessage[];
-    stream: boolean;
-}) => Promise<ChatResponse>;
+export type ChatPostFn = (
+    body: {
+        model: string;
+        messages: ChatMessage[];
+        stream: boolean;
+    },
+    opts?: { signal?: AbortSignal }
+) => Promise<ChatResponse>;
 
-let chatPoster: ChatPostFn = (body) => sharedClient().post('/api/v1/shell/chat/completions', body);
+let chatPoster: ChatPostFn = (body, opts) =>
+    sharedClient().post('/api/v1/shell/chat/completions', body, { signal: opts?.signal });
 
 /** Test seam: swap the chat HTTP layer. */
 export function setChatPoster(fn: ChatPostFn): void {
@@ -119,8 +123,15 @@ interface DelegationState {
     /** Last routing decision, always surfaced in the UI (never silent). */
     lastDecision: DelegationDecision | null;
     ask(prompt: string): Promise<void>;
+    /** Abort the in-flight shell chat (FCS-1 §2 stop state / Esc). */
+    stop(): void;
     clearChat(): void;
 }
+
+/** In-flight chat aborter; null when idle. */
+let chatAbort: AbortController | null = null;
+/** True only when the abort came from stop() (vs the request timeout). */
+let stopRequested = false;
 
 const HISTORY_CAP = 20;
 
@@ -136,13 +147,18 @@ export const useDelegation = create<DelegationState>((set, get) => ({
         const history = [...get().messages, { role: 'user' as const, content: p }].slice(
             -HISTORY_CAP
         );
+        chatAbort = new AbortController();
+        stopRequested = false;
         set({ messages: history, busy: true, error: null });
         try {
-            const resp = await chatPoster({
-                model: usePrefs.getState().model,
-                messages: history,
-                stream: false,
-            });
+            const resp = await chatPoster(
+                {
+                    model: usePrefs.getState().model,
+                    messages: history,
+                    stream: false,
+                },
+                { signal: chatAbort.signal }
+            );
             const content = resp.choices?.[0]?.message?.content?.trim();
             if (!content) throw new Error('empty response');
             set({
@@ -151,9 +167,24 @@ export const useDelegation = create<DelegationState>((set, get) => ({
             });
             console.log('[delegation] chat reply received,', content.length, 'chars');
         } catch (err) {
-            console.error('[delegation] chat failed', err);
-            set({ busy: false, error: (err as Error).message });
+            if ((err as Error).name === 'AbortError' && stopRequested) {
+                console.log('[delegation] chat stopped by user');
+                set({ busy: false });
+            } else {
+                console.error('[delegation] chat failed', err);
+                set({ busy: false, error: (err as Error).message });
+            }
+        } finally {
+            chatAbort = null;
+            stopRequested = false;
         }
+    },
+
+    stop() {
+        if (!chatAbort) return;
+        console.log('[delegation] stop requested');
+        stopRequested = true;
+        chatAbort.abort();
     },
 
     clearChat() {

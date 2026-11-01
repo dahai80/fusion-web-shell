@@ -553,6 +553,7 @@ export function HomePage({ onOpen }: Props) {
     const chatBusy = useDelegation((s) => s.busy);
     const chatError = useDelegation((s) => s.error);
     const ask = useDelegation((s) => s.ask);
+    const stop = useDelegation((s) => s.stop);
 
     const send = () => {
         const prompt = draft.trim();
@@ -626,39 +627,52 @@ export function HomePage({ onOpen }: Props) {
                 value={draft}
                 onChange={setDraft}
                 onSubmit={send}
+                onStop={stop}
                 busy={chatBusy}
                 placeholder={t(
-                    '用自然语言描述任务，引擎会自动决定执行方式…',
-                    'Ask in natural language — the engine handles how…'
+                    '描述要完成的任务，/ 查看命令，@ 引用',
+                    'Describe the task, / for commands, @ to reference'
                 )}
                 ariaLabel={t('委托输入框', 'Delegation message box')}
                 hint={t('Enter 发送 · Shift+Enter 换行', 'Enter to send · Shift+Enter new line')}
+                stopHint={t('· Esc 停止', '· Esc to stop')}
+                sendVariant="pill"
                 sendLabel={t('发送', 'Send')}
-                busyLabel={t('回答中…', 'Thinking…')}
+                stopLabel={t('停止', 'Stop')}
                 textareaRef={textareaRef}
-                model={{
-                    value: model,
-                    onChange: setModel,
-                    options: modelPickerOptions,
-                    fallbackLabel: t('默认模型', 'Default model'),
+                slashCommands={{
+                    emptyLabel: t('暂无命令', 'No commands yet'),
+                    items: STATIC_CHIPS.map((c) => ({
+                        key: c.key,
+                        label: lang === 'en' ? c.labelEn : c.label,
+                        onClick: () => prefillChip(c.prefill),
+                    })),
                 }}
-                effort={{
-                    value: effort,
-                    onChange: (v) => setEffort(v as Effort),
-                    options: [
-                        { value: 'default', label: t('思考：自动', 'Thinking: auto') },
-                        { value: 'low', label: t('思考：低', 'Thinking: low') },
-                        { value: 'medium', label: t('思考：中', 'Thinking: medium') },
-                        { value: 'high', label: t('思考：高', 'Thinking: high') },
-                    ],
-                }}
-                actions={{
-                    popoverTitle: 'AGENT CAPABILITIES',
+                references={{
                     emptyLabel: t('暂无可用的能力入口', 'No capability entries yet'),
                     items: composerCapabilities(manifests, lang).map((c) => ({
                         key: `${c.moduleId}:${c.route}`,
                         label: c.title,
+                        onClick: () => jumpChip(c.moduleId, c.route, c.title),
                     })),
+                }}
+                params={{
+                    model: {
+                        value: model,
+                        onChange: setModel,
+                        options: modelPickerOptions,
+                        fallbackLabel: t('默认模型', 'Default model'),
+                    },
+                    effort: {
+                        value: effort,
+                        onChange: (v) => setEffort(v as Effort),
+                        options: [
+                            { value: 'default', label: t('思考：自动', 'Thinking: auto') },
+                            { value: 'low', label: t('思考：低', 'Thinking: low') },
+                            { value: 'medium', label: t('思考：中', 'Thinking: medium') },
+                            { value: 'high', label: t('思考：高', 'Thinking: high') },
+                        ],
+                    },
                 }}
             />
             {!convoActive && suggestionChips.length > 0 ? (

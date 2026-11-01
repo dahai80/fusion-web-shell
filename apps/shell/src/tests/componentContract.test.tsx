@@ -8,94 +8,117 @@ const BASE = {
     onSubmit: () => {},
 };
 
-describe('@fusion/web-ui Composer (issue #55, retooled #87)', () => {
-    it('renders the contract box: rounded-input, focus-within brand ring, borderless textarea', () => {
+describe('@fusion/web-ui Composer (FCS-1, fusion-composer-standard-1101)', () => {
+    it('zone contract: rounded-2xl zinc container, indigo focus ring, borderless textarea', () => {
         const html = renderToStaticMarkup(
             <Composer {...BASE} placeholder="ask anything" ariaLabel="composer" />
         );
-        expect(html).toContain('rounded-input');
-        expect(html).toContain('focus-within:border-brand');
+        expect(html).toContain('rounded-2xl');
+        expect(html).toContain('border-zinc-200/80');
+        expect(html).toContain('focus-within:ring-2');
+        expect(html).toContain('ring-indigo-500/30');
+        expect(html).toContain('[.dark_&amp;]:bg-zinc-900');
         expect(html).toContain('border-none bg-transparent');
         expect(html).toContain('placeholder="ask anything"');
         expect(html).toContain('aria-label="composer"');
     });
-    it('Enter-to-send textarea with min 40px / max 120px auto-grow', () => {
+    it('zone 3: auto-grow textarea clamped 1 row (44px) to 8 rows (176px)', () => {
         const html = renderToStaticMarkup(<Composer {...BASE} />);
-        expect(html).toContain('min-h-[40px]');
-        expect(html).toContain('max-h-[120px]');
+        expect(html).toContain('height:44px');
+        expect(html).toContain('max-height:176px');
         expect(html).toContain('resize-none');
     });
-    it('no native select remains; model/effort render as toolbar text buttons only when provided', () => {
-        const withPickers = renderToStaticMarkup(
-            <Composer
-                {...BASE}
-                model={{
-                    value: 'm1',
-                    onChange: () => {},
-                    options: [
-                        { value: '', label: 'Model: default' },
-                        { value: 'm1', label: 'm1' },
-                    ],
-                }}
-                effort={{
-                    value: 'low',
-                    onChange: () => {},
-                    options: [
-                        { value: 'default', label: 'Thinking: auto' },
-                        { value: 'low', label: 'Thinking: low' },
-                    ],
-                }}
-            />
-        );
-        expect(withPickers).not.toContain('<select');
-        expect(withPickers).not.toContain('<option');
-        expect(withPickers).toContain('aria-label="model"');
-        expect(withPickers).toContain('aria-label="effort"');
-        expect(withPickers).toContain('aria-haspopup="dialog"');
-
-        const without = renderToStaticMarkup(<Composer {...BASE} />);
-        expect(without).not.toContain('aria-label="model"');
-        expect(without).not.toContain('aria-label="effort"');
-    });
-    it('send button is a brand circle: disabled when empty, hover uses brand-hover', () => {
-        const empty = renderToStaticMarkup(<Composer {...BASE} value="" sendLabel="Send" />);
-        expect(empty).toContain('rounded-full bg-brand');
-        expect(empty).toContain('hover:bg-brand-hover');
-        expect(empty).toContain('disabled');
-        const filled = renderToStaticMarkup(<Composer {...BASE} value="hi" sendLabel="Send" />);
-        expect(filled).toContain('aria-label="Send"');
-        const busy = renderToStaticMarkup(<Composer {...BASE} busy sendLabel="Send" />);
-        expect(busy).toContain('aria-label="Thinking…"');
-        expect(busy).toContain('animate-pulse');
-    });
-    it('chips prop is gone from the composer contract (moved to Home, issue #86)', () => {
-        const html = renderToStaticMarkup(<Composer {...BASE} />);
-        expect(html).not.toContain('suggestion pills');
-    });
-    it('attach slot + capability pill render in the bottom toolbar', () => {
+    it('zones 1/2: context chips and removable attachment chips render when provided', () => {
         const html = renderToStaticMarkup(
             <Composer
                 {...BASE}
-                actions={{ items: [{ key: 'a', label: 'Run graph' }], popoverTitle: 'CAPS' }}
+                contextChips={[{ key: 'wd', label: '~/fusion', onClick: () => {} }]}
+                attachments={[{ key: 'f1', label: 'report.xlsx' }]}
+                onRemoveAttachment={() => {}}
             />
         );
-        expect(html).toContain('aria-label="attach"');
-        expect(html).toContain('aria-label="actions"');
-        expect(html).toContain('⚙');
-        expect(html).toContain('Tools');
+        expect(html).toContain('~/fusion');
+        expect(html).toContain('report.xlsx');
+        expect(html).toContain('aria-label="remove report.xlsx"');
     });
-    it('hint row shows Enter / Shift+Enter unless disabled', () => {
-        const withHint = renderToStaticMarkup(<Composer {...BASE} hint="Enter to send" />);
-        expect(withHint).toContain('Enter to send');
+    it('zone 4 left: attach / image / reference entries appear only when provided', () => {
+        const full = renderToStaticMarkup(
+            <Composer
+                {...BASE}
+                attach={{ onFiles: () => {} }}
+                images={{ onImage: () => {} }}
+                references={{ items: [{ key: 'r', label: 'agent' }] }}
+            />
+        );
+        expect(full).toContain('aria-label="attach files"');
+        expect(full).toContain('aria-label="attach image"');
+        expect(full).toContain('aria-label="reference"');
+        const bare = renderToStaticMarkup(<Composer {...BASE} />);
+        expect(bare).not.toContain('aria-label="attach files"');
+        expect(bare).not.toContain('aria-label="reference"');
+        expect(bare).not.toContain('aria-label="parameters"');
+    });
+    it('zone 4 right: params popup button only when params provided, send always rightmost', () => {
+        const withParams = renderToStaticMarkup(
+            <Composer
+                {...BASE}
+                params={{
+                    model: { value: 'm1', onChange: () => {}, options: [] },
+                    effort: { value: 'low', onChange: () => {}, options: [] },
+                }}
+            />
+        );
+        expect(withParams).toContain('aria-label="parameters"');
+        expect(withParams).toContain('aria-haspopup="dialog"');
+        // Send sits after the params trigger in the tool row.
+        expect(withParams.lastIndexOf('aria-label="Send"')).toBeGreaterThan(
+            withParams.lastIndexOf('aria-label="parameters"')
+        );
+        expect(withParams).not.toContain('<select');
+    });
+    it('send three states: empty disabled, content indigo, busy becomes stop (no label switch)', () => {
+        const empty = renderToStaticMarkup(<Composer {...BASE} value="" sendLabel="Send" />);
+        expect(empty).toContain('disabled');
+        expect(empty).toContain('bg-zinc-200');
+        const filled = renderToStaticMarkup(<Composer {...BASE} value="hi" sendLabel="Send" />);
+        expect(filled).toContain('bg-indigo-600');
+        expect(filled).toContain('aria-label="Send"');
+        const busy = renderToStaticMarkup(
+            <Composer
+                {...BASE}
+                busy
+                onStop={() => {}}
+                sendLabel="Send"
+                stopLabel="Stop"
+                sendVariant="pill"
+            />
+        );
+        expect(busy).toContain('⏹');
+        expect(busy).toContain('aria-label="Stop"');
+        // FCS-1 §2: the pill label never swaps with state.
+        expect(busy).toContain('>Send</span>');
+        expect(busy).not.toContain('disabled');
+        const busyNoStop = renderToStaticMarkup(<Composer {...BASE} busy onStop={undefined} />);
+        expect(busyNoStop).toContain('disabled');
+    });
+    it('zone 5: persistent hint row, stop hint appended only while busy', () => {
+        const idle = renderToStaticMarkup(
+            <Composer {...BASE} hint="Enter 发送" stopHint="· Esc 停止" />
+        );
+        expect(idle).toContain('Enter 发送');
+        expect(idle).not.toContain('Esc 停止');
+        const busy = renderToStaticMarkup(
+            <Composer {...BASE} busy onStop={() => {}} hint="Enter 发送" stopHint="· Esc 停止" />
+        );
+        expect(busy).toContain('Enter 发送 · Esc 停止');
         const noHint = renderToStaticMarkup(<Composer {...BASE} hint={false} />);
         expect(noHint).not.toContain('to send');
     });
-    it('token-driven: no hardcoded hex colors', () => {
+    it('token discipline: no hardcoded hex colors in the rendered contract', () => {
         const html = renderToStaticMarkup(
             <Composer
                 {...BASE}
-                model={{ value: '', onChange: () => {}, options: [] }}
-                effort={{ value: '', onChange: () => {}, options: [] }}
+                params={{ model: { value: '', onChange: () => {}, options: [] } }}
             />
         );
         expect(html).not.toMatch(/#[0-9a-f]{3,8}\b/i);
