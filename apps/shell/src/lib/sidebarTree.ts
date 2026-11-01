@@ -70,3 +70,31 @@ export function syncGroupsWithActive(
     next.add(active.group);
     return next;
 }
+
+/**
+ * Standalone first-class sidebar entry (issue #92): a module pinned above
+ * the groups — present only when registered and granted (RBAC), so the
+ * entry never leaks a module the session cannot open.
+ */
+export function standaloneEntry<T extends { id: string }>(
+    manifests: T[],
+    canView: (id: string) => boolean,
+    moduleId: string
+): T | null {
+    const m = manifests.find((x) => x.id === moduleId);
+    return m && canView(m.id) ? m : null;
+}
+
+/**
+ * Unread approvals count for one module (issue #92): feeds the standalone
+ * entry's badge from the notification center's approvals sources.
+ */
+export function unreadApprovalsFor(
+    items: { id: string; moduleId: string; kind: string }[],
+    readIds: Set<string>,
+    moduleId: string
+): number {
+    return items.filter(
+        (i) => i.moduleId === moduleId && i.kind === 'approvals' && !readIds.has(i.id)
+    ).length;
+}
