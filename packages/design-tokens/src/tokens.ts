@@ -17,6 +17,8 @@ export interface Palette {
     error: string;
     offline: string;
     brand: string;
+    bgSidebar: string;
+    brandHover: string;
 }
 
 export const palette: { dark: Palette; light: Palette } = {
@@ -34,6 +36,8 @@ export const palette: { dark: Palette; light: Palette } = {
         error: '#ef4444',
         offline: '#6b7488',
         brand: '#4f7cff',
+        bgSidebar: '#131722',
+        brandHover: '#6b93ff',
     },
     light: {
         bg: '#f5f6f8',
@@ -49,6 +53,8 @@ export const palette: { dark: Palette; light: Palette } = {
         error: '#dc2626',
         offline: '#8a92a4',
         brand: '#2f5fe8',
+        bgSidebar: '#eceef2',
+        brandHover: '#264ec4',
     },
 };
 
@@ -67,7 +73,15 @@ export const radius = {
     md: '0.5rem',
     card: '0.5rem',
     lg: '0.75rem',
+    input: '1rem',
     full: '9999px',
+} as const;
+
+/** System font stacks (issue #85, D2 — no webfont bundling). Values mirror
+ *  the --fs-font-serif / --fs-font-sans tokens in tokens.css exactly. */
+export const fontStacks = {
+    serif: 'ui-serif, Georgia, "Songti SC", "Noto Serif SC", serif',
+    sans: 'Inter, ui-sans-serif, system-ui, "PingFang SC", "Microsoft YaHei", sans-serif',
 } as const;
 
 export const typography = {

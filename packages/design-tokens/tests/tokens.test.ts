@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { cssVarName, palette, preset, radius, shadow, spacing, typography, zIndex } from '../src';
+import {
+    cssVarName,
+    fontStacks,
+    palette,
+    preset,
+    radius,
+    shadow,
+    spacing,
+    typography,
+    zIndex,
+} from '../src';
 
 const SEMANTIC_KEYS = [
     'bg',
@@ -17,6 +27,8 @@ const SEMANTIC_KEYS = [
     'error',
     'offline',
     'brand',
+    'bgSidebar',
+    'brandHover',
 ] as const;
 
 describe('@fusion/design-tokens palette', () => {
@@ -96,5 +108,29 @@ describe('@fusion/design-tokens interaction layer (issue #56)', () => {
         for (const [key, value] of Object.entries(radius)) {
             expect(css).toContain(`--fs-radius-${key}: ${value}`);
         }
+    });
+});
+
+describe('@fusion/design-tokens layout tokens (issue #85)', () => {
+    const css = readFileSync(join(import.meta.dir, '..', 'src', 'tokens.css'), 'utf8');
+    it('font stacks pair with --fs-font-* in both :root and html.light', () => {
+        for (const [key, stack] of Object.entries(fontStacks)) {
+            const darkBlock = css.slice(css.indexOf(':root'), css.indexOf('html.light {'));
+            const lightBlock = css.slice(css.indexOf('html.light {'));
+            expect(darkBlock).toContain(`--fs-font-${key}: ${stack}`);
+            expect(lightBlock).toContain(`--fs-font-${key}: ${stack}`);
+        }
+    });
+    it('bg-sidebar and brand-hover differ per theme and pair with tokens.css', () => {
+        expect(palette.dark.bgSidebar).not.toBe(palette.light.bgSidebar);
+        expect(palette.dark.brandHover).not.toBe(palette.light.brandHover);
+        expect(css).toContain(`--fs-bg-sidebar: ${palette.dark.bgSidebar}`);
+        expect(css).toContain(`--fs-bg-sidebar: ${palette.light.bgSidebar}`);
+        expect(css).toContain(`--fs-brand-hover: ${palette.dark.brandHover}`);
+        expect(css).toContain(`--fs-brand-hover: ${palette.light.brandHover}`);
+    });
+    it('radius.input declared in both themes', () => {
+        expect(radius.input).toBe('1rem');
+        expect(css.match(/--fs-radius-input: 1rem/g)?.length).toBe(2);
     });
 });
