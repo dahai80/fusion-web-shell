@@ -28,6 +28,29 @@
 3. **SDK**:依赖 `@fusion/web-sdk`(≥ v0.1.2),消费方式见 §3。禁止手写 postMessage 桥、禁止手写主题 localStorage 同步。
 4. **注册与开发态**:manifest 注册 `POST /api/v1/shell/manifests`(或随 gateway 静态托管);本地 HMR 用 shell 的 `FUSION_DEV_MODULES=<id>:<vite端口>`。
 
+### Tailwind 管线(必备 —— 缺失即构建产物 0 工具类,issue #84)
+
+Tailwind 的 `@tailwind` 指令要靠 **PostCSS 插件**展开,静态 `http.server`/Vite 不会自动处理;缺 `postcss.config.js` 时指令原样透传,dist CSS 只有 ~0.9 kB 空壳,页面全裸。每个模块的 `web/` 必须同时具备三件:
+
+1. `web/postcss.config.js`:
+
+```js
+export default { plugins: { tailwindcss: {}, autoprefixer: {} } };
+```
+
+2. CSS 入口 `web/src/index.css`(tokens 是语义色的唯一来源,不 import 则工具类解析不到变量):
+
+```css
+@import '@fusion/design-tokens/tokens.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+```
+
+3. 两个入口文件(tsx/ts)顶部 `import './index.css';`,且 `tailwind.config.ts` 的 `content` 覆盖 HTML 入口与 `src/**/*.{ts,tsx}`。
+
+验收:构建后 dist CSS 应含真实规则(如 `.bg-bg { background-color: var(--fs-bg) }`),双主题 computed style 抽查通过(§6)。`scripts/new-business-app.sh` 脚手架已内置这三件。
+
 ## 3. SDK 消费方式(business 仓专用)
 
 有仓模块从 GitHub tag re-vendor;business 仓没有 git 仓,**不要 vendor 拷贝源码**(会像此前 9 个仓一样腐烂),统一用相对 `file:` 依赖直连 fusion-web-shell 工作区源码 —— 源码即锁,host 侧修复自动生效:
