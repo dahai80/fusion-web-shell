@@ -144,6 +144,16 @@ function StatusFooter({
     );
 }
 
+/** #93: the offline verdict needs loaded manifests — the store starts empty,
+ *  so a bare !engine would flash the warning on every cold load. */
+export function computeEngineOffline(
+    engine: ModuleManifest | undefined,
+    unreachableIds: Set<string>,
+    manifestsLoaded: boolean
+): boolean {
+    return manifestsLoaded && (!engine || unreachableIds.has(engine.id));
+}
+
 /** Engine-unreachable escalation (issue #86 D5): thin warning strip above the
  *  composer; the normal state shows only the muted footer line. */
 function EngineWarning() {
@@ -404,6 +414,7 @@ function ProjectsSection({
 export function HomePage({ onOpen }: Props) {
     const manifests = useManifests((s) => s.manifests);
     const unreachableIds = useManifests((s) => s.unreachableIds);
+    const manifestsLoaded = useManifests((s) => s.loaded);
     const user = useAuth((s) => s.user);
     const lang = useLang((l) => l.lang);
     const tasks = useTasks((s) => s.items);
@@ -681,7 +692,7 @@ export function HomePage({ onOpen }: Props) {
     }
 
     const engine = manifests.find((m) => m.id === ENGINE_ID);
-    const engineOffline = !engine || unreachableIds.has(engine.id);
+    const engineOffline = computeEngineOffline(engine, unreachableIds, manifestsLoaded);
 
     return (
         <div className="h-full overflow-y-auto">

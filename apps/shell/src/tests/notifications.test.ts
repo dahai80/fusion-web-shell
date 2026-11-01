@@ -1,8 +1,9 @@
+import './domSetup';
 import './setup';
 import { beforeEach, describe, expect, it } from 'bun:test';
 import { useAuth } from '../stores/auth';
 import { useManifests } from '../stores/manifests';
-import { setFetcher, useNotifications } from '../stores/notifications';
+import { recheckDeadlines, setFetcher, useNotifications } from '../stores/notifications';
 import { useTabs } from '../stores/tabs';
 import type { ModuleManifest } from '../types/manifest';
 
@@ -269,6 +270,7 @@ describe('notification center (issue #24, G11/C3)', () => {
 describe('stale registration degradation (issue #46)', () => {
     beforeEach(() => {
         localStorage.removeItem('fusion.shell.notifications.read');
+        recheckDeadlines().clear();
         useNotifications.setState({ items: [], readIds: new Set(), polling: false });
         useTabs.setState({ tabs: [], activeTabId: null });
         useManifests.setState({ manifests: [], loaded: false, unreachableIds: new Set() });
@@ -326,6 +328,76 @@ describe('stale registration degradation (issue #46)', () => {
         await useNotifications.getState().pollNow();
         expect(useManifests.getState().unreachableIds.has('fusion-a')).toBe(true);
         expect(useManifests.getState().unreachableIds.has('fusion-b')).toBe(false);
+    });
+
+    it('marked module self-heals: skipped inside the recheck window, re-probed and cleared after it (issue #93)', async () => {
+        setupSources([
+            mk({
+                id: 'fusion-mlx',
+                notifications: [
+                    { id: 'n', label: 'N', endpoint: '/api/mlx/notifications', kind: 'engine' },
+                ],
+            }),
+            mk({
+                id: 'fusion-cowork',
+                notifications: [
+                    { id: 'c', label: 'C', endpoint: '/api/cowork/runs', kind: 'runs' },
+                ],
+            }),
+        ]);
+        let mlxUp = false;
+        let mlxCalls = 0;
+        setFetcher(async (path) => {
+            if (path.startsWith('/api/mlx')) {
+                mlxCalls += 1;
+                if (!mlxUp) throw Object.assign(new Error('refused'), { status: 503 });
+                return { items: [{ id: 'e1', title: 'engine recovered' }] };
+            }
+            return { items: [{ id: 'r1', title: 'run R-1 done' }] };
+        });
+        await useNotifications.getState().pollNow();
+        expect(useManifests.getState().unreachableIds.has('fusion-mlx')).toBe(true);
+        expect(recheckDeadlines().has('fusion-mlx')).toBe(true);
+
+        // Upstream recovered, but the recheck window has not elapsed: the
+        // module stays muted and is not probed.
+        mlxUp = true;
+        await useNotifications.getState().pollNow();
+        expect(mlxCalls).toBe(1);
+        expect(useManifests.getState().unreachableIds.has('fusion-mlx')).toBe(true);
+
+        // Past the deadline: probed again, success clears the client-side mark.
+        recheckDeadlines().set('fusion-mlx', Date.now() - 1);
+        await useNotifications.getState().pollNow();
+        expect(mlxCalls).toBe(2);
+        expect(useManifests.getState().unreachableIds.has('fusion-mlx')).toBe(false);
+        expect(recheckDeadlines().has('fusion-mlx')).toBe(false);
+        expect(useNotifications.getState().items.map((i) => i.moduleId)).toEqual([
+            'fusion-mlx',
+            'fusion-cowork',
+        ]);
+    });
+
+    it('failed re-probe keeps the mark and pushes the deadline forward (issue #93)', async () => {
+        setupSources([
+            mk({
+                id: 'fusion-mlx',
+                notifications: [
+                    { id: 'n', label: 'N', endpoint: '/api/mlx/notifications', kind: 'engine' },
+                ],
+            }),
+        ]);
+        setFetcher(async () => {
+            throw Object.assign(new Error('still refused'), { status: 503 });
+        });
+        await useNotifications.getState().pollNow();
+        expect(useManifests.getState().unreachableIds.has('fusion-mlx')).toBe(true);
+        recheckDeadlines().set('fusion-mlx', Date.now() - 1);
+        await useNotifications.getState().pollNow();
+        expect(useManifests.getState().unreachableIds.has('fusion-mlx')).toBe(true);
+        // The fresh deadline must sit in the future again, past the
+        // artificially-expired value the test injected.
+        expect(recheckDeadlines().get('fusion-mlx')!).toBeGreaterThan(Date.now());
     });
 });
 
