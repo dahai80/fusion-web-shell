@@ -1,13 +1,10 @@
 import { fetchEngineModels } from '@/api/endpoints';
 import { pushToast } from '@/components/ToastHost';
 import { composerCapabilities } from '@/lib/composerCapabilities';
+import { modelOptions } from '@/lib/modelCatalog';
+import { relativeTime } from '@/lib/relativeTime';
 import { useAuth } from '@/stores/auth';
-import {
-    type DelegationDecision,
-    logDelegation,
-    routeDelegation,
-    useDelegation,
-} from '@/stores/delegation';
+import { logDelegation, routeDelegation, useDelegation } from '@/stores/delegation';
 import { t, useLang } from '@/stores/lang';
 import type { Lang } from '@/stores/lang';
 import { moduleTitle, useManifests } from '@/stores/manifests';
@@ -16,14 +13,14 @@ import { type ProjectItem, useProjects } from '@/stores/projects';
 import { type ApprovalAction, type TaskItem, taskBucket, useTasks } from '@/stores/tasks';
 import type { ModuleManifest } from '@/types/manifest';
 import type { ComposerChip } from '@fusion/web-ui';
-import { ChatThread, Composer, EmptyState } from '@fusion/web-ui';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { ChatThread, Composer } from '@fusion/web-ui';
+import { useEffect, useRef, useState } from 'react';
 
 interface Props {
     onOpen(manifest: ModuleManifest, route?: string, pageTitle?: string): void;
 }
 
-/** Engine / resident-node ids shown in the Home status strip. */
+/** Engine / resident-node ids shown in the Home status footer. */
 const ENGINE_ID = 'fusion-mlx';
 const NODE_ID = 'fusion-multi-node';
 
@@ -38,40 +35,40 @@ const STATIC_CHIPS: ReadonlyArray<{
 }> = [
     {
         key: 'tidy',
-        label: '整理桌面',
-        labelEn: 'Tidy desktop',
+        label: '🧹 整理桌面',
+        labelEn: '🧹 Tidy desktop',
         moduleId: 'fusion-cowork',
         route: '/workflows?new=1',
         prefill: '整理桌面',
     },
     {
         key: 'weekly',
-        label: '周报 readout',
-        labelEn: 'Weekly readout',
+        label: '📊 周报 readout',
+        labelEn: '📊 Weekly readout',
         moduleId: 'fusion-cowork',
         route: '/workflows?new=1',
         prefill: '生成周报 readout',
     },
     {
         key: 'review',
-        label: '代码评审',
-        labelEn: 'Code review',
+        label: '💻 代码评审',
+        labelEn: '💻 Code review',
         moduleId: 'fusion-agent-studio',
         route: '/canvas?run=1',
         prefill: '代码评审',
     },
     {
         key: 'audit',
-        label: '对账',
-        labelEn: 'Reconcile',
+        label: '💰 对账',
+        labelEn: '💰 Reconcile',
         moduleId: 'fusion-cowork',
         route: '/workflows?new=1',
         prefill: '月度对账',
     },
     {
         key: 'research',
-        label: '研究',
-        labelEn: 'Research',
+        label: '🔍 研究',
+        labelEn: '🔍 Research',
         moduleId: 'fusion-agent-studio',
         route: '/canvas?run=1',
         prefill: '研究一下',
@@ -86,6 +83,12 @@ function greetingKey(hour: number): 'morning' | 'afternoon' | 'evening' {
     return 'evening';
 }
 
+function greetingEmoji(hour: number): string {
+    if (hour < 12) return '☀️';
+    if (hour < 18) return '🌤';
+    return '🌙';
+}
+
 function greetingText(hour: number, name: string | undefined, lang: 'zh' | 'en'): string {
     const key = greetingKey(hour);
     const zh = { morning: '早上好', afternoon: '下午好', evening: '晚上好' }[key];
@@ -96,13 +99,13 @@ function greetingText(hour: number, name: string | undefined, lang: 'zh' | 'en')
     return name ? `${hello}, ${name}` : hello;
 }
 
-// SECTION: status strip
+// SECTION: status footer (issue #86 D5: demoted to one muted line)
 
 function StatusDot({ online, label }: { online: boolean; label: string }) {
     return (
-        <span className="flex items-center gap-1.5 text-xs text-text-secondary">
+        <span className="flex items-center gap-1.5 text-xs text-text-muted">
             <span
-                className={`inline-block h-2 w-2 rounded-full ${online ? 'bg-success' : 'bg-offline'}`}
+                className={`inline-block h-1.5 w-1.5 rounded-full ${online ? 'bg-success' : 'bg-offline'}`}
                 aria-hidden
             />
             {label}
@@ -110,7 +113,7 @@ function StatusDot({ online, label }: { online: boolean; label: string }) {
     );
 }
 
-function StatusStrip({
+function StatusFooter({
     manifests,
     unreachableIds,
 }: {
@@ -120,7 +123,7 @@ function StatusStrip({
     const engine = manifests.find((m) => m.id === ENGINE_ID);
     const node = manifests.find((m) => m.id === NODE_ID);
     return (
-        <div className="flex flex-wrap items-center gap-4">
+        <footer className="flex flex-wrap items-center gap-4 pb-2">
             <StatusDot
                 online={!!engine && !unreachableIds.has(engine.id)}
                 label={
@@ -137,11 +140,27 @@ function StatusStrip({
                         : t('常驻节点未注册', 'Node not registered')
                 }
             />
+        </footer>
+    );
+}
+
+/** Engine-unreachable escalation (issue #86 D5): thin warning strip above the
+ *  composer; the normal state shows only the muted footer line. */
+function EngineWarning() {
+    return (
+        <div
+            role="alert"
+            className="rounded-card border border-warning/50 bg-warning/10 px-3 py-2 text-xs text-warning"
+        >
+            {t(
+                '推理引擎不可达，壳级问答与模型列表暂不可用',
+                'Inference engine unreachable — shell chat and the model list are unavailable'
+            )}
         </div>
     );
 }
 
-// SECTION: task sections
+// SECTION: task cards (issue #86 N7: 2-col card grid)
 
 const RISK_LABEL: Record<'low' | 'medium' | 'high', [string, string]> = {
     low: ['低风险', 'Low risk'],
@@ -184,7 +203,7 @@ function ApprovalCard({
                     type="button"
                     disabled={busy}
                     onClick={() => onAction(task.id, 'always_allow')}
-                    className="fs-btn fs-btn-secondary text-xs hover:text-brand"
+                    className="fs-btn fs-btn-secondary text-xs hover:border-brand hover:text-brand"
                 >
                     {t('始终允许', 'Always allow')}
                 </button>
@@ -193,9 +212,10 @@ function ApprovalCard({
     );
 }
 
-function TaskRow({
+function TaskCard({
     task,
     moduleLabel,
+    lang,
     onOpen,
     onOpenSpace,
     onApprove,
@@ -203,14 +223,16 @@ function TaskRow({
 }: {
     task: TaskItem;
     moduleLabel: string;
+    lang: Lang;
     onOpen(task: TaskItem): void;
     onOpenSpace(task: TaskItem): void;
     onApprove(taskId: string, action: ApprovalAction): void;
     approveBusy: boolean;
 }) {
+    const running = taskBucket(task) === 'running';
     return (
-        <div className="border-b border-border px-4 py-3 last:border-b-0">
-            <div className="flex items-center justify-between gap-3">
+        <div className="rounded-card border border-border bg-bg-elevated p-4 hover:border-brand">
+            <div className="flex items-start justify-between gap-2">
                 <button
                     type="button"
                     onClick={() => onOpen(task)}
@@ -229,20 +251,18 @@ function TaskRow({
                         {task.space}
                     </button>
                 ) : null}
-                <span className="shrink-0 text-xs text-text-muted">{moduleLabel}</span>
-                {typeof task.progress === 'number' ? (
-                    <span className="shrink-0 font-mono text-xs tabular-nums text-text-secondary">
-                        {task.progress}%
-                    </span>
-                ) : null}
-                {typeof task.artifacts === 'number' && task.artifacts > 0 ? (
-                    <span className="shrink-0 text-xs text-text-muted">
-                        {t('产物', 'Artifacts')} {task.artifacts}
-                    </span>
-                ) : null}
             </div>
-            {typeof task.progress === 'number' ? (
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-bg-muted">
+            <div className="mt-1.5 flex items-center justify-between gap-2 text-xs text-text-muted">
+                <span className="truncate">{moduleLabel}</span>
+                <span className="shrink-0">
+                    {relativeTime(task.updatedAt, lang)}
+                    {typeof task.artifacts === 'number' && task.artifacts > 0
+                        ? ` · ${t('产物', 'Artifacts')} ${task.artifacts}`
+                        : ''}
+                </span>
+            </div>
+            {running && typeof task.progress === 'number' ? (
+                <div className="mt-2 h-1 overflow-hidden rounded-full bg-bg-muted">
                     <div
                         className={`h-full rounded-full transition-all ${task.status === 'failed' || task.status === 'error' ? 'bg-error' : 'bg-running'}`}
                         style={{ width: `${task.progress}%` }}
@@ -256,33 +276,54 @@ function TaskRow({
     );
 }
 
+/** One task section (issue #86 D3): renders only when it has items — empty
+ *  sections vanish instead of painting bordered EmptyState boxes. */
 function TaskSection({
     icon,
     title,
     tasks,
-    emptyTitle,
-    emptyDesc,
-    renderRow,
+    lang,
+    byId,
+    onOpen,
+    onOpenSpace,
+    onApprove,
+    approveBusyId,
 }: {
     icon: string;
     title: string;
     tasks: TaskItem[];
-    emptyTitle: string;
-    emptyDesc: string;
-    renderRow(task: TaskItem): ReactNode;
+    lang: Lang;
+    byId: Map<string, ModuleManifest>;
+    onOpen(task: TaskItem): void;
+    onOpenSpace(task: TaskItem): void;
+    onApprove(taskId: string, action: ApprovalAction): void;
+    approveBusyId: string | null;
 }) {
+    if (tasks.length === 0) return null;
     return (
-        <section className="rounded-card border border-border bg-bg-elevated">
-            <h2 className="flex items-center gap-2 border-b border-border px-4 py-3 text-sm font-medium text-text-primary">
+        <section>
+            <h2 className="flex items-center gap-2 px-1 pb-2 text-sm font-medium text-text-primary">
                 <span aria-hidden>{icon}</span>
                 {title}
                 <span className="text-xs font-normal text-text-muted">{tasks.length}</span>
             </h2>
-            {tasks.length === 0 ? (
-                <EmptyState title={emptyTitle} description={emptyDesc} />
-            ) : (
-                tasks.map((task) => renderRow(task))
-            )}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {tasks.map((task) => (
+                    <TaskCard
+                        key={task.id}
+                        task={task}
+                        lang={lang}
+                        moduleLabel={(() => {
+                            const m = byId.get(task.moduleId);
+                            return m ? moduleTitle(m, lang) : task.moduleId;
+                        })()}
+                        onOpen={onOpen}
+                        onOpenSpace={onOpenSpace}
+                        onApprove={onApprove}
+                        approveBusy={approveBusyId === task.id}
+                    />
+                ))}
+            </div>
         </section>
     );
 }
@@ -337,7 +378,7 @@ function ProjectsSection({
                                         type="button"
                                         onClick={() => onOpen(m, p.route!)}
                                         title={p.description ?? p.title}
-                                        className="rounded-full border border-border px-3 py-1.5 text-xs text-text-secondary hover:border-brand hover:text-brand"
+                                        className="rounded-full border border-border bg-bg-muted px-3 py-1.5 text-xs text-text-secondary hover:border-brand hover:text-brand"
                                     >
                                         {p.title}
                                     </button>
@@ -353,9 +394,13 @@ function ProjectsSection({
 
 // SECTION: page
 
-/** Home landing (issue #32/#33): greeting + status strip + delegation message
- *  box + aggregated task sections (approval-first) + suggested chips. The
- *  message box hands off to the delegation routing (#34). */
+/** Home landing (issue #32/#33, claude-parity layout #86): serif greeting +
+ * composer + standalone chip row; empty task sections vanish (D3); tasks
+ * render as a 2-col card grid; the status strip demotes to a muted footer
+ * line (D5) escalating to a warning strip when the engine is offline; the
+ * routing decision surfaces as a 3s toast; chat is in-place — messages grow
+ * above the composer in the same column (N9 hard requirement) and the home
+ * chrome collapses while a conversation is active. */
 export function HomePage({ onOpen }: Props) {
     const manifests = useManifests((s) => s.manifests);
     const unreachableIds = useManifests((s) => s.unreachableIds);
@@ -370,17 +415,32 @@ export function HomePage({ onOpen }: Props) {
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
     const byId = new Map(manifests.map((m) => [m.id, m]));
 
-    // Engine model list (issue #50): fetched once, fed to the composer's
-    // model select — one source of truth (strip selects removed, issue #59).
-    // Permission-gated: the probe goes through the fusion-mlx module proxy, so
-    // users without that module grant would only produce a 403 round-trip
-    // (and the shell would toast "module fusion-mlx is not in your permissions").
+    // Engine model list (issue #50): fetched once, fed to the composer model
+    // popover — curated shell-side (issue #87) over the unchanged engine API.
     useEffect(() => {
         if (!useAuth.getState().canView('fusion-mlx')) return;
         void fetchEngineModels().then((ids) => {
             console.log('[home] engine models:', ids.length);
             setEngineModels(ids);
         });
+    }, []);
+
+    // Sidebar "new chat" / composer-focus intents (#86/#88): the sidebar
+    // dispatches window events so the shell chrome stays decoupled from the
+    // Home page internals.
+    useEffect(() => {
+        const onNewChat = () => {
+            useDelegation.getState().clearChat();
+            setDraft('');
+            textareaRef.current?.focus();
+        };
+        const onFocusComposer = () => textareaRef.current?.focus();
+        window.addEventListener('fusion:new-chat', onNewChat);
+        window.addEventListener('fusion:focus-composer', onFocusComposer);
+        return () => {
+            window.removeEventListener('fusion:new-chat', onNewChat);
+            window.removeEventListener('fusion:focus-composer', onFocusComposer);
+        };
     }, []);
 
     const running = tasks.filter((x) => taskBucket(x) === 'running');
@@ -422,39 +482,32 @@ export function HomePage({ onOpen }: Props) {
         }
     };
 
-    const renderRow = (task: TaskItem): ReactNode => (
-        <TaskRow
-            key={task.id}
-            task={task}
-            moduleLabel={(() => {
-                const m = byId.get(task.moduleId);
-                return m ? moduleTitle(m, lang) : task.moduleId;
-            })()}
-            onOpen={openTask}
-            onOpenSpace={openTaskSpace}
-            onApprove={(id, action) => void handleApprove(id, action)}
-            approveBusy={approveBusyId === task.id}
-        />
-    );
+    const sectionProps = {
+        lang,
+        byId,
+        onOpen: openTask,
+        onOpenSpace: openTaskSpace,
+        onApprove: (id: string, action: ApprovalAction) => void handleApprove(id, action),
+        approveBusyId,
+    };
 
     const manifestChips = manifests.flatMap((m) =>
         (m.home ?? []).filter((c) => c.chip).map((c) => ({ manifest: m, card: c }))
     );
 
-    // Global model/effort prefs feed the shared Composer selects (#55); the
-    // same store remains the handoff contract for module iframes (#34).
+    // Global model/effort prefs feed the shared Composer pickers (#55/#87);
+    // the same store remains the handoff contract for module iframes (#34).
     const model = usePrefs((s) => s.model);
     const setModel = usePrefs((s) => s.setModel);
     const effort = usePrefs((s) => s.effort);
     const setEffort = usePrefs((s) => s.setEffort);
-    const modelOptions = [
-        { value: '', label: t('模型：默认', 'Model: default') },
-        ...engineModels.map((id) => ({ value: id, label: id })),
-        ...(model && !engineModels.includes(model) ? [{ value: model, label: model }] : []),
-    ];
+    const modelPickerOptions = modelOptions(engineModels, t('默认模型', 'Default model'));
+    if (model && !engineModels.includes(model)) {
+        modelPickerOptions.push({ value: model, label: model, hint: model, curated: false });
+    }
 
-    // Suggestion chips render inside the shared Composer (#55); static chips
-    // prefill only, module-declared chips keep their deep link.
+    // Suggestion chips render as a standalone pill row below the composer
+    // (issue #86 N4); static chips prefill only, module chips deep-link.
     const suggestionChips: ComposerChip[] = [
         ...STATIC_CHIPS.map((c) => ({
             key: c.key,
@@ -483,23 +536,32 @@ export function HomePage({ onOpen }: Props) {
         textareaRef.current?.focus();
     };
 
-    // Delegation (issue #34): phase-1 rule routing; the decision is shown,
-    // never silent, and every send is audit-logged.
+    // Delegation (issue #34): phase-1 rule routing; the decision surfaces as
+    // a 3s toast (issue #86 N8) and every send is audit-logged.
     const chatMessages = useDelegation((s) => s.messages);
     const chatBusy = useDelegation((s) => s.busy);
     const chatError = useDelegation((s) => s.error);
     const ask = useDelegation((s) => s.ask);
-    const [lastDecision, setLastDecision] = useState<DelegationDecision | null>(null);
 
     const send = () => {
         const prompt = draft.trim();
         if (!prompt) return;
         const decision = routeDelegation(prompt);
-        setLastDecision(decision);
         logDelegation(
             prompt,
             decision.route,
             lang === 'en' ? decision.reasonEn : decision.reasonZh
+        );
+        const routeLabel =
+            decision.route === 'chat'
+                ? t('壳级问答', 'Shell chat')
+                : decision.route === 'cowork'
+                  ? 'Cowork'
+                  : 'Agent Studio';
+        pushToast(
+            'info',
+            `${t('路由决策', 'Routing')}: ${routeLabel} — ${lang === 'en' ? decision.reasonEn : decision.reasonZh}`,
+            3000
         );
         if (decision.route === 'chat') {
             setDraft('');
@@ -520,138 +582,141 @@ export function HomePage({ onOpen }: Props) {
         }
     };
 
+    // In-place chat state (N9): once a conversation exists the home chrome
+    // (greeting / chips / tasks / footer) collapses — data preserved, layout
+    // yields — and the thread scrolls above the bottom-anchored composer.
+    const convoActive = chatMessages.length > 0 || !!chatError;
+
+    const thread = (
+        <ChatThread
+            ariaLabel={t('壳级问答', 'Shell chat')}
+            messages={[
+                ...chatMessages.map((m, i) => ({
+                    id: String(i),
+                    role: (m.role === 'user' ? 'user' : 'agent') as 'user' | 'agent',
+                    body: m.content,
+                })),
+                ...(chatError
+                    ? [
+                          {
+                              id: 'error',
+                              role: 'error' as const,
+                              body: `${t('问答失败', 'Chat failed')}: ${chatError}`,
+                          },
+                      ]
+                    : []),
+            ]}
+        />
+    );
+
+    const composerBlock = (
+        <>
+            <Composer
+                value={draft}
+                onChange={setDraft}
+                onSubmit={send}
+                busy={chatBusy}
+                placeholder={t(
+                    '用自然语言描述任务，引擎会自动决定执行方式…',
+                    'Ask in natural language — the engine handles how…'
+                )}
+                ariaLabel={t('委托输入框', 'Delegation message box')}
+                hint={t('Enter 发送 · Shift+Enter 换行', 'Enter to send · Shift+Enter new line')}
+                sendLabel={t('发送', 'Send')}
+                busyLabel={t('回答中…', 'Thinking…')}
+                textareaRef={textareaRef}
+                model={{
+                    value: model,
+                    onChange: setModel,
+                    options: modelPickerOptions,
+                    fallbackLabel: t('默认模型', 'Default model'),
+                }}
+                effort={{
+                    value: effort,
+                    onChange: (v) => setEffort(v as Effort),
+                    options: [
+                        { value: 'default', label: t('思考：自动', 'Thinking: auto') },
+                        { value: 'low', label: t('思考：低', 'Thinking: low') },
+                        { value: 'medium', label: t('思考：中', 'Thinking: medium') },
+                        { value: 'high', label: t('思考：高', 'Thinking: high') },
+                    ],
+                }}
+                actions={{
+                    popoverTitle: 'AGENT CAPABILITIES',
+                    emptyLabel: t('暂无可用的能力入口', 'No capability entries yet'),
+                    items: composerCapabilities(manifests, lang).map((c) => ({
+                        key: `${c.moduleId}:${c.route}`,
+                        label: c.title,
+                    })),
+                }}
+            />
+            {!convoActive && suggestionChips.length > 0 ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                    {suggestionChips.map((c) => (
+                        <button
+                            key={c.key}
+                            type="button"
+                            onClick={c.onClick}
+                            className={`rounded-full border border-border bg-bg-muted px-3 py-1.5 text-xs text-text-secondary hover:border-brand hover:text-brand ${c.muted ? 'opacity-40' : ''}`}
+                        >
+                            {c.label}
+                        </button>
+                    ))}
+                </div>
+            ) : null}
+        </>
+    );
+
+    if (convoActive) {
+        return (
+            <div className="flex h-full flex-col">
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                    <div className="mx-auto flex max-w-3xl flex-col gap-3 px-4 py-8 md:px-8">
+                        {thread}
+                    </div>
+                </div>
+                <div className="mx-auto w-full max-w-3xl px-4 pb-6 md:px-8">{composerBlock}</div>
+            </div>
+        );
+    }
+
+    const engine = manifests.find((m) => m.id === ENGINE_ID);
+    const engineOffline = !engine || unreachableIds.has(engine.id);
+
     return (
         <div className="h-full overflow-y-auto">
             <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-8 md:px-8">
-                <header className="flex flex-col gap-2">
-                    <h1 className="text-xl font-medium text-text-primary">
+                <header>
+                    <h1 className="font-serif text-[34px] font-normal leading-tight text-text-primary">
+                        <span aria-hidden className="mr-2">
+                            {greetingEmoji(new Date().getHours())}
+                        </span>
                         {greetingText(new Date().getHours(), user?.display_name, lang)}
                     </h1>
-                    <StatusStrip manifests={manifests} unreachableIds={unreachableIds} />
                 </header>
 
-                <Composer
-                    value={draft}
-                    onChange={setDraft}
-                    onSubmit={send}
-                    busy={chatBusy}
-                    placeholder={t(
-                        '用自然语言描述任务，引擎会自动决定执行方式… (Enter 发送，Shift+Enter 换行)',
-                        'Ask in natural language — the engine handles how… (Enter to send, Shift+Enter for a new line)'
-                    )}
-                    ariaLabel={t('委托输入框', 'Delegation message box')}
-                    hint={t(
-                        'Enter 发送 · Shift+Enter 换行',
-                        'Enter to send · Shift+Enter new line'
-                    )}
-                    sendLabel={t('发送', 'Send')}
-                    busyLabel={t('回答中…', 'Thinking…')}
-                    textareaRef={textareaRef}
-                    model={{
-                        value: model,
-                        onChange: setModel,
-                        options: modelOptions,
-                    }}
-                    effort={{
-                        value: effort,
-                        onChange: (v) => setEffort(v as Effort),
-                        options: [
-                            { value: 'default', label: t('思考：默认', 'Thinking: auto') },
-                            { value: 'low', label: t('思考：低', 'Thinking: low') },
-                            { value: 'medium', label: t('思考：中', 'Thinking: medium') },
-                            { value: 'high', label: t('思考：高', 'Thinking: high') },
-                        ],
-                    }}
-                    actions={{
-                        popoverTitle: 'AGENT CAPABILITIES',
-                        emptyLabel: t('暂无可用的能力入口', 'No capability entries yet'),
-                        items: composerCapabilities(manifests, lang).map((c) => ({
-                            key: `${c.moduleId}:${c.route}`,
-                            label: c.title,
-                        })),
-                    }}
-                    chips={suggestionChips}
-                />
+                {engineOffline ? <EngineWarning /> : null}
 
-                {lastDecision ? (
-                    <div
-                        className="rounded-card border border-border bg-bg-muted px-3 py-2 text-xs text-text-secondary"
-                        role="status"
-                    >
-                        {t('路由决策', 'Routing')}:{' '}
-                        {lastDecision.route === 'chat'
-                            ? t('壳级问答', 'Shell chat')
-                            : lastDecision.route === 'cowork'
-                              ? 'Cowork'
-                              : 'Agent Studio'}{' '}
-                        — {lang === 'en' ? lastDecision.reasonEn : lastDecision.reasonZh}
-                    </div>
-                ) : null}
+                {composerBlock}
 
-                {chatMessages.length > 0 || chatError ? (
-                    <section
-                        className="max-h-80 overflow-y-auto rounded-card border border-border bg-bg-elevated px-4 py-3"
-                        aria-label={t('壳级问答', 'Shell chat')}
-                    >
-                        <ChatThread
-                            messages={[
-                                ...chatMessages.map((m, i) => ({
-                                    id: String(i),
-                                    role: (m.role === 'user' ? 'user' : 'agent') as
-                                        | 'user'
-                                        | 'agent',
-                                    body: m.content,
-                                })),
-                                ...(chatError
-                                    ? [
-                                          {
-                                              id: 'error',
-                                              role: 'error' as const,
-                                              body: `${t('问答失败', 'Chat failed')}: ${chatError}`,
-                                          },
-                                      ]
-                                    : []),
-                            ]}
-                        />
-                    </section>
-                ) : null}
-
-                <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-6">
                     <TaskSection
                         icon="▷"
                         title={t('进行中', 'Running')}
                         tasks={running}
-                        emptyTitle={t('暂无进行中的任务', 'No running tasks')}
-                        emptyDesc={t(
-                            '模块任务将跨模块聚合在此展示',
-                            'Module tasks will aggregate here across modules'
-                        )}
-                        renderRow={renderRow}
+                        {...sectionProps}
                     />
                     <TaskSection
                         icon="✓"
                         title={t('最近完成', 'Recently completed')}
                         tasks={recent}
-                        emptyTitle={t(
-                            '最近完成的任务会出现在这里',
-                            'Completed tasks will appear here'
-                        )}
-                        emptyDesc={t(
-                            '完成后可查看产物与引用',
-                            'Inspect artifacts and references once done'
-                        )}
-                        renderRow={renderRow}
+                        {...sectionProps}
                     />
                     <TaskSection
                         icon="⏰"
                         title={t('定时', 'Scheduled')}
                         tasks={scheduled}
-                        emptyTitle={t('暂无定时任务', 'No scheduled tasks')}
-                        emptyDesc={t(
-                            '定时节奏的任务将在此展示',
-                            'Scheduled rhythms will surface here'
-                        )}
-                        renderRow={renderRow}
+                        {...sectionProps}
                     />
                 </div>
 
@@ -670,6 +735,8 @@ export function HomePage({ onOpen }: Props) {
                     lang={lang}
                     onOpen={(m, route) => onOpen(m, route)}
                 />
+
+                <StatusFooter manifests={manifests} unreachableIds={unreachableIds} />
             </div>
         </div>
     );

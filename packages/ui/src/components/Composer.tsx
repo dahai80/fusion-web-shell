@@ -4,12 +4,19 @@ import { StreamingMarkdown } from './StreamingMarkdown';
 export interface ComposerOption {
     value: string;
     label: string;
+    /** Secondary text under the label (raw engine id) — shown in popovers. */
+    hint?: string;
+    /** Chat-capable default-list entry; non-curated items surface only via
+     *  popover search (issue #87 curation contract). */
+    curated?: boolean;
 }
 
 export interface ComposerSelectProps {
     value: string;
     options: ComposerOption[];
     onChange(value: string): void;
+    /** Placeholder-ish label while no option matches (e.g. default model). */
+    fallbackLabel?: string;
 }
 
 export interface ComposerActionItem {
@@ -32,14 +39,12 @@ export interface ComposerProps {
     onSubmit(): void;
     placeholder?: string;
     ariaLabel?: string;
-    /** Optional model select (renders in the action row when provided). */
+    /** Optional model picker (bottom-toolbar text button + popover). */
     model?: ComposerSelectProps;
-    /** Optional effort/thinking select (renders in the action row when provided). */
+    /** Optional effort/thinking picker (bottom-toolbar text button + popover). */
     effort?: ComposerSelectProps;
     /** Optional `+` popover entries (agent capabilities etc.). */
     actions?: { items: ComposerActionItem[]; popoverTitle?: string; emptyLabel?: string };
-    /** Optional suggestion pills attached under the box. */
-    chips?: ComposerChip[];
     /** Row under the box; pass a custom string or false to hide. */
     hint?: string | false;
     busy?: boolean;
@@ -49,12 +54,166 @@ export interface ComposerProps {
     textareaRef?: Ref<HTMLTextAreaElement>;
 }
 
+/** Bottom-toolbar popover (issue #87): a text button that opens a floating
+ *  panel above it, closing on outside mousedown or Escape. */
+function ToolbarPopover({
+    buttonLabel,
+    buttonAria,
+    align = 'left',
+    width = 'w-[240px]',
+    children,
+}: {
+    buttonLabel: ReactNode;
+    buttonAria: string;
+    align?: 'left' | 'right';
+    width?: string;
+    children: (close: () => void) => ReactNode;
+}) {
+    const [open, setOpen] = useState(false);
+    const ref = useRef<HTMLDivElement | null>(null);
+    const close = () => setOpen(false);
+
+    useEffect(() => {
+        if (!open) return;
+        const onDown = (e: MouseEvent) => {
+            if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+        };
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setOpen(false);
+        };
+        document.addEventListener('mousedown', onDown);
+        document.addEventListener('keydown', onKey);
+        return () => {
+            document.removeEventListener('mousedown', onDown);
+            document.removeEventListener('keydown', onKey);
+        };
+    }, [open]);
+
+    return (
+        <div className="relative" ref={ref}>
+            <button
+                type="button"
+                onClick={() => setOpen((v) => !v)}
+                aria-expanded={open}
+                aria-haspopup="dialog"
+                aria-label={buttonAria}
+                className="flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-text-secondary hover:bg-bg-muted hover:text-text-primary"
+            >
+                {buttonLabel}
+                <span aria-hidden className="text-[9px] text-text-muted">
+                    ▾
+                </span>
+            </button>
+            {open ? (
+                <div
+                    role="dialog"
+                    aria-label={buttonAria}
+                    className={`absolute bottom-[32px] z-dropdown max-h-[280px] overflow-y-auto rounded-xl border border-border bg-bg-elevated p-1.5 shadow-overlay ${width} ${align === 'right' ? 'right-0' : 'left-0'}`}
+                >
+                    {children(close)}
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+function OptionRow({
+    option,
+    selected,
+    onPick,
+}: {
+    option: ComposerOption;
+    selected: boolean;
+    onPick(value: string): void;
+}) {
+    return (
+        <button
+            key={option.value}
+            type="button"
+            onClick={() => onPick(option.value)}
+            className={`flex w-full items-start justify-between gap-2 rounded-md px-2 py-1.5 text-left hover:bg-bg-muted ${selected ? 'text-brand' : 'text-text-secondary'}`}
+        >
+            <span className="min-w-0">
+                <span className="block truncate text-xs">{option.label}</span>
+                {option.hint ? (
+                    <span className="block truncate text-[10px] text-text-muted">
+                        {option.hint}
+                    </span>
+                ) : null}
+            </span>
+            {selected ? (
+                <span aria-hidden className="shrink-0 text-xs text-brand">
+                    ✓
+                </span>
+            ) : null}
+        </button>
+    );
+}
+
+/** Model picker (issue #87): search input + curated-by-default list; a
+ *  non-empty query reveals every option (raw ids included). */
+function ModelPicker({ model }: { model: ComposerSelectProps }) {
+    return (
+        <ToolbarPopover
+            buttonAria="model"
+            align="right"
+            width="w-[300px]"
+            buttonLabel={
+                model.options.find((o) => o.value === model.value)?.label ??
+                model.fallbackLabel ??
+                'Model'
+            }
+        >
+            {(close) => <ModelPickerBody model={model} close={close} />}
+        </ToolbarPopover>
+    );
+}
+
+function ModelPickerBody({ model, close }: { model: ComposerSelectProps; close(): void }) {
+    const [query, setQuery] = useState('');
+    const q = query.trim().toLowerCase();
+    const visible = q
+        ? model.options.filter(
+              (o) =>
+                  o.label.toLowerCase().includes(q) ||
+                  o.value.toLowerCase().includes(q) ||
+                  (o.hint ?? '').toLowerCase().includes(q)
+          )
+        : model.options.filter((o) => o.curated !== false);
+    return (
+        <>
+            <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search models…"
+                aria-label="search models"
+                className="mb-1 w-full rounded-md border border-border bg-bg px-2 py-1.5 text-xs text-text-primary outline-none focus:border-brand"
+            />
+            {visible.length === 0 ? (
+                <div className="px-2 py-1 text-xs text-text-muted">No matches</div>
+            ) : (
+                visible.map((o) => (
+                    <OptionRow
+                        key={o.value}
+                        option={o}
+                        selected={o.value === model.value}
+                        onPick={(v) => {
+                            model.onChange(v);
+                            close();
+                        }}
+                    />
+                ))
+            )}
+        </>
+    );
+}
+
 /**
- * Shared chat/delegation composer (issue #55) — one implementation for all
- * products, styled after f-ecommerce's AI Assistant: bordered 14px-radius box
- * with brand focus ring, borderless auto-grow textarea, action row
- * (`+` actions / spacer / model / thinking / Send), Enter-to-send.
- * Token-driven: colors only via @fusion/design-tokens Tailwind names.
+ * Shared chat/delegation composer (issue #55, retooled #87) — claude.ai
+ * input anatomy: rounded-input bordered card with brand focus ring,
+ * borderless auto-grow textarea, bottom toolbar (left `+` attach slot +
+ * capability pill, right model/effort text buttons + brand-blue circular
+ * send button), Enter-to-send. Token-driven via @fusion/design-tokens.
  */
 export function Composer({
     value,
@@ -65,7 +224,6 @@ export function Composer({
     model,
     effort,
     actions,
-    chips,
     hint = 'Enter to send · Shift+Enter new line',
     busy = false,
     disabled = false,
@@ -88,7 +246,7 @@ export function Composer({
 
     return (
         <div className="w-full text-left">
-            <div className="rounded-[14px] border border-border bg-bg-elevated px-3 pb-2 pt-2.5 focus-within:border-brand">
+            <div className="rounded-input border border-border bg-bg-elevated px-3 pb-2 pt-2.5 focus-within:border-brand">
                 <textarea
                     ref={textareaRef}
                     value={value}
@@ -105,17 +263,30 @@ export function Composer({
                     disabled={disabled}
                     className="block max-h-[120px] min-h-[40px] w-full resize-none border-none bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
                 />
-                <div className="mt-1.5 flex items-center gap-2">
+                <div className="mt-1.5 flex items-center gap-1.5">
+                    {/* Attach slot: no upload pipeline yet — kept as the
+                        documented anatomy slot (issue #87). */}
+                    <button
+                        type="button"
+                        disabled
+                        aria-label="attach"
+                        title="Attach"
+                        className="flex h-[30px] w-[30px] items-center justify-center rounded-full p-0 text-base leading-none text-text-muted opacity-50"
+                    >
+                        +
+                    </button>
                     {actions ? (
                         <div className="relative" ref={popRef}>
                             <button
                                 type="button"
                                 onClick={() => setPopOpen((v) => !v)}
                                 aria-expanded={popOpen}
+                                aria-haspopup="dialog"
                                 aria-label="actions"
-                                className="flex h-[30px] w-[30px] items-center justify-center rounded-full border border-border bg-bg-elevated p-0 text-base leading-none text-text-secondary hover:border-brand hover:text-brand"
+                                className="flex items-center gap-1 rounded-full border border-border bg-bg-muted px-2.5 py-1 text-xs text-text-secondary hover:border-brand hover:text-brand"
                             >
-                                +
+                                <span aria-hidden>⚙</span>
+                                <span>Tools</span>
                             </button>
                             {popOpen ? (
                                 <div
@@ -150,60 +321,50 @@ export function Composer({
                         </div>
                     ) : null}
                     <span className="flex-1" />
-                    {model ? (
-                        <select
-                            value={model.value}
-                            onChange={(e) => model.onChange(e.target.value)}
-                            aria-label="model"
-                            className="rounded-lg border border-border bg-bg-elevated px-1.5 py-1 text-xs text-text-secondary"
-                        >
-                            {model.options.map((o) => (
-                                <option key={o.value} value={o.value}>
-                                    {o.label}
-                                </option>
-                            ))}
-                        </select>
-                    ) : null}
+                    {model ? <ModelPicker model={model} /> : null}
                     {effort ? (
-                        <select
-                            value={effort.value}
-                            onChange={(e) => effort.onChange(e.target.value)}
-                            aria-label="effort"
-                            className="rounded-lg border border-border bg-bg-elevated px-1.5 py-1 text-xs text-text-secondary"
+                        <ToolbarPopover
+                            buttonAria="effort"
+                            align="right"
+                            buttonLabel={
+                                effort.options.find((o) => o.value === effort.value)?.label ??
+                                effort.fallbackLabel ??
+                                'Effort'
+                            }
                         >
-                            {effort.options.map((o) => (
-                                <option key={o.value} value={o.value}>
-                                    {o.label}
-                                </option>
-                            ))}
-                        </select>
+                            {(close) => (
+                                <>
+                                    {effort.options.map((o) => (
+                                        <OptionRow
+                                            key={o.value}
+                                            option={o}
+                                            selected={o.value === effort.value}
+                                            onPick={(v) => {
+                                                effort.onChange(v);
+                                                close();
+                                            }}
+                                        />
+                                    ))}
+                                </>
+                            )}
+                        </ToolbarPopover>
                     ) : null}
                     <button
                         type="button"
                         onClick={onSubmit}
                         disabled={busy || disabled || value.trim().length === 0}
-                        className="shrink-0 rounded-lg bg-brand px-3.5 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                        aria-label={busy ? busyLabel : sendLabel}
+                        title={busy ? busyLabel : sendLabel}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-sm text-white hover:bg-brand-hover disabled:opacity-40"
                     >
-                        {busy ? busyLabel : sendLabel}
+                        <span aria-hidden className={busy ? 'animate-pulse' : ''}>
+                            ↑
+                        </span>
                     </button>
                 </div>
             </div>
             {hint !== false ? (
                 <div className="mt-1.5 text-center text-[11.5px] text-text-secondary">{hint}</div>
-            ) : null}
-            {chips && chips.length > 0 ? (
-                <div className="mt-2 flex flex-wrap justify-center gap-2">
-                    {chips.map((c) => (
-                        <button
-                            key={c.key}
-                            type="button"
-                            onClick={c.onClick}
-                            className={`rounded-full border border-border bg-bg-muted px-3 py-1.5 text-xs text-text-secondary hover:border-brand hover:text-brand ${c.muted ? 'opacity-40' : ''}`}
-                        >
-                            {c.label}
-                        </button>
-                    ))}
-                </div>
             ) : null}
         </div>
     );

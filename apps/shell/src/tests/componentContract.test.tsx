@@ -8,12 +8,12 @@ const BASE = {
     onSubmit: () => {},
 };
 
-describe('@fusion/web-ui Composer (issue #55)', () => {
-    it('renders the contract box: 14px radius, focus-within brand ring, borderless textarea', () => {
+describe('@fusion/web-ui Composer (issue #55, retooled #87)', () => {
+    it('renders the contract box: rounded-input, focus-within brand ring, borderless textarea', () => {
         const html = renderToStaticMarkup(
             <Composer {...BASE} placeholder="ask anything" ariaLabel="composer" />
         );
-        expect(html).toContain('rounded-[14px]');
+        expect(html).toContain('rounded-input');
         expect(html).toContain('focus-within:border-brand');
         expect(html).toContain('border-none bg-transparent');
         expect(html).toContain('placeholder="ask anything"');
@@ -25,8 +25,8 @@ describe('@fusion/web-ui Composer (issue #55)', () => {
         expect(html).toContain('max-h-[120px]');
         expect(html).toContain('resize-none');
     });
-    it('model and effort selects render only when provided', () => {
-        const withSelects = renderToStaticMarkup(
+    it('no native select remains; model/effort render as toolbar text buttons only when provided', () => {
+        const withPickers = renderToStaticMarkup(
             <Composer
                 {...BASE}
                 model={{
@@ -47,39 +47,42 @@ describe('@fusion/web-ui Composer (issue #55)', () => {
                 }}
             />
         );
-        expect(withSelects).toContain('aria-label="model"');
-        expect(withSelects).toContain('aria-label="effort"');
-        expect(withSelects).toContain('<option value="m1" selected="">m1</option>');
+        expect(withPickers).not.toContain('<select');
+        expect(withPickers).not.toContain('<option');
+        expect(withPickers).toContain('aria-label="model"');
+        expect(withPickers).toContain('aria-label="effort"');
+        expect(withPickers).toContain('aria-haspopup="dialog"');
 
         const without = renderToStaticMarkup(<Composer {...BASE} />);
         expect(without).not.toContain('aria-label="model"');
         expect(without).not.toContain('aria-label="effort"');
     });
-    it('send button disabled when busy or empty; row order = actions, spacer, selects, send', () => {
+    it('send button is a brand circle: disabled when empty, hover uses brand-hover', () => {
+        const empty = renderToStaticMarkup(<Composer {...BASE} value="" sendLabel="Send" />);
+        expect(empty).toContain('rounded-full bg-brand');
+        expect(empty).toContain('hover:bg-brand-hover');
+        expect(empty).toContain('disabled');
+        const filled = renderToStaticMarkup(<Composer {...BASE} value="hi" sendLabel="Send" />);
+        expect(filled).toContain('aria-label="Send"');
         const busy = renderToStaticMarkup(<Composer {...BASE} busy sendLabel="Send" />);
-        expect(busy).toContain('disabled');
-        expect(busy).toContain('Thinking…');
-        const pos = {
-            actions: busy.indexOf('aria-label="actions"'),
-            spacer: busy.indexOf('flex-1'),
-            model: busy.indexOf('aria-label="model"'),
-            send: busy.lastIndexOf('type="button"'),
-        };
-        expect(pos.actions).toBeLessThan(pos.spacer);
+        expect(busy).toContain('aria-label="Thinking…"');
+        expect(busy).toContain('animate-pulse');
     });
-    it('chips render as suggestion pills under the box', () => {
+    it('chips prop is gone from the composer contract (moved to Home, issue #86)', () => {
+        const html = renderToStaticMarkup(<Composer {...BASE} />);
+        expect(html).not.toContain('suggestion pills');
+    });
+    it('attach slot + capability pill render in the bottom toolbar', () => {
         const html = renderToStaticMarkup(
             <Composer
                 {...BASE}
-                chips={[
-                    { key: 'a', label: 'Tidy desktop', onClick: () => {} },
-                    { key: 'b', label: 'Weekly readout', onClick: () => {} },
-                ]}
+                actions={{ items: [{ key: 'a', label: 'Run graph' }], popoverTitle: 'CAPS' }}
             />
         );
-        expect(html).toContain('Tidy desktop');
-        expect(html).toContain('Weekly readout');
-        expect(html).toContain('rounded-full');
+        expect(html).toContain('aria-label="attach"');
+        expect(html).toContain('aria-label="actions"');
+        expect(html).toContain('⚙');
+        expect(html).toContain('Tools');
     });
     it('hint row shows Enter / Shift+Enter unless disabled', () => {
         const withHint = renderToStaticMarkup(<Composer {...BASE} hint="Enter to send" />);
@@ -93,7 +96,6 @@ describe('@fusion/web-ui Composer (issue #55)', () => {
                 {...BASE}
                 model={{ value: '', onChange: () => {}, options: [] }}
                 effort={{ value: '', onChange: () => {}, options: [] }}
-                chips={[{ key: 'a', label: 'x', onClick: () => {} }]}
             />
         );
         expect(html).not.toMatch(/#[0-9a-f]{3,8}\b/i);
