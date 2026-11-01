@@ -3,8 +3,10 @@ import { describe, expect, it } from 'bun:test';
 import {
     isPageActive,
     rowClickIntent,
+    standaloneEntry,
     syncExpandedWithActive,
     toggleExpanded,
+    unreadApprovalsFor,
 } from '../lib/sidebarTree';
 
 describe('L2 page active state (issue #53)', () => {
@@ -53,5 +55,37 @@ describe('sidebar accordion state (issue #46)', () => {
             expand: false,
             navigate: false,
         });
+    });
+});
+
+describe('standalone first-class entry (issue #92)', () => {
+    const manifests = [
+        { id: 'fusion-cowork', title: '工作流画布' },
+        { id: 'fusion-mlx', title: '推理引擎' },
+    ];
+
+    it('present when the module is registered and granted', () => {
+        expect(standaloneEntry(manifests, () => true, 'fusion-cowork')?.id).toBe('fusion-cowork');
+    });
+
+    it('hidden when not granted (RBAC) or not registered', () => {
+        expect(standaloneEntry(manifests, () => false, 'fusion-cowork')).toBeNull();
+        expect(
+            standaloneEntry(manifests, (id) => id !== 'fusion-cowork', 'fusion-cowork')
+        ).toBeNull();
+        expect(standaloneEntry(manifests, () => true, 'fusion-missing')).toBeNull();
+    });
+
+    it('unread approvals count only counts the module, approvals kind, unread items', () => {
+        const items = [
+            { id: 'a', moduleId: 'fusion-cowork', kind: 'approvals' },
+            { id: 'b', moduleId: 'fusion-cowork', kind: 'approvals' },
+            { id: 'c', moduleId: 'fusion-cowork', kind: 'runs' },
+            { id: 'd', moduleId: 'fusion-mlx', kind: 'approvals' },
+        ];
+        expect(unreadApprovalsFor(items, new Set(['b']), 'fusion-cowork')).toBe(1);
+        expect(unreadApprovalsFor(items, new Set(), 'fusion-cowork')).toBe(2);
+        expect(unreadApprovalsFor(items, new Set(), 'fusion-mlx')).toBe(1);
+        expect(unreadApprovalsFor(items, new Set(), 'fusion-agent-studio')).toBe(0);
     });
 });

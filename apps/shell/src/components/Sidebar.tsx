@@ -3,9 +3,11 @@ import { navigateShell, pathForAdminPage } from '@/lib/adminRoute';
 import {
     isPageActive,
     rowClickIntent,
+    standaloneEntry,
     syncExpandedWithActive,
     syncGroupsWithActive,
     toggleExpanded,
+    unreadApprovalsFor,
 } from '@/lib/sidebarTree';
 import { useAuth } from '@/stores/auth';
 import { t, useLang } from '@/stores/lang';
@@ -16,6 +18,7 @@ import {
     moduleTitle,
     useManifests,
 } from '@/stores/manifests';
+import { useNotifications } from '@/stores/notifications';
 import { usePalette } from '@/stores/palette';
 import { usePrefs } from '@/stores/prefs';
 import { useTabs } from '@/stores/tabs';
@@ -28,6 +31,10 @@ interface Props {
     onOpen(manifest: ModuleManifest, route?: string, pageTitle?: string): void;
     onLogout(): void;
 }
+
+/** Standalone first-class entry module (issue #92, decision D1): Cowork as
+ *  the primary work surface, above the category groups. */
+const COWORK_ID = 'fusion-cowork';
 
 /**
  * Sidebar type scale (issue #53): one tier per hierarchy level, all
@@ -61,7 +68,8 @@ function startNewChat(): void {
 /**
  * Desktop sidebar menu (>= md), two-level per issue #46, claude.ai chrome
  * per issue #88: serif wordmark, full-width "new chat" primary card, search
- * field opening the ⌘K palette, nav groups (unreachable modules greyed with
+ * field opening the ⌘K palette, standalone first-class Cowork entry with an
+ * approvals badge (issue #92), nav groups (unreachable modules greyed with
  * a muted dot, never removed — PRD §5.2), pending-approval entry, footer
  * user row with the settings/users/audit/logout menu. "+" re-opens an
  * already-open module as a second instance (PRD §6). Bilingual per S9.
@@ -81,6 +89,10 @@ export function Sidebar({ onOpen, onLogout }: Props) {
     const lang = useLang((l) => l.lang);
     const setLang = useLang((l) => l.setLang);
     const groups = menuGroups(manifests, canView, false, lang);
+    const cowork = standaloneEntry(manifests, canView, COWORK_ID);
+    const coworkApprovals = useNotifications((s) =>
+        unreadApprovalsFor(s.items, s.readIds, COWORK_ID)
+    );
     const activeTab = tabs.find((tb) => tb.id === activeTabId) ?? null;
     const activeManifestId = activeTab?.manifestId ?? null;
     const [expanded, setExpanded] = useState<string | null>(null);
@@ -158,6 +170,32 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                     <span aria-hidden>⌕</span>
                     {t('搜索… ⌘K', 'Search… ⌘K')}
                 </button>
+                {cowork ? (
+                    <button
+                        type="button"
+                        onClick={() => onOpen(cowork)}
+                        className={`mb-3 flex w-full items-center gap-2 rounded-md px-2 py-2 text-left ${TYPE_SCALE.l1} ${activeManifestId === COWORK_ID ? TYPE_SCALE.l1Active : TYPE_SCALE.l1Idle}`}
+                    >
+                        <span aria-hidden>✳</span>
+                        <span className="truncate">Cowork</span>
+                        {coworkApprovals > 0 ? (
+                            <span
+                                title={t('待审批', 'Pending approvals')}
+                                aria-label={t('待审批', 'Pending approvals')}
+                                className="ml-auto rounded-full bg-warning/20 px-1.5 text-xs font-medium text-warning"
+                            >
+                                {coworkApprovals}
+                            </span>
+                        ) : null}
+                        {unreachableIds.has(COWORK_ID) ? (
+                            <span
+                                title={t('离线', 'Offline')}
+                                aria-label={t('离线', 'Offline')}
+                                className={`${coworkApprovals > 0 ? '' : 'ml-auto'} h-1.5 w-1.5 shrink-0 rounded-full bg-offline`}
+                            />
+                        ) : null}
+                    </button>
+                ) : null}
                 {pendingApprovals > 0 ? (
                     <button
                         type="button"

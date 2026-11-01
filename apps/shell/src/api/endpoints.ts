@@ -1,4 +1,5 @@
 /** Gateway API surface (PRD §4/§5). Backend lives in fusion-gateway (R-1). */
+import { type ShellModel, uniqueModels } from '../lib/modelCatalog';
 import { sharedClient } from './client';
 
 export interface SessionUser {
@@ -69,17 +70,44 @@ export function fetchManifests(): Promise<ManifestDto[]> {
 }
 
 /**
- * Loaded engine models for the global selector (issue #34): fusion-mlx's
- * OpenAI list route reached through the same-origin module proxy.
+ * Session-gated model catalog for the global selector (issue #94,
+ * fusion-gateway#443): the gateway router's full list — local (loaded +
+ * unloaded), cloud backends (glm-5 …) and aliases — so the picker can
+ * offer everything shell chat can actually route to.
  */
-export function fetchEngineModels(): Promise<string[]> {
+export function fetchShellModels(): Promise<ShellModel[]> {
     return sharedClient()
-        .get<{ data?: Array<{ id?: string }> }>('/shell/fusion-mlx/v1/models', { quiet: true })
+        .get<{
+            data?: Array<{
+                id?: string;
+                owned_by?: string;
+                loaded?: boolean;
+                engine_type?: string;
+            }>;
+        }>('/api/v1/shell/models', { quiet: true })
         .then((r) =>
-            (r.data ?? []).map((m) => m.id).filter((id): id is string => typeof id === 'string')
+            uniqueModels(
+                (r.data ?? [])
+                    .filter(
+                        (
+                            m
+                        ): m is {
+                            id: string;
+                            owned_by?: string;
+                            loaded?: boolean;
+                            engine_type?: string;
+                        } => typeof m.id === 'string' && m.id.length > 0
+                    )
+                    .map((m) => ({
+                        id: m.id,
+                        ownedBy: typeof m.owned_by === 'string' ? m.owned_by : '',
+                        loaded: m.loaded === true,
+                        engineType: typeof m.engine_type === 'string' ? m.engine_type : '',
+                    }))
+            )
         )
         .catch((err) => {
-            console.warn('[endpoints] engine model list failed', err);
+            console.warn('[endpoints] shell model catalog failed', err);
             return [];
         });
 }

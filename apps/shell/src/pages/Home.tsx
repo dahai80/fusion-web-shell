@@ -1,7 +1,7 @@
-import { fetchEngineModels } from '@/api/endpoints';
+import { fetchShellModels } from '@/api/endpoints';
 import { pushToast } from '@/components/ToastHost';
 import { composerCapabilities } from '@/lib/composerCapabilities';
-import { modelOptions } from '@/lib/modelCatalog';
+import { type ShellModel, modelOptions } from '@/lib/modelCatalog';
 import { relativeTime } from '@/lib/relativeTime';
 import { useAuth } from '@/stores/auth';
 import { logDelegation, routeDelegation, useDelegation } from '@/stores/delegation';
@@ -422,17 +422,17 @@ export function HomePage({ onOpen }: Props) {
     const projectItems = useProjects((s) => s.items);
     const [approveBusyId, setApproveBusyId] = useState<string | null>(null);
     const [draft, setDraft] = useState('');
-    const [engineModels, setEngineModels] = useState<string[]>([]);
+    const [shellModels, setShellModels] = useState<ShellModel[]>([]);
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
     const byId = new Map(manifests.map((m) => [m.id, m]));
 
-    // Engine model list (issue #50): fetched once, fed to the composer model
-    // popover — curated shell-side (issue #87) over the unchanged engine API.
+    // Model catalog (issue #94): the gateway's session-gated list — local +
+    // cloud + alias — fetched once, curated shell-side (issue #87). Any
+    // authed session may call it; no module grant is involved.
     useEffect(() => {
-        if (!useAuth.getState().canView('fusion-mlx')) return;
-        void fetchEngineModels().then((ids) => {
-            console.log('[home] engine models:', ids.length);
-            setEngineModels(ids);
+        void fetchShellModels().then((models) => {
+            console.log('[home] shell model catalog:', models.length);
+            setShellModels(models);
         });
     }, []);
 
@@ -512,8 +512,8 @@ export function HomePage({ onOpen }: Props) {
     const setModel = usePrefs((s) => s.setModel);
     const effort = usePrefs((s) => s.effort);
     const setEffort = usePrefs((s) => s.setEffort);
-    const modelPickerOptions = modelOptions(engineModels, t('默认模型', 'Default model'));
-    if (model && !engineModels.includes(model)) {
+    const modelPickerOptions = modelOptions(shellModels, t('默认模型', 'Default model'));
+    if (model && !shellModels.some((m) => m.id === model)) {
         modelPickerOptions.push({ value: model, label: model, hint: model, curated: false });
     }
 
