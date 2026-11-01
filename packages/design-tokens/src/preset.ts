@@ -22,10 +22,12 @@ export const fusionPreset: Partial<Config> = {
                 md: radius.md,
                 card: radius.card,
                 lg: radius.lg,
+                input: radius.input,
                 full: radius.full,
             },
             fontFamily: {
                 sans: typography.fontFamily.sans,
+                serif: 'var(--fs-font-serif)',
                 mono: typography.fontFamily.mono,
             },
             fontSize: {
