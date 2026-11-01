@@ -108,6 +108,31 @@ describe('shell-level chat (issue #34)', () => {
         expect(s.messages.map((m) => m.role)).toEqual(['user']);
         expect(s.error).toBe('engine down');
     });
+
+    it('stop() aborts the in-flight chat cleanly (FCS-1 §2): busy clears, no error', async () => {
+        let pending: ((err: Error) => void) | null = null;
+        setChatPoster(
+            (_body, opts) =>
+                new Promise((_resolve, reject) => {
+                    pending = reject;
+                    opts?.signal?.addEventListener('abort', () => {
+                        const e = new Error('aborted');
+                        e.name = 'AbortError';
+                        (pending as (err: Error) => void)(e);
+                    });
+                })
+        );
+        const asking = useDelegation.getState().ask('写一份长报告');
+        expect(useDelegation.getState().busy).toBe(true);
+        useDelegation.getState().stop();
+        await asking.catch(() => undefined);
+        const s = useDelegation.getState();
+        expect(s.busy).toBe(false);
+        expect(s.error).toBeNull();
+        expect(s.messages.map((m) => m.role)).toEqual(['user']);
+        // Stopping while idle is a no-op.
+        expect(() => useDelegation.getState().stop()).not.toThrow();
+    });
 });
 
 describe('global model/effort prefs (issue #34)', () => {

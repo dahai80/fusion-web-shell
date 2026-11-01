@@ -42,7 +42,16 @@ export class ApiClient {
     ): Promise<T> {
         const token = this.tokenProvider();
         const controller = new AbortController();
+        // Caller-provided abort signal (chat stop, FCS-1 §2) rides the same
+        // controller as the request timeout — whichever fires first wins.
+        const external = init.signal;
+        const relay = () => controller.abort();
+        if (external) {
+            if (external.aborted) controller.abort();
+            else external.addEventListener('abort', relay, { once: true });
+        }
         const timeout = setTimeout(() => controller.abort(), init.timeoutMs ?? 15000);
+        const unrelay = () => external?.removeEventListener('abort', relay);
         try {
             const res = await fetch(this.base + path, {
                 ...init,
@@ -98,6 +107,7 @@ export class ApiClient {
             return (await res.json()) as T;
         } finally {
             clearTimeout(timeout);
+            unrelay();
         }
     }
 
@@ -122,10 +132,11 @@ export class ApiClient {
         return this.request<T>(path, { quiet: opts?.quiet });
     }
 
-    post<T>(path: string, body?: unknown): Promise<T> {
+    post<T>(path: string, body?: unknown, opts?: { signal?: AbortSignal }): Promise<T> {
         return this.request<T>(path, {
             method: 'POST',
             body: body === undefined ? undefined : JSON.stringify(body),
+            signal: opts?.signal,
         });
     }
 
