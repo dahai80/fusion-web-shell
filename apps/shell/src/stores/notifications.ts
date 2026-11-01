@@ -36,6 +36,18 @@ const READ_KEY = 'fusion.shell.notifications.read';
 const MAX_READ = 200;
 const MAX_ITEMS_PER_SOURCE = 32;
 
+// #93: a 502/503 mute (issue #46) must not grey a module forever — the
+// upstream usually recovers (engine restart, memory pressure passing), so a
+// muted module is re-probed once this window elapses and a success clears
+// the client-side mark.
+const UNREACHABLE_RECHECK_MS = 60_000;
+const recheckAt = new Map<string, number>();
+
+/** Test seam: direct access to the client-side recheck deadlines. */
+export function recheckDeadlines(): Map<string, number> {
+    return recheckAt;
+}
+
 function loadReadIds(): Set<string> {
     try {
         const raw = localStorage.getItem(READ_KEY);
@@ -94,18 +106,28 @@ export const useNotifications = create<NotificationsState>((set, get) => ({
         }
         const { manifests, unreachableIds } = useManifests.getState();
         const canView = useAuth.getState().canView;
-        const targets = manifests.flatMap((m) =>
-            m.unreachable || unreachableIds.has(m.id) || !canView(m.id)
-                ? []
-                : // kind:tasks feeds the Home task cards (issue #33), not the bell.
-                  (m.notifications ?? [])
-                      .filter((s) => s.kind !== 'tasks')
-                      .map((s) => ({ m, s }))
-        );
+        const now = Date.now();
+        const targets = manifests.flatMap((m) => {
+            if (!canView(m.id)) return [];
+            // Gateway heartbeat says down (PRD §5.2): authoritative, hard skip.
+            if (m.unreachable) return [];
+            // Client-side 502/503 mark (#46): muted only until the recheck
+            // deadline, then probed again so recovery clears the mark (#93).
+            if (unreachableIds.has(m.id) && (recheckAt.get(m.id) ?? 0) > now) return [];
+            // kind:tasks feeds the Home task cards (issue #33), not the bell.
+            return (m.notifications ?? []).filter((s) => s.kind !== 'tasks').map((s) => ({ m, s }));
+        });
         const settled = await Promise.all(
             targets.map(async ({ m, s }) => {
                 try {
                     const data = await fetcher(s.endpoint);
+                    // #93: a source answering again clears a client-side mark —
+                    // the mute was a liveness hint, not a verdict.
+                    if (useManifests.getState().unreachableIds.has(m.id)) {
+                        useManifests.getState().markUnreachable(m.id, false);
+                        recheckAt.delete(m.id);
+                        console.log('[notifications] upstream recovered:', m.id);
+                    }
                     const items = Array.isArray(data?.items) ? data.items : [];
                     return items
                         .slice(0, MAX_ITEMS_PER_SOURCE)
@@ -138,12 +160,18 @@ export const useNotifications = create<NotificationsState>((set, get) => ({
                 } catch (err) {
                     // Issue #46: 502/503 = the module's upstream refuses
                     // connections (stale registration). Mark it unreachable
-                    // once — later polls skip it, killing the 503 spam. The
-                    // gateway heartbeat re-registers on the next real start.
+                    // and mute it until the recheck deadline — later polls
+                    // inside the window skip it, killing the 503 spam (#93
+                    // made the mute expire instead of lasting a session).
                     const status = (err as { status?: number })?.status;
                     if (status === 502 || status === 503) {
                         useManifests.getState().markUnreachable(m.id, true);
-                        console.log('[notifications] upstream down, muted module:', m.id);
+                        recheckAt.set(m.id, Date.now() + UNREACHABLE_RECHECK_MS);
+                        console.log(
+                            '[notifications] upstream down, muted module:',
+                            m.id,
+                            `recheck in ${UNREACHABLE_RECHECK_MS / 1000}s`
+                        );
                     } else {
                         console.warn('[notifications] source rejected:', s.endpoint, err);
                     }
