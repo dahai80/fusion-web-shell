@@ -206,7 +206,7 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                 <button
                     type="button"
                     onClick={startNewChat}
-                    className={`mb-2 flex w-full items-center gap-2 rounded-lg border border-border bg-bg-elevated px-3 py-2.5 text-left text-sm font-medium shadow-sm hover:border-brand ${activeTabId === null ? 'text-brand' : 'text-text-primary'}`}
+                    className={`mb-2 flex w-full items-center gap-2 rounded-lg border border-border bg-bg-elevated px-3 py-2.5 text-left text-sm font-medium fs-elev-1 hover:border-brand ${activeTabId === null ? 'text-brand' : 'text-text-primary'}`}
                 >
                     <span aria-hidden className="text-base leading-none">
                         ＋

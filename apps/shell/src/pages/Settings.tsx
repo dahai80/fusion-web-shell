@@ -3,7 +3,7 @@ import { navigateShell } from '@/lib/adminRoute';
 import { useKeys } from '@/stores/keys';
 import type { ApiKeyRow, IssuedKey, ScopeRow } from '@/stores/keys';
 import { flattenScopes, scopeMatrix } from '@/stores/keys';
-import { t } from '@/stores/lang';
+import { t, useLang } from '@/stores/lang';
 import { useManifests } from '@/stores/manifests';
 import { ConfirmDialog, EmptyState, ErrorState, Skeleton } from '@fusion/web-ui';
 import { useEffect, useMemo, useState } from 'react';
@@ -16,6 +16,7 @@ import { useEffect, useMemo, useState } from 'react';
  * gateway ships K2 (fusion-gateway#262) instead of an error wall.
  */
 export function SettingsPage() {
+    useLang((l) => l.lang);
     const items = useKeys((s) => s.items);
     const loading = useKeys((s) => s.loading);
     const error = useKeys((s) => s.error);

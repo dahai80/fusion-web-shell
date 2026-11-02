@@ -1,3 +1,4 @@
+import { useLang } from '@/stores/lang';
 import { useEffect, useState } from 'react';
 
 export interface Toast {
@@ -69,6 +70,7 @@ const LEVEL_STYLE: Record<Toast['level'], string> = {
 };
 
 export function ToastHost() {
+    useLang((l) => l.lang);
     const [items, setItems] = useState<Toast[]>([]);
     useEffect(() => {
         listeners.add(setItems);

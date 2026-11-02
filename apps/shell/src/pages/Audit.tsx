@@ -8,7 +8,7 @@ import {
     stripAuditPathPrefix,
 } from '@/lib/settingsOps';
 import { useAuth } from '@/stores/auth';
-import { t } from '@/stores/lang';
+import { t, useLang } from '@/stores/lang';
 import { ErrorState } from '@fusion/web-ui';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -19,6 +19,7 @@ import { useCallback, useEffect, useState } from 'react';
  * it ships. Auditor/admin only.
  */
 export function AuditPage() {
+    useLang((l) => l.lang);
     const [entries, setEntries] = useState<AuditEntry[]>([]);
     const [user, setUser] = useState('');
     const [cls, setCls] = useState('');

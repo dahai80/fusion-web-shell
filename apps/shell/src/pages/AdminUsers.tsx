@@ -12,14 +12,14 @@ import {
     sanitizeRoles,
 } from '@/lib/settingsOps';
 import { useAuth } from '@/stores/auth';
-import { t } from '@/stores/lang';
-import { useManifests } from '@/stores/manifests';
+import { t, useLang } from '@/stores/lang';
+import { menuSectionGroups, useManifests } from '@/stores/manifests';
 import type { ModuleManifest } from '@/types/manifest';
 import { ConfirmDialog } from '@fusion/web-ui';
 import { Skeleton } from '@fusion/web-ui';
 import { EmptyState } from '@fusion/web-ui';
 import { ErrorState } from '@fusion/web-ui';
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 
 type LoadState = 'loading' | 'ready' | 'error';
 type AdminTab = 'users' | 'roles' | 'menus';
@@ -43,6 +43,7 @@ export function AdminUsersPage() {
     const [confirmDelete, setConfirmDelete] = useState<api.AdminUserRow | null>(null);
     const manifests = useManifests((s) => s.manifests);
     const me = useAuth((s) => s.user);
+    useLang((l) => l.lang);
     const [roleNames, setRoleNames] = useState<string[]>(DEFAULT_ROLE_NAMES);
     const [newUsername, setNewUsername] = useState('');
     const [newPassword, setNewPassword] = useState('');
@@ -85,7 +86,9 @@ export function AdminUsersPage() {
     const createUser = () => {
         if (!newUsername.trim() || !newPassword || !newRole) {
             setCreateOk(false);
-            setCreateMsg('用户名、密码与角色必填。');
+            setCreateMsg(
+                t('用户名、密码与角色必填。', 'Username, password and role are required.')
+            );
             return;
         }
         api.createUser({
@@ -101,7 +104,7 @@ export function AdminUsersPage() {
             )
             .then(() => {
                 setCreateOk(true);
-                setCreateMsg('用户已创建。');
+                setCreateMsg(t('用户已创建。', 'User created.'));
                 setNewUsername('');
                 setNewPassword('');
                 console.log('[admin] user created:', newUsername, 'role:', newRole);
@@ -109,12 +112,16 @@ export function AdminUsersPage() {
             })
             .catch((err) => {
                 setCreateOk(false);
-                setCreateMsg(formatAdminError(err) || '创建失败。');
+                setCreateMsg(formatAdminError(err) || t('创建失败。', 'Create failed.'));
             });
     };
 
     if (me && !isAdmin) {
-        return <div className="p-6 text-sm text-error">需要管理员角色</div>;
+        return (
+            <div className="p-6 text-sm text-error">
+                {t('需要管理员角色', 'Admin role required')}
+            </div>
+        );
     }
     if (!me) {
         return (
@@ -128,9 +135,14 @@ export function AdminUsersPage() {
         <div className="mx-auto max-w-3xl p-4">
             <div className="mb-3 flex items-center justify-between">
                 <div>
-                    <div className="text-lg text-text-primary">用户与授权管理</div>
+                    <div className="text-lg text-text-primary">
+                        {t('用户与授权管理', 'Users & Permissions')}
+                    </div>
                     <div className="text-xs text-text-muted">
-                        新模块注册后默认无人可见，勾选后才出现在用户菜单
+                        {t(
+                            '新模块注册后默认无人可见，勾选后才出现在用户菜单',
+                            'New modules are visible to no one until granted here'
+                        )}
                     </div>
                 </div>
                 <button
@@ -138,7 +150,7 @@ export function AdminUsersPage() {
                     onClick={() => void reload()}
                     className="fs-btn fs-btn-secondary"
                 >
-                    刷新
+                    {t('刷新', 'Refresh')}
                 </button>
             </div>
             <div
@@ -172,25 +184,27 @@ export function AdminUsersPage() {
             {tab === 'users' ? (
                 <>
                     <div className="mb-4 rounded-card border border-border bg-bg-elevated px-4 py-3">
-                        <div className="mb-2 text-sm text-text-primary">创建用户</div>
+                        <div className="mb-2 text-sm text-text-primary">
+                            {t('创建用户', 'Create User')}
+                        </div>
                         <div className="flex flex-wrap items-center gap-2 text-xs">
                             <input
                                 value={newUsername}
                                 onChange={(e) => setNewUsername(e.target.value)}
-                                placeholder="用户名"
+                                placeholder={t('用户名', 'Username')}
                                 className="w-36 rounded-md border border-border bg-bg px-3 py-2 text-sm text-text-primary"
                             />
                             <input
                                 value={newPassword}
                                 onChange={(e) => setNewPassword(e.target.value)}
                                 type="password"
-                                placeholder="初始密码"
+                                placeholder={t('初始密码', 'Initial password')}
                                 className="w-40 rounded-md border border-border bg-bg px-3 py-2 text-sm text-text-primary"
                             />
                             <select
                                 value={newRole}
                                 onChange={(e) => setNewRole(e.target.value)}
-                                aria-label="角色"
+                                aria-label={t('角色', 'Role')}
                                 className="rounded-md border border-border bg-bg px-2 py-2 text-sm text-text-primary"
                             >
                                 {roleNames.map((r) => (
@@ -204,7 +218,7 @@ export function AdminUsersPage() {
                                 onClick={createUser}
                                 className="fs-btn fs-btn-primary text-xs"
                             >
-                                创建
+                                {t('创建', 'Create')}
                             </button>
                             {createMsg ? (
                                 <span
@@ -224,12 +238,18 @@ export function AdminUsersPage() {
                         </div>
                     ) : null}
                     {state === 'error' ? (
-                        <ErrorState message={error ?? '加载失败'} onRetry={() => void reload()} />
+                        <ErrorState
+                            message={error ?? t('加载失败', 'Load failed')}
+                            onRetry={() => void reload()}
+                        />
                     ) : null}
                     {state === 'ready' && users.length === 0 ? (
                         <EmptyState
-                            title="暂无用户"
-                            description="创建第一个用户后开始分配模块权限；身份后端未同步的用户不会显示在此。"
+                            title={t('暂无用户', 'No users yet')}
+                            description={t(
+                                '创建第一个用户后开始分配模块权限；身份后端未同步的用户不会显示在此。',
+                                'Create the first user to start granting modules; users not synced from the identity backend are hidden.'
+                            )}
                         />
                     ) : null}
                     {state === 'ready' && users.length > 0 ? (
@@ -247,11 +267,11 @@ export function AdminUsersPage() {
                                             </span>
                                             {u.disabled ? (
                                                 <span className="ml-2 rounded-full bg-bg-muted px-2 text-xs text-offline">
-                                                    已禁用
+                                                    {t('已禁用', 'Disabled')}
                                                 </span>
                                             ) : (
                                                 <span className="ml-2 rounded-full bg-success/15 px-2 text-xs text-success">
-                                                    正常
+                                                    {t('正常', 'Active')}
                                                 </span>
                                             )}
                                         </div>
@@ -259,10 +279,19 @@ export function AdminUsersPage() {
                                             {(() => {
                                                 const src = effectiveModuleAccess(u);
                                                 if (src.source === 'admin')
-                                                    return 'admin 角色 · 全部模块';
+                                                    return t(
+                                                        'admin 角色 · 全部模块',
+                                                        'admin role · all modules'
+                                                    );
                                                 if (src.source === 'wildcard')
-                                                    return '通配授权 * · 全部模块';
-                                                return `已授权 ${src.count} 个模块`;
+                                                    return t(
+                                                        '通配授权 * · 全部模块',
+                                                        'wildcard * · all modules'
+                                                    );
+                                                return t(
+                                                    `已授权 ${src.count} 个模块`,
+                                                    `${src.count} modules granted`
+                                                );
                                             })()}
                                             {u.created_at
                                                 ? ` · ${new Date(u.created_at * 1000).toLocaleDateString()}`
@@ -278,11 +307,15 @@ export function AdminUsersPage() {
                                                 .catch((err) =>
                                                     pushToast(
                                                         'error',
-                                                        formatAdminError(err) || '角色更新失败'
+                                                        formatAdminError(err) ||
+                                                            t('角色更新失败', 'Role update failed')
                                                     )
                                                 )
                                         }
-                                        aria-label={`角色: ${u.display_name}`}
+                                        aria-label={t(
+                                            `角色: ${u.display_name}`,
+                                            `Role: ${u.display_name}`
+                                        )}
                                         className="mx-3 shrink-0 rounded-md border border-border bg-bg px-2 py-1.5 text-xs text-text-primary"
                                     >
                                         {(roleNames.includes(u.roles[0] ?? '')
@@ -300,7 +333,7 @@ export function AdminUsersPage() {
                                             onClick={() => setGrantUser(u)}
                                             className="fs-btn fs-btn-secondary text-xs"
                                         >
-                                            授权
+                                            {t('授权', 'Grant')}
                                         </button>
                                         <button
                                             type="button"
@@ -310,7 +343,10 @@ export function AdminUsersPage() {
                                                     .then((r) =>
                                                         pushToast(
                                                             'info',
-                                                            `临时密码: ${r.temp_password}`
+                                                            t(
+                                                                `临时密码: ${r.temp_password}`,
+                                                                `Temp password: ${r.temp_password}`
+                                                            )
                                                         )
                                                     )
                                                     .catch((err) =>
@@ -319,7 +355,7 @@ export function AdminUsersPage() {
                                             }
                                             className="fs-btn fs-btn-secondary text-xs"
                                         >
-                                            重置密码
+                                            {t('重置密码', 'Reset password')}
                                         </button>
                                         <button
                                             type="button"
@@ -335,7 +371,9 @@ export function AdminUsersPage() {
                                             }
                                             className="fs-btn fs-btn-secondary text-xs"
                                         >
-                                            {u.disabled ? '启用' : '禁用'}
+                                            {u.disabled
+                                                ? t('启用', 'Enable')
+                                                : t('禁用', 'Disable')}
                                         </button>
                                         <button
                                             type="button"
@@ -370,10 +408,16 @@ export function AdminUsersPage() {
             <ConfirmDialog
                 open={confirmDelete !== null}
                 danger
-                title={`删除用户 ${confirmDelete?.display_name ?? ''}`}
-                description="删除后该用户无法登录，授权记录一并移除。"
+                title={t(
+                    `删除用户 ${confirmDelete?.display_name ?? ''}`,
+                    `Delete user ${confirmDelete?.display_name ?? ''}`
+                )}
+                description={t(
+                    '删除后该用户无法登录，授权记录一并移除。',
+                    'The user can no longer sign in; grants are removed too.'
+                )}
                 confirmName={confirmDelete?.user_id}
-                confirmLabel="删除"
+                confirmLabel={t('删除', 'Delete')}
                 onCancel={() => setConfirmDelete(null)}
                 onConfirm={() => {
                     if (!confirmDelete) return;
@@ -397,13 +441,10 @@ export function GrantDialog({
     manifests,
 }: { user: api.AdminUserRow; onClose(): void; onSaved(): void; manifests: ModuleManifest[] }) {
     const [selected, setSelected] = useState<Set<string>>(new Set(user.permissions));
-    const cats: Array<'platform' | 'domain' | 'infra' | 'dev'> = [
-        'platform',
-        'domain',
-        'infra',
-        'dev',
-    ];
-    const catLabel = { platform: '平台', domain: '领域', infra: '基础设施', dev: '开发' };
+    // Four-section grouping (#103): same axis as the sidebar taxonomy (#99),
+    // replacing the legacy platform/domain/infra/dev buckets.
+    const lang = useLang((l) => l.lang);
+    const groups = menuSectionGroups(manifests, lang);
     const isAdmin = user.roles.includes('admin');
     const wildcard = selected.has('*');
 
@@ -428,10 +469,15 @@ export function GrantDialog({
             onMouseDown={(e) => e.target === e.currentTarget && onClose()}
         >
             <div className="fs-elev-2 max-h-[80vh] w-full max-w-md overflow-y-auto rounded-card border border-border bg-bg-elevated p-4">
-                <div className="text-base text-text-primary">授权: {user.display_name}</div>
+                <div className="text-base text-text-primary">
+                    {t('授权', 'Grant')}: {user.display_name}
+                </div>
                 {isAdmin ? (
                     <div className="mt-3 rounded-card border border-border bg-bg-muted px-3 py-2 text-xs text-text-secondary">
-                        admin 角色已含全部模块，无需单独授权。
+                        {t(
+                            'admin 角色已含全部模块，无需单独授权。',
+                            'The admin role already covers all modules; no separate grants needed.'
+                        )}
                     </div>
                 ) : (
                     <div className="mt-3 space-y-3">
@@ -440,19 +486,17 @@ export function GrantDialog({
                                 type="checkbox"
                                 checked={wildcard}
                                 onChange={toggleAll}
-                                aria-label="全部模块（通配 *）"
+                                aria-label={t('全部模块（通配 *）', 'All modules (wildcard *)')}
                             />
-                            全部模块
+                            {t('全部模块', 'All modules')}
                             <span className="font-mono text-xs text-text-muted">*</span>
                         </label>
-                        {cats.map((cat) => {
-                            const items = manifests.filter((m) => m.category === cat);
+                        {groups.map((g) => {
+                            const items = g.items;
                             if (items.length === 0) return null;
                             return (
-                                <div key={cat}>
-                                    <div className="pb-1 text-xs text-text-muted">
-                                        {catLabel[cat]}
-                                    </div>
+                                <div key={g.section}>
+                                    <div className="pb-1 text-xs text-text-muted">{g.label}</div>
                                     {items.map((m) => (
                                         <label
                                             key={m.id}
@@ -476,7 +520,7 @@ export function GrantDialog({
                 )}
                 <div className="mt-4 flex justify-end gap-2">
                     <button type="button" onClick={onClose} className="fs-btn fs-btn-secondary">
-                        取消
+                        {t('取消', 'Cancel')}
                     </button>
                     <button
                         type="button"
@@ -489,7 +533,7 @@ export function GrantDialog({
                         }}
                         className="fs-btn fs-btn-primary"
                     >
-                        保存授权
+                        {t('保存授权', 'Save Grants')}
                     </button>
                 </div>
             </div>
@@ -756,6 +800,7 @@ function RolesPanel() {
 const cell = (role: string, menuId: string) => `${role}|${menuId}`;
 
 function MenuPermissionsPanel() {
+    const lang = useLang((l) => l.lang);
     const [menus, setMenus] = useState<MenuPermissionsDoc['menus']>([]);
     const [allRoles, setAllRoles] = useState<string[]>([]);
     const [grid, setGrid] = useState<Set<string>>(new Set());
@@ -921,47 +966,59 @@ function MenuPermissionsPanel() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {menus.map((m) => (
-                                    <tr
-                                        key={m.id}
-                                        className="border-b border-border/40 last:border-0"
-                                    >
-                                        <td className="px-3 py-2 font-medium text-text-primary">
-                                            {m.label}{' '}
-                                            <span className="font-mono text-text-muted">
-                                                ({m.id})
-                                            </span>
-                                        </td>
-                                        {allRoles.map((r) => (
-                                            <td key={r} className="px-3 py-2">
-                                                <input
-                                                    type="checkbox"
-                                                    aria-label={`${m.label} ${r}`}
-                                                    checked={grid.has(cell(r, m.id))}
-                                                    onChange={() => {
-                                                        const next = new Set(grid);
-                                                        const c = cell(r, m.id);
-                                                        if (next.has(c)) next.delete(c);
-                                                        else next.add(c);
-                                                        setGrid(next);
-                                                    }}
-                                                />
-                                            </td>
-                                        ))}
-                                        <td className="px-3 py-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => deleteMenu(m.id)}
-                                                className="fs-btn fs-btn-danger px-2 py-1"
-                                                aria-label={t(
-                                                    `移除菜单 ${m.id}`,
-                                                    `Remove menu ${m.id}`
-                                                )}
+                                {menuSectionGroups(menus, lang).map((g) => (
+                                    <Fragment key={g.section}>
+                                        <tr className="border-b border-border/40 bg-bg-muted/60">
+                                            <td
+                                                colSpan={allRoles.length + 2}
+                                                className="px-3 py-1.5 text-[11px] uppercase tracking-wide text-text-muted"
                                             >
-                                                ✕
-                                            </button>
-                                        </td>
-                                    </tr>
+                                                {g.label}
+                                            </td>
+                                        </tr>
+                                        {g.items.map((m) => (
+                                            <tr
+                                                key={m.id}
+                                                className="border-b border-border/40 last:border-0"
+                                            >
+                                                <td className="px-3 py-2 font-medium text-text-primary">
+                                                    {m.label}{' '}
+                                                    <span className="font-mono text-text-muted">
+                                                        ({m.id})
+                                                    </span>
+                                                </td>
+                                                {allRoles.map((r) => (
+                                                    <td key={r} className="px-3 py-2">
+                                                        <input
+                                                            type="checkbox"
+                                                            aria-label={`${m.label} ${r}`}
+                                                            checked={grid.has(cell(r, m.id))}
+                                                            onChange={() => {
+                                                                const next = new Set(grid);
+                                                                const c = cell(r, m.id);
+                                                                if (next.has(c)) next.delete(c);
+                                                                else next.add(c);
+                                                                setGrid(next);
+                                                            }}
+                                                        />
+                                                    </td>
+                                                ))}
+                                                <td className="px-3 py-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => deleteMenu(m.id)}
+                                                        className="fs-btn fs-btn-danger px-2 py-1"
+                                                        aria-label={t(
+                                                            `移除菜单 ${m.id}`,
+                                                            `Remove menu ${m.id}`
+                                                        )}
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </Fragment>
                                 ))}
                                 {menus.length === 0 ? (
                                     <tr>

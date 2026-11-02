@@ -58,7 +58,10 @@ export function BottomNav({ onOpen, onMore, onHome }: Props) {
                 aria-label="more"
             >
                 <span>⋯</span>
-                <span>更多{more > 0 ? ` (${more})` : ''}</span>
+                <span>
+                    {t('更多', 'More')}
+                    {more > 0 ? ` (${more})` : ''}
+                </span>
             </button>
         </nav>
     );
