@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { ManifestDto } from '../api/endpoints';
-import { syncGroupsWithActive, toggleGroupExpanded } from '../lib/sidebarTree';
+import { groupStatus, syncGroupsWithActive, toggleGroupExpanded } from '../lib/sidebarTree';
 import {
     groupAllUnreachable,
     groupTitle,
@@ -202,5 +202,22 @@ describe('menu permissions section grouping (issue #103)', () => {
             menuSectionGroups([{ id: 'fusion-doc', label: 'Doc', href: '/x', roles: [] }], 'en')[0]
                 ?.label
         ).toBe('Platform');
+    });
+});
+
+describe('group aggregate status (issue #104)', () => {
+    const items: { id: string; moduleId: string; kind: string }[] = [];
+    it('green when any member healthy, priority over events/offline', () => {
+        const members = [{ id: 'a' }, { id: 'b' }];
+        expect(groupStatus(members, new Set(['b']), items, new Set())).toBe('healthy');
+    });
+    it('amber when no healthy member but one has unread events', () => {
+        const members = [{ id: 'a' }, { id: 'b' }];
+        const evs = [{ id: 'i1', moduleId: 'b', kind: 'runs' }];
+        expect(groupStatus(members, new Set(['a']), evs, new Set())).toBe('events');
+    });
+    it('gray only when every member offline', () => {
+        const members = [{ id: 'a' }, { id: 'b' }];
+        expect(groupStatus(members, new Set(['a', 'b']), items, new Set())).toBe('offline');
     });
 });
