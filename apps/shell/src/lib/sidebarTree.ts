@@ -131,6 +131,23 @@ export function moduleStatus(
     return hasEvents ? 'events' : 'healthy';
 }
 
+/**
+ * Aggregate status for a group row (issue #104): priority healthy > events >
+ * offline — green when any member is healthy, amber when none is healthy but
+ * at least one has unread events, gray only when every member is offline.
+ */
+export function groupStatus(
+    members: { id: string }[],
+    unreachableIds: Set<string>,
+    items: { id: string; moduleId: string; kind: string }[],
+    readIds: Set<string>
+): ModuleStatus {
+    const statuses = members.map((m) => moduleStatus(m.id, unreachableIds, items, readIds));
+    if (statuses.some((s) => s === 'healthy')) return 'healthy';
+    if (statuses.some((s) => s === 'events')) return 'events';
+    return 'offline';
+}
+
 /** Dot color + tooltip per status; tokens only (S1). */
 export const MODULE_STATUS_DOT: Record<ModuleStatus, { cls: string; zh: string; en: string }> = {
     healthy: { cls: 'bg-success', zh: '健康', en: 'Healthy' },

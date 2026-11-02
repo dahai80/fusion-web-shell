@@ -3,6 +3,7 @@ import { navigateShell, pathForAdminPage } from '@/lib/adminRoute';
 import {
     MODULE_STATUS_DOT,
     type ModuleStatus,
+    groupStatus,
     isPageActive,
     moduleStatus,
     rowClickIntent,
@@ -271,8 +272,16 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                                                   onClick={() => toggleExpandedGroup(entry.id)}
                                                   className={`flex h-8 w-full items-center justify-between rounded-lg px-2 text-left ${TYPE_SCALE.l1} ${TYPE_SCALE.l1Idle} ${groupAllUnreachable(entry.members, unreachableIds) ? 'text-offline' : ''}`}
                                               >
-                                                  <span className="truncate">
-                                                      {groupTitle(entry, lang)}
+                                                  <span className="flex min-w-0 items-center gap-2">
+                                                      <GroupStatusDot
+                                                          members={entry.members}
+                                                          unreachableIds={unreachableIds}
+                                                          notifItems={notifItems}
+                                                          readIds={readIds}
+                                                      />
+                                                      <span className="truncate">
+                                                          {groupTitle(entry, lang)}
+                                                      </span>
                                                   </span>
                                                   <span
                                                       className={`ml-1 shrink-0 text-xs text-text-muted ${expandedGroups.has(entry.id) ? 'rotate-90' : ''}`}
@@ -413,6 +422,30 @@ function StatusDot({
     readIds: Set<string>;
 }) {
     const status: ModuleStatus = moduleStatus(m.id, unreachableIds, notifItems, readIds);
+    const dot = MODULE_STATUS_DOT[status];
+    const label = t(dot.zh, dot.en);
+    return (
+        <span
+            title={label}
+            aria-label={label}
+            className={`h-2 w-2 shrink-0 rounded-full ${dot.cls}`}
+        />
+    );
+}
+
+/** Aggregate dot for a group row (issue #104): healthy > events > offline. */
+function GroupStatusDot({
+    members,
+    unreachableIds,
+    notifItems,
+    readIds,
+}: {
+    members: ModuleManifest[];
+    unreachableIds: Set<string>;
+    notifItems: { id: string; moduleId: string; kind: string }[];
+    readIds: Set<string>;
+}) {
+    const status = groupStatus(members, unreachableIds, notifItems, readIds);
     const dot = MODULE_STATUS_DOT[status];
     const label = t(dot.zh, dot.en);
     return (
