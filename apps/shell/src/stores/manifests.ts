@@ -12,7 +12,7 @@ import type {
 } from '@/types/manifest';
 import { create } from 'zustand';
 
-export const CATEGORY_ORDER = ['platform', 'domain', 'infra', 'dev'] as const;
+export const CATEGORY_ORDER = ['platform', 'domain', 'infra', 'dev', 'core', 'governance'] as const;
 export type Category = (typeof CATEGORY_ORDER)[number];
 
 /** One sidebar row (issue #71): a flat module, or a collapsible group of them. */
@@ -30,6 +30,8 @@ const CATEGORY_LABEL: Record<Category, string> = {
     domain: '领域',
     infra: '基础设施',
     dev: '开发',
+    core: '主场景',
+    governance: '能力与治理',
 };
 
 const CATEGORY_LABEL_EN: Record<Category, string> = {
@@ -37,10 +39,78 @@ const CATEGORY_LABEL_EN: Record<Category, string> = {
     domain: 'Domain',
     infra: 'Infrastructure',
     dev: 'Dev',
+    core: 'Core',
+    governance: 'Governance',
 };
 
 export function categoryLabel(c: Category, lang: Lang = 'zh'): string {
     return (lang === 'en' ? CATEGORY_LABEL_EN : CATEGORY_LABEL)[c] ?? c;
+}
+
+/**
+ * Four-section menu taxonomy (issue #99, MT-1): fixed order
+ * core → governance → domain → platform, replacing the legacy category
+ * grouping in the sidebar. Sections are shell-side; gateway categories
+ * (incl. the pre-#455 legacy values) map through sectionOf.
+ */
+export const SECTION_ORDER = ['core', 'governance', 'domain', 'platform'] as const;
+export type SectionId = (typeof SECTION_ORDER)[number];
+
+export const SECTION_SORT: Record<SectionId, number> = {
+    core: 10,
+    governance: 20,
+    domain: 30,
+    platform: 40,
+};
+
+const SECTION_LABEL: Record<SectionId, string> = {
+    core: '主场景',
+    governance: '能力与治理',
+    domain: '领域应用',
+    platform: '平台',
+};
+
+const SECTION_LABEL_EN: Record<SectionId, string> = {
+    core: 'Core',
+    governance: 'Governance',
+    domain: 'Domain',
+    platform: 'Platform',
+};
+
+export function sectionLabel(s: SectionId, lang: Lang = 'zh'): string {
+    return (lang === 'en' ? SECTION_LABEL_EN : SECTION_LABEL)[s];
+}
+
+/**
+ * Per-module section pins (issue #99): product lines belong to core and
+ * security is governance regardless of the gateway category they still
+ * carry, until gateway #455 emits the extended enum — the id map is the
+ * shell-side half of that fallback.
+ */
+const SECTION_BY_ID: Record<string, SectionId> = {
+    'fusion-cowork': 'core',
+    'fusion-agent-studio': 'core',
+    'fusion-artifacts': 'core',
+    'fusion-design': 'core',
+    'fusion-code': 'core',
+    'fusion-security': 'governance',
+    'fusion-mlx': 'platform',
+    'fusion-admin': 'platform',
+    'fusion-doc': 'platform',
+};
+
+/** Resolve a manifest's sidebar section: id pin, then new enum, then legacy. */
+export function sectionOf(m: ModuleManifest): SectionId {
+    const pinned = SECTION_BY_ID[m.id];
+    if (pinned) return pinned;
+    if ((SECTION_ORDER as readonly string[]).includes(m.category)) return m.category as SectionId;
+    switch (m.category) {
+        case 'infra':
+        case 'dev':
+            return 'platform';
+        default:
+            return m.category === 'platform' ? 'platform' : 'domain';
+    }
 }
 
 /** Spec S9: menu/tab titles follow host language, falling back to zh title. */
@@ -253,19 +323,24 @@ export function iframeAllowPolicy(m: ModuleManifest): string | undefined {
     return features.map((f) => `${f} 'src'`).join('; ');
 }
 
-/** Filter + group for menu render. desktop: all; mobile: hide desktop-only (PRD §8.1). */
+/**
+ * Filter + group for menu render by the four fixed sections (issue #99).
+ * Visibility is registration + RBAC only (issue #100): unreachable modules
+ * stay listed — health degrades to the status dot, never hides the entry.
+ * desktop: all; mobile: hide desktop-only (PRD §8.1).
+ */
 export function menuGroups(
     manifests: ModuleManifest[],
     canView: (id: string) => boolean,
     mobile: boolean,
     lang: Lang = 'zh'
 ) {
-    return CATEGORY_ORDER.map((cat) => ({
-        category: cat,
-        label: categoryLabel(cat, lang),
+    return SECTION_ORDER.map((section) => ({
+        section,
+        label: sectionLabel(section, lang),
         items: menuEntries(
             manifests
-                .filter((m) => m.category === cat && canView(m.id))
+                .filter((m) => sectionOf(m) === section && canView(m.id))
                 .filter((m) => (mobile ? !m.devices.includes('desktop-only') : true)),
             lang
         ),

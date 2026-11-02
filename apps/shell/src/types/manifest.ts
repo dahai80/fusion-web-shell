@@ -43,7 +43,7 @@ export interface ModuleManifest {
     health?: string | null;
     backend?: string | null;
     devices: DeviceMode[];
-    category: 'platform' | 'domain' | 'infra' | 'dev';
+    category: 'platform' | 'domain' | 'infra' | 'dev' | 'core' | 'governance';
     unreachable?: boolean;
     searchProviders?: SearchProvider[];
     pages?: ModulePage[];

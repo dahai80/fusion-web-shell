@@ -1,8 +1,9 @@
 import { type ErrorEnvelope, sharedClient } from '@/api/client';
+import { ModuleUnavailablePage } from '@/components/ModuleUnavailable';
 import { pushToast } from '@/components/ToastHost';
 import { useViewport } from '@/hooks/useViewport';
 import { t, useLang } from '@/stores/lang';
-import { iframeAllowPolicy, isReadonlyOnMobile } from '@/stores/manifests';
+import { iframeAllowPolicy, isReadonlyOnMobile, useManifests } from '@/stores/manifests';
 import type { ShellTab } from '@/stores/tabs';
 import { useTabs } from '@/stores/tabs';
 import { useTheme } from '@/stores/theme';
@@ -45,13 +46,20 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
     // view-only here, not left to each module's own degradation.
     const viewport = useViewport();
     const readonly = isReadonlyOnMobile(manifest?.devices ?? [], viewport);
+    // Issue #100: a heartbeat-expired module keeps its menu entry; a tab
+    // opened (or retried) while it is down shows the unavailable page until
+    // a manifest refetch (retry button) proves recovery. Already-loaded
+    // tabs keep the existing crash-card flow instead of losing KeepAlive.
+    const unreachable = useManifests((s) => (manifest ? s.unreachableIds.has(manifest.id) : false));
+    // Bumped by the unavailable-page retry to re-run the entry preflight.
+    const [probeKey, setProbeKey] = useState(0);
     const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const iframeRef = useRef<HTMLIFrameElement>(null);
     const bridgeRef = useRef<HostBridgeHandle | null>(null);
 
     // Load-timeout crash detection (works for every module, SDK or not).
     useEffect(() => {
-        if (!tab.src) return;
+        if (!tab.src || unreachable) return;
         setLoaded(false);
         if (timerRef.current) clearTimeout(timerRef.current);
         timerRef.current = setTimeout(() => {
@@ -66,14 +74,15 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
         return () => {
             if (timerRef.current) clearTimeout(timerRef.current);
         };
-    }, [tab.src, tab.id, onCrash]);
+    }, [tab.src, tab.id, onCrash, unreachable]);
 
     // Entry preflight (acceptance F-4 / PRD A4): fetch the module entry with
     // credentials before mounting. Non-200 -> per-tab crash card instead of
     // rendering the gateway error document as tab content. Cross-origin dev
     // entries (FUSION_DEV_MODULES) skip the check — CORS would false-positive.
     useEffect(() => {
-        if (!tab.src) return;
+        void probeKey; // retry bumps this to force a fresh preflight
+        if (!tab.src || unreachable) return;
         setEntryOk(false);
         let crossOrigin = false;
         try {
@@ -121,7 +130,7 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
         return () => {
             cancelled = true;
         };
-    }, [tab.src, tab.id, onCrash]);
+    }, [tab.src, tab.id, onCrash, unreachable, probeKey]);
 
     // Push current shell state into the module. Called at bridge creation and
     // again on iframe load: the first postMessage lands in about:blank and is
@@ -222,6 +231,12 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
             <div className="flex h-full items-center justify-center text-sm text-text-muted">
                 {t('模块未注册', 'Module not registered')}: {tab.manifestId}
             </div>
+        );
+    }
+
+    if (unreachable && !loaded) {
+        return (
+            <ModuleUnavailablePage manifest={manifest} onProbed={() => setProbeKey((k) => k + 1)} />
         );
     }
 

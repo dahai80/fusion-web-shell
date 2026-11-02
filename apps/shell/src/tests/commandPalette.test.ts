@@ -59,7 +59,7 @@ describe('buildNavCommands (G4: navigation source)', () => {
         expect(cmds.map((c) => c.label)).toEqual(['Cowork', 'Cowork · Runs']);
     });
 
-    it('skips ungranted and unreachable modules', () => {
+    it('skips ungranted modules but keeps unreachable ones navigable (issue #100)', () => {
         const manifests = [
             mk({ id: 'fusion-cowork' }),
             mk({ id: 'fusion-mlx', unreachable: true }),
@@ -67,6 +67,9 @@ describe('buildNavCommands (G4: navigation source)', () => {
         ];
         const cmds = buildNavCommands(manifests, canCowork, 'zh');
         expect(cmds.map((c) => c.label)).toEqual(['fusion-cowork']);
+        // RBAC still gates; unreachability no longer removes the command.
+        const all = buildNavCommands(manifests, canAll, 'zh');
+        expect(all.map((c) => c.label)).toEqual(['fusion-cowork', 'fusion-mlx', 'fusion-sec']);
     });
 });
 

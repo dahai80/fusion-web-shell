@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'bun:test';
 import type { ManifestDto } from '../api/endpoints';
-import { isReadonlyOnMobile, menuGroups, moduleTitle, useManifests } from '../stores/manifests';
+import {
+    isReadonlyOnMobile,
+    menuGroups,
+    moduleTitle,
+    sectionOf,
+    useManifests,
+} from '../stores/manifests';
 import type { ModuleManifest } from '../types/manifest';
 
 const mk = (
@@ -19,21 +25,55 @@ const mk = (
 const canAdmin = () => true;
 const canNone = () => false;
 
+describe('sectionOf (issue #99, MT-1 four-section taxonomy)', () => {
+    it('pins product lines to core and security to governance regardless of gateway category', () => {
+        expect(sectionOf(mk('fusion-cowork', 'platform', ['desktop']))).toBe('core');
+        expect(sectionOf(mk('fusion-agent-studio', 'platform', ['desktop']))).toBe('core');
+        expect(sectionOf(mk('fusion-artifacts', 'platform', ['desktop']))).toBe('core');
+        expect(sectionOf(mk('fusion-design', 'platform', ['desktop']))).toBe('core');
+        expect(sectionOf(mk('fusion-code', 'dev', ['desktop']))).toBe('core');
+        expect(sectionOf(mk('fusion-security', 'domain', ['desktop']))).toBe('governance');
+        expect(sectionOf(mk('fusion-mlx', 'platform', ['desktop']))).toBe('platform');
+        expect(sectionOf(mk('fusion-admin', 'infra', ['desktop']))).toBe('platform');
+        expect(sectionOf(mk('fusion-doc', 'infra', ['desktop']))).toBe('platform');
+    });
+    it('passes the extended gateway enum through and maps legacy fallbacks', () => {
+        expect(sectionOf(mk('x', 'core', ['desktop']))).toBe('core');
+        expect(sectionOf(mk('x', 'governance', ['desktop']))).toBe('governance');
+        expect(sectionOf(mk('x', 'platform', ['desktop']))).toBe('platform');
+        expect(sectionOf(mk('x', 'domain', ['desktop']))).toBe('domain');
+        expect(sectionOf(mk('x', 'infra', ['desktop']))).toBe('platform');
+        expect(sectionOf(mk('x', 'dev', ['desktop']))).toBe('platform');
+    });
+});
+
 describe('menuGroups', () => {
-    it('groups by category in fixed order', () => {
+    it('groups by fixed sections core→governance→domain→platform (issue #99)', () => {
         const groups = menuGroups(
             [
-                mk('c', 'dev', ['desktop']),
-                mk('a', 'platform', ['desktop']),
-                mk('b', 'platform', ['desktop']),
+                mk('d', 'domain', ['desktop']),
+                mk('fusion-security', 'domain', ['desktop']),
+                mk('fusion-cowork', 'platform', ['desktop']),
+                mk('fusion-mlx', 'platform', ['desktop']),
             ],
             canAdmin,
             false
         );
-        expect(groups.map((g) => g.category)).toEqual(['platform', 'dev']);
+        expect(groups.map((g) => g.section)).toEqual(['core', 'governance', 'domain', 'platform']);
         expect(groups[0]!.items.map((i) => (i.kind === 'module' ? i.m.id : i.id))).toEqual([
-            'a',
-            'b',
+            'fusion-cowork',
+        ]);
+    });
+    it('keeps unreachable modules listed — health degrades to the dot (issue #100)', () => {
+        const groups = menuGroups(
+            [mk('fusion-cowork', 'platform', ['desktop']), mk('d', 'domain', ['desktop'])],
+            canAdmin,
+            false
+        );
+        // No unreachable filter here: visibility = registration + RBAC only.
+        expect(groups).toHaveLength(2);
+        expect(groups[0]!.items.map((i) => (i.kind === 'module' ? i.m.id : i.id))).toEqual([
+            'fusion-cowork',
         ]);
     });
     it('filters by RBAC: nothing granted -> empty menu (A9)', () => {
