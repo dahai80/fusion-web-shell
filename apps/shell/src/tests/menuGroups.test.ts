@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'bun:test';
 import type { ManifestDto } from '../api/endpoints';
 import { syncGroupsWithActive, toggleGroupExpanded } from '../lib/sidebarTree';
-import { groupAllUnreachable, groupTitle, menuGroups, useManifests } from '../stores/manifests';
+import {
+    groupAllUnreachable,
+    groupTitle,
+    menuGroups,
+    menuSectionGroups,
+    sectionOfId,
+    useManifests,
+} from '../stores/manifests';
 import type { ModuleManifest } from '../types/manifest';
 
 const mk = (
@@ -155,5 +162,45 @@ describe('group reachability + expansion helpers (issue #71)', () => {
         expect(next.has('other')).toBe(true);
         // No active tab: unchanged.
         expect(syncGroupsWithActive(prev, null, [office('docs')])).toEqual(prev);
+    });
+});
+
+describe('menu permissions section grouping (issue #103)', () => {
+    it('sectionOfId pins known ids and defaults unknowns to domain', () => {
+        expect(sectionOfId('fusion-cowork')).toBe('core');
+        expect(sectionOfId('fusion-security')).toBe('governance');
+        expect(sectionOfId('fusion-mlx')).toBe('platform');
+        expect(sectionOfId('fusion-anything-else')).toBe('domain');
+    });
+
+    it('menuSectionGroups buckets rows into the four fixed sections in order', () => {
+        const menus = [
+            { id: 'fusion-mlx', label: 'MLX', href: '/shell/fusion-mlx/', roles: [] },
+            {
+                id: 'fusion-security',
+                label: 'Security',
+                href: '/shell/fusion-security/',
+                roles: [],
+            },
+            { id: 'fusion-cowork', label: 'Cowork', href: '/shell/fusion-cowork/', roles: [] },
+            { id: 'fusion-todo', label: 'Todo', href: '/shell/fusion-todo/', roles: [] },
+        ];
+        const groups = menuSectionGroups(menus);
+        expect(groups.map((g) => g.section)).toEqual(['core', 'governance', 'domain', 'platform']);
+        expect(groups[0]?.items.map((m) => m.id)).toEqual(['fusion-cowork']);
+        expect(groups[3]?.items.map((m) => m.id)).toEqual(['fusion-mlx']);
+    });
+
+    it('empty sections are dropped and labels follow the language', () => {
+        const groups = menuSectionGroups([
+            { id: 'fusion-doc', label: 'Doc', href: '/x', roles: [] },
+        ]);
+        expect(groups).toHaveLength(1);
+        expect(groups[0]?.section).toBe('platform');
+        expect(groups[0]?.label).toBe('平台');
+        expect(
+            menuSectionGroups([{ id: 'fusion-doc', label: 'Doc', href: '/x', roles: [] }], 'en')[0]
+                ?.label
+        ).toBe('Platform');
     });
 });

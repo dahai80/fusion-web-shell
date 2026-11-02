@@ -6,7 +6,7 @@ import { TabManager } from '@/components/TabManager';
 import { TabStrip } from '@/components/TabStrip';
 import { pushToast } from '@/components/ToastHost';
 import { type AdminPageName, navigateShell } from '@/lib/adminRoute';
-import { t } from '@/stores/lang';
+import { t, useLang } from '@/stores/lang';
 import { useManifests } from '@/stores/manifests';
 import { useNotifications } from '@/stores/notifications';
 import { useProjects } from '@/stores/projects';
@@ -32,6 +32,7 @@ const PROJECTS_POLL_MS = 60000;
  * persisted tabs restore once manifests arrive (PRD §6.1).
  */
 export function MainPage({ onLogout, adminPage = null, adminNode }: Props) {
+    useLang((l) => l.lang);
     const openTab = useTabs((s) => s.openTab);
     const activeTabId = useTabs((s) => s.activeTabId);
     const manifestsLoaded = useManifests((s) => s.loaded);

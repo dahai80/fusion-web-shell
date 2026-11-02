@@ -113,6 +113,38 @@ export function sectionOf(m: ModuleManifest): SectionId {
     }
 }
 
+/**
+ * Section for a bare menu id (menu-permissions matrix): only the id pin
+ * applies — gateway matrix rows carry no category, unknown ids default to
+ * domain.
+ */
+export function sectionOfId(id: string): SectionId {
+    return SECTION_BY_ID[id] ?? 'domain';
+}
+
+/**
+ * Group menu rows by the four fixed sections (issue #103): keeps the
+ * /users menu-permissions matrix on the same axis as the sidebar (#99).
+ * Order follows SECTION_ORDER; empty sections are dropped.
+ */
+export function menuSectionGroups<T extends { id: string }>(
+    menus: T[],
+    lang: Lang = 'zh'
+): { section: SectionId; label: string; items: T[] }[] {
+    const buckets = new Map<SectionId, T[]>();
+    for (const m of menus) {
+        const s = sectionOfId(m.id);
+        const list = buckets.get(s) ?? [];
+        list.push(m);
+        buckets.set(s, list);
+    }
+    return SECTION_ORDER.filter((s) => buckets.has(s)).map((s) => ({
+        section: s,
+        label: sectionLabel(s, lang),
+        items: buckets.get(s)!,
+    }));
+}
+
 /** Spec S9: menu/tab titles follow host language, falling back to zh title. */
 export function moduleTitle(m: ModuleManifest, lang: Lang = 'zh'): string {
     return lang === 'en' && m.title_en ? m.title_en : m.title;

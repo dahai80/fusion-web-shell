@@ -1,3 +1,4 @@
+import { t } from '@/stores/lang';
 import { Component, type ReactNode } from 'react';
 
 interface Props {
@@ -24,7 +25,7 @@ export class ErrorBoundary extends Component<Props, State> {
         if (this.state.error) {
             return (
                 <div className="flex h-screen flex-col items-center justify-center gap-3 bg-bg p-8">
-                    <div className="text-error">Shell 内部错误</div>
+                    <div className="text-error">{t('Shell 内部错误', 'Shell internal error')}</div>
                     <div className="max-w-md text-center font-mono text-xs text-text-muted">
                         {this.state.error.message}
                     </div>
@@ -33,7 +34,7 @@ export class ErrorBoundary extends Component<Props, State> {
                         onClick={() => this.setState({ error: null })}
                         className="rounded-md border border-border px-4 py-2 text-sm"
                     >
-                        重试
+                        {t('重试', 'Retry')}
                     </button>
                 </div>
             );

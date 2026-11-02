@@ -63,7 +63,7 @@ export function LoginPage({ onAuthed }: { onAuthed(user: api.SessionUser, token:
 
     return (
         <div className="flex h-screen items-center justify-center bg-bg p-4">
-            <div className="w-full max-w-sm rounded-card border border-border bg-bg-elevated p-6 shadow-md shadow-zinc-900/5">
+            <div className="w-full max-w-sm rounded-card border border-border bg-bg-elevated p-6 shadow-overlay">
                 <div className="font-serif text-2xl font-normal text-text-primary">✳ Fusion</div>
                 <div className="mb-4 mt-1 text-xs text-text-muted">{t('统一登录', 'Sign in')}</div>
                 <label className="block text-xs text-text-muted" htmlFor="username">
