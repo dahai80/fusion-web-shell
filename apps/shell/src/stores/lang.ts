@@ -34,8 +34,10 @@ export const useLang = create<LangState>((set, get) => ({
     },
 }));
 
-// Keep <html lang> in sync from boot.
-document.documentElement.lang = initial() === 'en' ? 'en' : 'zh-CN';
+// Keep <html lang> in sync from boot; DOM absent in non-browser test envs.
+if (typeof document !== 'undefined') {
+    document.documentElement.lang = initial() === 'en' ? 'en' : 'zh-CN';
+}
 
 /** Spec S9: pick copy by active language. */
 export function t(zh: string, en: string): string {

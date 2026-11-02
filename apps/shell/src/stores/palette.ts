@@ -27,7 +27,9 @@ export function buildNavCommands(
 ): PaletteCommand[] {
     const cmds: PaletteCommand[] = [];
     for (const m of manifests) {
-        if (m.unreachable || !canView(m.id)) continue;
+        // Issue #100: unreachable modules stay navigable (the tab shows the
+        // unavailable page); only RBAC hides them.
+        if (!canView(m.id)) continue;
         const title = moduleTitle(m, lang);
         cmds.push({
             id: `nav:${m.id}`,

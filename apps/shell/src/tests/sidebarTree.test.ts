@@ -1,12 +1,16 @@
 import './setup';
 import { describe, expect, it } from 'bun:test';
 import {
+    DEFAULT_EXPANDED_SECTIONS,
+    MODULE_STATUS_DOT,
     isPageActive,
+    moduleStatus,
     rowClickIntent,
     standaloneEntry,
     syncExpandedWithActive,
     toggleExpanded,
     unreadApprovalsFor,
+    unreadCountFor,
 } from '../lib/sidebarTree';
 
 describe('L2 page active state (issue #53)', () => {
@@ -87,5 +91,44 @@ describe('standalone first-class entry (issue #92)', () => {
         expect(unreadApprovalsFor(items, new Set(), 'fusion-cowork')).toBe(2);
         expect(unreadApprovalsFor(items, new Set(), 'fusion-mlx')).toBe(1);
         expect(unreadApprovalsFor(items, new Set(), 'fusion-agent-studio')).toBe(0);
+    });
+});
+
+describe('module status + unread bubbles (issue #99, MT-2)', () => {
+    const items = [
+        { id: 'a', moduleId: 'fusion-cowork', kind: 'approvals' },
+        { id: 'b', moduleId: 'fusion-cowork', kind: 'runs' },
+        { id: 'c', moduleId: 'fusion-cowork', kind: 'runs' },
+        { id: 'd', moduleId: 'fusion-mlx', kind: 'approvals' },
+    ];
+
+    it('three-state status: offline > events > healthy', () => {
+        expect(moduleStatus('fusion-cowork', new Set(['fusion-cowork']), items, new Set())).toBe(
+            'offline'
+        );
+        expect(moduleStatus('fusion-cowork', new Set(), items, new Set())).toBe('events');
+        expect(moduleStatus('fusion-cowork', new Set(), items, new Set(['b', 'c']))).toBe(
+            'healthy'
+        );
+        // Approvals alone are not "running events" — no amber for them.
+        expect(moduleStatus('fusion-mlx', new Set(), items, new Set())).toBe('healthy');
+    });
+
+    it('dot styles + tooltips exist for all three states, bilingual', () => {
+        expect(MODULE_STATUS_DOT.healthy.cls).toBe('bg-success');
+        expect(MODULE_STATUS_DOT.events.cls).toBe('bg-warning');
+        expect(MODULE_STATUS_DOT.offline.cls).toBe('bg-offline');
+        expect(MODULE_STATUS_DOT.offline.en).toBe('Offline');
+    });
+
+    it('unread count covers all kinds and caps rendering at 99+ client-side', () => {
+        expect(unreadCountFor(items, new Set(), 'fusion-cowork')).toBe(3);
+        expect(unreadCountFor(items, new Set(['a']), 'fusion-cowork')).toBe(2);
+        expect(unreadCountFor(items, new Set(), 'fusion-agent-studio')).toBe(0);
+    });
+
+    it('section collapse defaults: domain collapsed, others expanded (MT-3)', () => {
+        expect(DEFAULT_EXPANDED_SECTIONS).toEqual(['core', 'governance', 'platform']);
+        expect(DEFAULT_EXPANDED_SECTIONS.includes('domain')).toBe(false);
     });
 });

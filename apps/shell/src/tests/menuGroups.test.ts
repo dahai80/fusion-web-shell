@@ -36,7 +36,7 @@ describe('menuGroups group entries (issue #71)', () => {
             canAll,
             false
         );
-        const app = groups.find((g) => g.category === 'domain');
+        const app = groups.find((g) => g.section === 'domain');
         expect(app?.items.map((e) => e.kind)).toEqual(['module', 'group']);
         const group = app?.items.find((e) => e.kind === 'group');
         expect(group?.kind === 'group' ? group.members.map((m) => m.id) : []).toEqual([

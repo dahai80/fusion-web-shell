@@ -15,6 +15,8 @@ Fusion 统一前端宿主（union-web host）—— fusion-* 系列模块的统�
 - 桌面 TabStrip：崩溃/中断/错误徽标 + 活跃任务关闭确认（forceClose）；移动抽屉可关标签
 - 侧边栏 "+" 多实例打开；manifests 加载指数退避自动重试（"第 N 次重试中"）；/users 路由懒加载
 - 两级侧边栏（issue #46）：一级 = 模块手风琴行（点击开默认页），二级 = manifest `pages` 页面列表，同时只展开一个模块；活跃模块随标签聚焦自动展开；移动抽屉同款嵌套树
+- 侧栏四组分类法（issue #99，MT-1/2/3）：固定分区 主场景 Core → 能力与治理 Governance → 领域应用 Domain → 平台 Platform（shell 侧 `sectionOf` 将产品线钉入 core，待 gateway #455 扩枚举后收敛），11px 大写分组头、32px 行高 + 精选 16px lucide 图标、三态状态点（绿=健康 / 琥珀=有未读运行·任务·引擎事件 / 灰=离线，带 tooltip）、每模块未读通知计数气泡、分区折叠记忆（领域组默认折叠）
+- 可见性 = 注册 + RBAC（issue #100，MT-D）：心跳过期的模块保留菜单项并显示灰点，点入展示优雅的模块不可用页（重试会重新探测网关健康并在恢复后就地挂载 iframe），不再整项消失；⌘K 导航同样索引不可达但已授权的模块
 - 诚实降级（issue #46）：未上线网关面（adapters/connectors/roles/menu-permissions/audit/config）首次 404/501 即标记本会话待定（sessionStorage），只显示一个静默徽标、不再重复请求；通知源 502/503 将模块标记为不可达，停止对过期注册的 30 秒轮询
 - dev server 端口 11430（符合全仓 11400-11499 段规则，已登记 `architecture/port-registry.yaml`）
 

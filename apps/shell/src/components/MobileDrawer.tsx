@@ -75,7 +75,7 @@ export function MobileDrawer({ open, onClose, onOpenModule, onLogout }: Props) {
                     </div>
                 ) : null}
                 {groups.map((g) => (
-                    <div key={g.category} className="px-4 py-3">
+                    <div key={g.section} className="px-4 py-3">
                         <div className="pb-1 text-xs text-text-muted">{g.label}</div>
                         {g.items.map((entry) =>
                             entry.kind === 'group' ? (
@@ -166,9 +166,11 @@ function MobileModuleButton({
                 className={`flex min-h-[44px] w-full items-center justify-between text-left text-sm ${m.id === activeTabId ? 'text-brand' : 'text-text-primary'} ${unreachable ? 'opacity-40' : ''}`}
             >
                 <span>{moduleTitle(m, lang)}</span>
-                {unreachable ? (
-                    <span className="text-xs text-offline">{t('离线', 'Offline')}</span>
-                ) : null}
+                <span
+                    title={t('离线', 'Offline')}
+                    aria-label={t('离线', 'Offline')}
+                    className={`h-2 w-2 shrink-0 rounded-full ${unreachable ? 'bg-offline' : 'bg-success'}`}
+                />
             </button>
             {(m.pages ?? []).map((page) => {
                 const pageTitle = lang === 'en' && page.title_en ? page.title_en : page.title;
