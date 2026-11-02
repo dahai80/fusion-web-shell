@@ -1,26 +1,10 @@
 /**
  * Pure helpers for the f-ecommerce migration E6 (issue #42): sanitizers for
- * the platform/audit/roles admin surfaces plus the menu-matrix collector.
- * Endpoint contracts live in docs/f-ecommerce-migration-e6.md; the gateway
- * ships them behind /api/v1/shell/* (degradation handled at the pages).
+ * the audit/roles admin surfaces plus the menu-matrix collector. The
+ * adapter/connector/policy settings sections moved to the e-commerce
+ * module's own settings (~/fusion/business/ai-ecommerce/docs/
+ * shell-settings-transfer-1102.md); the gateway surfaces remain.
  */
-
-export interface AdapterRow {
-    platform: string;
-    configured: boolean;
-    enabled: boolean;
-    /** Server-masked credential projection (e.g. {"access_token": "…ab12"}). */
-    credentials_masked: Record<string, string>;
-    rate_limit_rps: number;
-    jitter_ms: number;
-}
-
-export interface ConnectorRow {
-    id: string;
-    kind: string;
-    operations: string[];
-    problems: string[];
-}
 
 export const AUDIT_CLASSES = ['read', 'write', 'approval', 'agent_run', 'config', 'auth'] as const;
 export type AuditClass = (typeof AUDIT_CLASSES)[number];
@@ -55,44 +39,6 @@ function str(v: unknown, fallback = ''): string {
 
 function num(v: unknown, fallback = 0): number {
     return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
-}
-
-export function sanitizeAdapters(raw: unknown): AdapterRow[] {
-    const rows = raw && typeof raw === 'object' ? (raw as { adapters?: unknown }).adapters : null;
-    if (!Array.isArray(rows)) return [];
-    return rows
-        .filter((r): r is Record<string, unknown> => !!r && typeof r === 'object')
-        .map((r) => ({
-            platform: str(r.platform),
-            configured: r.configured === true,
-            enabled: r.enabled === true,
-            credentials_masked:
-                r.credentials_masked && typeof r.credentials_masked === 'object'
-                    ? (r.credentials_masked as Record<string, string>)
-                    : {},
-            rate_limit_rps: num(r.rate_limit_rps),
-            jitter_ms: num(r.jitter_ms),
-        }))
-        .filter((r) => r.platform.length > 0);
-}
-
-export function sanitizeConnectors(raw: unknown): ConnectorRow[] {
-    const rows =
-        raw && typeof raw === 'object' ? (raw as { connectors?: unknown }).connectors : null;
-    if (!Array.isArray(rows)) return [];
-    return rows
-        .filter((r): r is Record<string, unknown> => !!r && typeof r === 'object')
-        .map((r) => ({
-            id: str(r.id),
-            kind: str(r.kind),
-            operations: Array.isArray(r.operations)
-                ? r.operations.filter((o): o is string => typeof o === 'string')
-                : [],
-            problems: Array.isArray(r.problems)
-                ? r.problems.filter((p): p is string => typeof p === 'string')
-                : [],
-        }))
-        .filter((r) => r.id.length > 0);
 }
 
 export function sanitizeAudit(raw: unknown): AuditEntry[] {
@@ -187,64 +133,6 @@ export function auditQueryString(user: string, actionClass: string): string {
     if (actionClass) params.set('action_class', actionClass);
     const q = params.toString();
     return q ? `?${q}` : '';
-}
-
-/** Connector sync example (users of settings.html loadExample) — kept verbatim. */
-export const SYNC_EXAMPLE = {
-    id: 'aws-catalog-sync',
-    kind: 'rest',
-    comment:
-        'Credentials are resolved from the vault: save them once under' +
-        " Adapters with a platform row named 'aws-catalog-sync' (credential_ref).",
-    credential_ref: 'aws-catalog-sync',
-    auth: { type: 'bearer', credential_fields: ['token'] },
-    base_url: 'https://your-api.example.com',
-    operations: {
-        'product.list': {
-            method: 'GET',
-            path: '/v1/products',
-            params: { since: '{since}' },
-            response: { items: '$.products' },
-        },
-        'product.create': { method: 'POST', path: '/v1/products' },
-        'inventory.get': {
-            method: 'GET',
-            path: '/v1/inventory/{sku_id}',
-            response: { available: '$.available' },
-        },
-        'inventory.set': { method: 'POST', path: '/v1/inventory/{sku_id}' },
-        'order.list': {
-            method: 'GET',
-            path: '/v1/orders',
-            params: { updated_after: '{since}' },
-            response: { orders: '$.orders' },
-        },
-    },
-    rate_limit_rps: 2,
-    jitter_ms: 200,
-    error_code_map: {
-        '403': 'auth failed — check vault credentials',
-        '429': 'rate limited — retry later',
-    },
-};
-
-/**
- * Parse a JSON textarea payload; returns an error message on invalid JSON.
- * requireNonEmpty rejects blank input (connector docs and policy overrides
- * must be explicit; adapter credentials keep the `{}` fallback).
- */
-export function parseJsonInput(
-    text: string,
-    opts?: { requireNonEmpty?: boolean }
-): { ok: true; value: unknown } | { ok: false; error: string } {
-    if (opts?.requireNonEmpty && text.trim().length === 0) {
-        return { ok: false, error: 'empty input' };
-    }
-    try {
-        return { ok: true, value: JSON.parse(text || '{}') };
-    } catch (err) {
-        return { ok: false, error: (err as Error).message };
-    }
 }
 
 /**
