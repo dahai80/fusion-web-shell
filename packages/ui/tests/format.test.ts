@@ -56,4 +56,10 @@ describe('formatRelativeTime', () => {
         expect(formatRelativeTime(now - 10_000, now)).toContain('前');
         expect(formatRelativeTime(now - 3 * 60_000, now)).toContain('分钟前');
     });
+
+    it('locale param renders en-US; zh-CN stays the default (issue #107)', () => {
+        const now = Date.now();
+        expect(formatRelativeTime(now - 3 * 60_000, now, 'en-US')).toContain('minutes ago');
+        expect(formatRelativeTime(now - 3 * 60_000, now)).toContain('分钟前');
+    });
 });

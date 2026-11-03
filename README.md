@@ -163,7 +163,7 @@ packages/sdk      # @fusion/web-sdk — postMessage bridge client:
 packages/ui       # @fusion/web-ui — re-exports @fusion/design-tokens tokens/preset,
                   #   shared components (StatusBadge, LogStream, MetricChart,
                   #   DataTable, TaskProgress, EmptyState/ErrorState/Skeleton),
-                  #   formatters, H5 responsive primitives
+                  #   formatters (`formatRelativeTime` takes an optional locale, zh-CN default — issue #107), H5 responsive primitives
 docs/             # Architecture notes, ADRs
 ```
 

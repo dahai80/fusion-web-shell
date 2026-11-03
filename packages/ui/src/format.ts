@@ -6,12 +6,28 @@ const RELATIVE_UNITS: Array<[Intl.RelativeTimeFormatUnit, number]> = [
     ['day', 24 * 60 * 60 * 1000],
 ];
 
-const rtf = new Intl.RelativeTimeFormat('zh-CN', { numeric: 'auto' });
+/** Per-locale formatter cache (issue #107): zh-CN default, modules in en
+ *  mode pass 'en-US' — one Intl.RelativeTimeFormat per locale, built lazily. */
+const rtfCache = new Map<string, Intl.RelativeTimeFormat>();
 
-export function formatRelativeTime(ts: number | Date, now: number = Date.now()): string {
+function rtfFor(locale: string): Intl.RelativeTimeFormat {
+    let rtf = rtfCache.get(locale);
+    if (!rtf) {
+        rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+        rtfCache.set(locale, rtf);
+    }
+    return rtf;
+}
+
+export function formatRelativeTime(
+    ts: number | Date,
+    now: number = Date.now(),
+    locale = 'zh-CN'
+): string {
     const t = ts instanceof Date ? ts.getTime() : ts;
     const diff = t - now;
     const abs = Math.abs(diff);
+    const rtf = rtfFor(locale);
     if (abs < 45 * 1000) return rtf.format(Math.round(diff / 1000), 'second');
     for (const [unit, ms] of RELATIVE_UNITS) {
         if (abs < ms * 45) return rtf.format(Math.round(diff / ms), unit);
