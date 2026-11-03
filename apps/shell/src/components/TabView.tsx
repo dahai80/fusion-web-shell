@@ -2,6 +2,7 @@ import { type ErrorEnvelope, sharedClient } from '@/api/client';
 import { ModuleUnavailablePage } from '@/components/ModuleUnavailable';
 import { pushToast } from '@/components/ToastHost';
 import { useViewport } from '@/hooks/useViewport';
+import { stampLastSeen } from '@/lib/sidebarTree';
 import { t, useLang } from '@/stores/lang';
 import { iframeAllowPolicy, isReadonlyOnMobile, useManifests } from '@/stores/manifests';
 import type { ShellTab } from '@/stores/tabs';
@@ -100,6 +101,9 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
             .then(async (res) => {
                 if (cancelled) return;
                 if (res.ok) {
+                    // #112: an answering entry stamps last-seen for the
+                    // offline tooltip's "last online" line.
+                    stampLastSeen([tab.manifestId]);
                     setEntryError(null);
                     setEntryOk(true);
                     return;
@@ -130,7 +134,7 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
         return () => {
             cancelled = true;
         };
-    }, [tab.src, tab.id, onCrash, unreachable, probeKey]);
+    }, [tab.src, tab.id, tab.manifestId, onCrash, unreachable, probeKey]);
 
     // Push current shell state into the module. Called at bridge creation and
     // again on iframe load: the first postMessage lands in about:blank and is

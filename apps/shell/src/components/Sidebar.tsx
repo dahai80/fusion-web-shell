@@ -5,7 +5,9 @@ import {
     type ModuleStatus,
     groupStatus,
     isPageActive,
+    loadLastSeen,
     moduleStatus,
+    offlineTooltip,
     rowClickIntent,
     syncExpandedWithActive,
     syncGroupsWithActive,
@@ -423,7 +425,15 @@ function StatusDot({
 }) {
     const status: ModuleStatus = moduleStatus(m.id, unreachableIds, notifItems, readIds);
     const dot = MODULE_STATUS_DOT[status];
-    const label = t(dot.zh, dot.en);
+    // Issue #112: offline dots get a diagnose hint + last-online time so a
+    // persistent gray dot is actionable instead of a dead end.
+    const label =
+        status === 'offline'
+            ? t(
+                  offlineTooltip(loadLastSeen()[m.id], Date.now()).zh,
+                  offlineTooltip(loadLastSeen()[m.id], Date.now()).en
+              )
+            : t(dot.zh, dot.en);
     return (
         <span
             title={label}

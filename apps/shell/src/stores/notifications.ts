@@ -1,4 +1,5 @@
 import { sharedClient } from '@/api/client';
+import { stampLastSeen } from '@/lib/sidebarTree';
 import { useAuth } from '@/stores/auth';
 import { useManifests } from '@/stores/manifests';
 import { useTabs } from '@/stores/tabs';
@@ -121,6 +122,9 @@ export const useNotifications = create<NotificationsState>((set, get) => ({
             targets.map(async ({ m, s }) => {
                 try {
                     const data = await fetcher(s.endpoint);
+                    // #112: a successful answer stamps last-seen for the
+                    // offline tooltip's "last online" line.
+                    stampLastSeen([m.id]);
                     // #93: a source answering again clears a client-side mark —
                     // the mute was a liveness hint, not a verdict.
                     if (useManifests.getState().unreachableIds.has(m.id)) {

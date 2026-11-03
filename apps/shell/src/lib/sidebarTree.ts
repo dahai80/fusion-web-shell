@@ -1,3 +1,5 @@
+import { formatRelativeTime } from '@fusion/web-ui';
+
 /**
  * Sidebar accordion state (issue #46): level 1 = product, level 2 = its
  * pages. One product expanded at a time; the active product auto-expands
@@ -154,6 +156,76 @@ export const MODULE_STATUS_DOT: Record<ModuleStatus, { cls: string; zh: string; 
     events: { cls: 'bg-warning', zh: '运行中 · 有事件', en: 'Running · has events' },
     offline: { cls: 'bg-offline', zh: '离线', en: 'Offline' },
 };
+
+/**
+ * Last-seen registry (issue #112): moduleId → last epoch-ms the shell
+ * observed the module answer (notification poll success / tab preflight
+ * ok). Persisted in localStorage, capped — feeds the offline tooltip's
+ * "last online" line.
+ */
+export const LAST_SEEN_KEY = 'fusion.shell.moduleLastSeen';
+const LAST_SEEN_CAP = 64;
+
+export function loadLastSeen(): Record<string, number> {
+    try {
+        const raw = localStorage.getItem(LAST_SEEN_KEY);
+        const obj = raw ? (JSON.parse(raw) as unknown) : {};
+        if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return {};
+        const out: Record<string, number> = {};
+        for (const [k, v] of Object.entries(obj)) {
+            if (typeof k === 'string' && k.length > 0 && typeof v === 'number' && v > 0) out[k] = v;
+        }
+        return out;
+    } catch (err) {
+        console.warn('[sidebar] last-seen load failed', err);
+        return {};
+    }
+}
+
+/** Pure merge (used in tests): stamp ids at ts, most recent wins, cap by age. */
+export function mergeLastSeen(
+    prev: Record<string, number>,
+    ids: string[],
+    ts: number
+): Record<string, number> {
+    const next = { ...prev };
+    for (const id of ids) if (id) next[id] = ts;
+    const entries = Object.entries(next).sort((a, b) => b[1] - a[1]);
+    return Object.fromEntries(entries.slice(0, LAST_SEEN_CAP));
+}
+
+export function persistLastSeen(map: Record<string, number>): void {
+    try {
+        localStorage.setItem(LAST_SEEN_KEY, JSON.stringify(map));
+    } catch (err) {
+        console.warn('[sidebar] last-seen persist failed', err);
+    }
+}
+/** Stamp ids into the persisted last-seen registry (issue #112); shared by
+ *  the notification poll and the tab entry preflight. */
+export function stampLastSeen(ids: string[]): void {
+    if (ids.length === 0) return;
+    persistLastSeen(mergeLastSeen(loadLastSeen(), ids, Date.now()));
+}
+
+/**
+ * Offline diagnose tooltip (issue #112): base label + a diagnose hint, and
+ * the relative last-online time when the shell has seen the module answer
+ * before — makes a persistent gray dot actionable instead of a dead end.
+ */
+export function offlineTooltip(
+    lastSeenTs: number | undefined,
+    now: number
+): { zh: string; en: string } {
+    const seen = lastSeenTs && lastSeenTs > 0 && lastSeenTs <= now ? lastSeenTs : undefined;
+    const hintZh = '离线 · 服务未启动或端口未监听，可用 fusion-sv 启动';
+    const hintEn = 'Offline · service not started or port not listening; start it via fusion-sv';
+    const seenZh =
+        seen !== undefined ? ` · 最后在线 ${formatRelativeTime(lastSeenTs!, now, 'zh-CN')}` : '';
+    const seenEn =
+        seen !== undefined ? ` · last online ${formatRelativeTime(lastSeenTs!, now, 'en-US')}` : '';
+    return { zh: hintZh + seenZh, en: hintEn + seenEn };
+}
 
 /**
  * Section collapse defaults (issue #99, MT-3): core/governance/platform

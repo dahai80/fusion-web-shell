@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'bun:test';
 import type { ManifestDto } from '../api/endpoints';
-import { groupStatus, syncGroupsWithActive, toggleGroupExpanded } from '../lib/sidebarTree';
+import {
+    groupStatus,
+    mergeLastSeen,
+    offlineTooltip,
+    syncGroupsWithActive,
+    toggleGroupExpanded,
+} from '../lib/sidebarTree';
 import {
     groupAllUnreachable,
     groupTitle,
@@ -219,5 +225,27 @@ describe('group aggregate status (issue #104)', () => {
     it('gray only when every member offline', () => {
         const members = [{ id: 'a' }, { id: 'b' }];
         expect(groupStatus(members, new Set(['a', 'b']), items, new Set())).toBe('offline');
+    });
+});
+
+describe('offline tooltip + last-seen registry (issue #112)', () => {
+    it('mergeLastSeen stamps ids, caps by recency', () => {
+        const base = mergeLastSeen({}, ['a', 'b'], 100);
+        expect(base).toEqual({ a: 100, b: 100 });
+        const bumped = mergeLastSeen(base, ['a'], 200);
+        expect(bumped.a).toBe(200);
+        expect(bumped.b).toBe(100);
+        const many = Object.fromEntries(Array.from({ length: 80 }, (_, i) => [`m${i}`, i]));
+        expect(Object.keys(mergeLastSeen(many, ['x'], 999)).length).toBeLessThanOrEqual(64);
+    });
+
+    it('offlineTooltip carries diagnose hint always, last-online only when known', () => {
+        const noSeen = offlineTooltip(undefined, 1000);
+        expect(noSeen.zh).toContain('fusion-sv');
+        expect(noSeen.zh).not.toContain('最后在线');
+        const seen = offlineTooltip(500, 65_000);
+        expect(seen.zh).toContain('最后在线');
+        expect(seen.en).toContain('last online');
+        expect(seen.en).toContain('fusion-sv');
     });
 });
