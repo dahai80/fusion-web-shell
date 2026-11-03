@@ -1,4 +1,12 @@
 import { sharedClient } from '@/api/client';
+import {
+    GROUNDING_CORRECTION_EN,
+    GROUNDING_CORRECTION_ZH,
+    type LoopMessage,
+    claimsArtifactCreation,
+    executeArtifactTool,
+    runChatTurn,
+} from '@/lib/chatTools';
 import { usePrefs } from '@/stores/prefs';
 import { create } from 'zustand';
 
@@ -102,8 +110,9 @@ export interface ChatResponse {
 export type ChatPostFn = (
     body: {
         model: string;
-        messages: ChatMessage[];
+        messages: LoopMessage[];
         stream: boolean;
+        tools?: never;
     },
     opts?: { signal?: AbortSignal }
 ) => Promise<ChatResponse>;
@@ -151,21 +160,39 @@ export const useDelegation = create<DelegationState>((set, get) => ({
         stopRequested = false;
         set({ messages: history, busy: true, error: null });
         try {
-            const resp = await chatPoster(
-                {
-                    model: usePrefs.getState().model,
-                    messages: history,
-                    stream: false,
-                },
+            // Issue #106: the turn runs through the artifacts tool loop —
+            // tool_calls are executed against the gateway module proxy and
+            // fed back until the model answers in plain text.
+            const loop = await runChatTurn(
+                (body) =>
+                    chatPoster(
+                        { model: body.model, messages: body.messages, stream: false },
+                        { signal: chatAbort!.signal }
+                    ),
+                { model: usePrefs.getState().model },
+                history,
+                (name, args) => executeArtifactTool(sharedClient(), name, args),
                 { signal: chatAbort.signal }
             );
-            const content = resp.choices?.[0]?.message?.content?.trim();
-            if (!content) throw new Error('empty response');
+            let content = loop.content;
+            // Grounding guard (#106 fix 2): a creation claim with zero
+            // successful artifact tool call gets a deterministic correction
+            // appended — no phantom success.
+            if (claimsArtifactCreation(content) && !loop.toolCalls.some((c) => c.ok)) {
+                content = `${content}\n\n${GROUNDING_CORRECTION_ZH}${GROUNDING_CORRECTION_EN}`;
+                console.warn('[delegation] grounding guard: artifact claim without tool call');
+            }
             set({
                 messages: [...history, { role: 'assistant', content }],
                 busy: false,
             });
-            console.log('[delegation] chat reply received,', content.length, 'chars');
+            console.log(
+                '[delegation] chat reply received,',
+                content.length,
+                'chars,',
+                'tool calls:',
+                loop.toolCalls.length
+            );
         } catch (err) {
             if ((err as Error).name === 'AbortError' && stopRequested) {
                 console.log('[delegation] chat stopped by user');
