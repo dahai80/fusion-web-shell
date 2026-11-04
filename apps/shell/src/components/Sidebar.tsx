@@ -426,7 +426,9 @@ function CatalogItemDialog({ entry, onClose }: { entry: CatalogEntry; onClose():
             <div className="fs-elev-2 w-full max-w-md rounded-card border border-border bg-bg-elevated p-4">
                 <div className="flex items-center justify-between">
                     <div className="text-base text-text-primary">
-                        {lang === 'en' ? (entry.title_en ?? entry.title) : (entry.title_cn ?? entry.title)}
+                        {lang === 'en'
+                            ? (entry.title_en ?? entry.title)
+                            : (entry.title_cn ?? entry.title)}
                     </div>
                     <span className="rounded-full bg-bg-muted px-2 py-0.5 text-xs text-text-muted">
                         {entry.category || t('产品线', 'product')}
@@ -434,10 +436,10 @@ function CatalogItemDialog({ entry, onClose }: { entry: CatalogEntry; onClose():
                 </div>
                 {entry.description || entry.description_en ? (
                     <div className={detail}>
-                            {lang === 'en'
-                                ? (entry.description_en ?? entry.description)
-                                : (entry.description_cn ?? entry.description)}
-                        </div>
+                        {lang === 'en'
+                            ? (entry.description_en ?? entry.description)
+                            : (entry.description_cn ?? entry.description)}
+                    </div>
                 ) : null}
                 <dl className="mt-3 space-y-1.5 text-xs">
                     {entry.footprint ? (
