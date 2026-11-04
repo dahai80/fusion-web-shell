@@ -1,5 +1,12 @@
 import { HttpError } from './retry';
-import type { DeviceInfo, HostEvent, HostResponse, ModuleRequest, ThemeMode } from './types';
+import type {
+    DeviceInfo,
+    HostEvent,
+    HostResponse,
+    ModuleRequest,
+    ShellModelInfo,
+    ThemeMode,
+} from './types';
 
 export interface HostBridgeOptions {
     /** Allowed module origin. Default: same origin as the host document. */
@@ -17,6 +24,8 @@ export interface HostBridgeOptions {
     }): Promise<{ status: number; data: unknown }>;
     /** Effective model resolution for module.get (issue #114). */
     getModel?(moduleId?: string): Promise<string>;
+    /** Full model environment for model-env (issue #118). */
+    getModelEnv?(moduleId?: string): Promise<ShellModelInfo>;
 }
 
 /** Issue #75: handleRequest returns bare strings ('theme'), plain objects
@@ -222,6 +231,13 @@ export function createHostBridge(
                 const moduleId = (msg.payload as { moduleId?: string } | null)?.moduleId;
                 if (!options.getModel) return '';
                 return options.getModel(moduleId);
+            }
+            case 'model-env': {
+                // Issue #118: full model environment; absent handler = older
+                // host — degrade to a capability-less env, not an error.
+                const moduleId = (msg.payload as { moduleId?: string } | null)?.moduleId;
+                if (!options.getModelEnv) return { modelCapable: false, allowlist: [] };
+                return options.getModelEnv(moduleId);
             }
             default:
                 throw new Error(`unknown bridge method: ${(msg as ModuleRequest).method}`);

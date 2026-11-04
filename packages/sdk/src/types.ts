@@ -78,14 +78,34 @@ export interface FusionShellSdk {
     model: {
         get(moduleId?: string): Promise<string>;
         subscribe(listener: (model: string) => void): () => void;
+        /**
+         * Full model environment for the embedding session (issue #118):
+         * module-declared capability/suggestion plus platform policy state.
+         * Cached per moduleId; invalidated by the host policy-change push.
+         */
+        env(moduleId?: string): Promise<ShellModelInfo>;
     };
+}
+
+/** Issue #118: resolved model environment exposed to module SDKs. */
+export interface ShellModelInfo {
+    /** Module manifest declares model_capable. */
+    modelCapable: boolean;
+    /** Module manifest suggestion (schema v3). */
+    suggestedModel?: string;
+    /** Platform-resolved model (policy chain, issue #114). */
+    platformModel?: string;
+    /** Platform privacy mode; undefined while the policy API is pending. */
+    privacyMode?: 'standard' | 'local_only';
+    /** Tenant user allowlist; undefined while the policy API is pending. */
+    allowlist?: string[];
 }
 
 /** Messages sent from module iframe to host. */
 export interface ModuleRequest {
     type: 'request';
     id: string;
-    method: 'http' | 'toast' | 'tab' | 'theme' | 'devices' | 'model';
+    method: 'http' | 'toast' | 'tab' | 'theme' | 'devices' | 'model' | 'model-env';
     payload: unknown;
 }
 

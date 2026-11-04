@@ -173,6 +173,26 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
             origin: new URL(tab.src, window.location.origin).origin,
             getToken: () => sessionStorage.getItem('fusion.shell.token') ?? null,
             getModel: (moduleId) => useModelPolicy.getState().effective(moduleId ?? tab.manifestId),
+            // Issue #118: full model environment — module-declared capability
+            // + suggestion, platform-resolved model, privacy/allowlist state
+            // (undefined while the gateway policy API is pending).
+            getModelEnv: async (moduleId) => {
+                const id = moduleId ?? tab.manifestId;
+                const m = useManifests.getState().manifests.find((x) => x.id === id);
+                const state = useModelPolicy.getState();
+                const ready = state.loaded && !state.gatewayPending;
+                return {
+                    modelCapable: m?.model_capable === true,
+                    suggestedModel: m?.suggested_model,
+                    platformModel: state.effectiveSync(id),
+                    privacyMode: ready
+                        ? state.policy.privacy_mode === 'local_only'
+                            ? 'local_only'
+                            : 'standard'
+                        : undefined,
+                    allowlist: ready ? state.policy.user_allowlist : undefined,
+                };
+            },
             onToast: (input) => {
                 const level = (['info', 'success', 'warning', 'error'] as const).includes(
                     input.level as 'info'

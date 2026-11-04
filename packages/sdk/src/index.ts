@@ -7,6 +7,7 @@ import type {
     HttpRequestInit,
     HttpResult,
     ModuleRequest,
+    ShellModelInfo,
     ShellSdkOptions,
     ThemeMode,
     ToastInput,
@@ -193,12 +194,14 @@ function standaloneSdk(log: BridgeDeps['log']): FusionShellSdk {
                 return () => obs.disconnect();
             },
         },
-        // Standalone: no host policy plane — empty model = gateway default.
+        // Standalone: no host policy plane — empty model = gateway default,
+        // no declared capability/allowlist (issue #118).
         model: {
             get: async () => '',
             subscribe() {
                 return () => undefined;
             },
+            env: async () => ({ modelCapable: false, allowlist: [] }),
         },
     };
 }
@@ -269,6 +272,8 @@ export function createShellSdk(options?: ShellSdkOptions): FusionShellSdk {
     // model-policy push, which also notifies subscribers with the fresh value.
     const modelCache = new Map<string, string>();
     const modelListeners = new Set<(model: string) => void>();
+    // Issue #118: env cache shares the model-policy invalidation.
+    const envCache = new Map<string, ShellModelInfo>();
     bridge.eventListeners.set(
         'model-policy',
         new Set([
@@ -283,6 +288,7 @@ export function createShellSdk(options?: ShellSdkOptions): FusionShellSdk {
                 } else {
                     modelCache.clear();
                 }
+                envCache.clear();
                 modelListeners.forEach((fn) => fn(modelCache.get('') ?? ''));
             },
         ])
@@ -409,6 +415,16 @@ export function createShellSdk(options?: ShellSdkOptions): FusionShellSdk {
             subscribe(listener) {
                 modelListeners.add(listener);
                 return () => modelListeners.delete(listener);
+            },
+            async env(moduleId?: string) {
+                const key = moduleId ?? '';
+                const hit = envCache.get(key);
+                if (hit) return hit;
+                const info = await bridge.call<ShellModelInfo>('model-env', {
+                    moduleId: key,
+                });
+                envCache.set(key, info);
+                return info;
             },
         },
     };
