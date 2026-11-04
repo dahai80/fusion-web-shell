@@ -1,10 +1,16 @@
+import { fetchShellModels } from '@/api/endpoints';
 import { pushToast } from '@/components/ToastHost';
 import { navigateShell } from '@/lib/adminRoute';
+import { type ShellModel, friendlyModelName, isChatModelInfo } from '@/lib/modelCatalog';
+import { type ModelPolicy, pickerFilter } from '@/lib/modelPolicy';
+import { useAuth } from '@/stores/auth';
 import { useKeys } from '@/stores/keys';
 import type { ApiKeyRow, IssuedKey, ScopeRow } from '@/stores/keys';
 import { flattenScopes, scopeMatrix } from '@/stores/keys';
 import { t, useLang } from '@/stores/lang';
 import { useManifests } from '@/stores/manifests';
+import { useModelPolicy } from '@/stores/modelPolicy';
+import { usePrefs } from '@/stores/prefs';
 import { ConfirmDialog, EmptyState, ErrorState, Skeleton } from '@fusion/web-ui';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -125,6 +131,8 @@ export function SettingsPage() {
                     )}
                 </div>
             ) : null}
+
+            <ModelPolicySection />
 
             <div className="mb-6 rounded-card border border-border bg-bg-elevated p-4">
                 <div className="text-sm text-text-primary">{t('申请新密钥', 'Create new key')}</div>
@@ -342,3 +350,278 @@ function PlaintextDialog({ issued, onClose }: { issued: IssuedKey; onClose(): vo
         </div>
     );
 }
+
+/**
+ * Model settings (issue #114): admin edits the tenant policy (default,
+ * per-module overrides for model_capable modules, user allowlist, privacy
+ * mode); non-admins get a read-only view plus a personal picker constrained
+ * by the allowlist and privacy mode. The gateway policy API
+ * (fusion-gateway#486) is pending — until it ships the section degrades to
+ * a notice and the personal picker stays unconstrained.
+ */
+function ModelPolicySection() {
+    useLang((l) => l.lang);
+    const user = useAuth((s) => s.user);
+    const isAdmin = !!user && (user.roles.includes('admin') || user.permissions.includes('*'));
+    const policy = useModelPolicy((s) => s.policy);
+    const loaded = useModelPolicy((s) => s.loaded);
+    const pending = useModelPolicy((s) => s.gatewayPending);
+    const loadError = useModelPolicy((s) => s.error);
+    const load = useModelPolicy((s) => s.load);
+    const save = useModelPolicy((s) => s.save);
+    const manifests = useManifests((s) => s.manifests);
+    const personalModel = usePrefs((s) => s.model);
+    const setPersonalModel = usePrefs((s) => s.setModel);
+    const [models, setModels] = useState<ShellModel[]>([]);
+    const [draft, setDraft] = useState<ModelPolicy | null>(null);
+    const [busy, setBusy] = useState(false);
+
+    useEffect(() => {
+        void load();
+    }, [load]);
+    useEffect(() => {
+        void fetchShellModels()
+            .then((list) => {
+                setModels(list.filter(isChatModelInfo));
+            })
+            .catch((err) => console.warn('[settings] model catalog failed', err));
+    }, []);
+    // Editing buffer mirrors the server policy once it arrives.
+    useEffect(() => {
+        if (loaded && draft === null) {
+            setDraft({
+                ...policy,
+                module_overrides: { ...policy.module_overrides },
+                user_allowlist: [...policy.user_allowlist],
+            });
+        }
+    }, [loaded, policy, draft]);
+
+    const chatModels = useMemo(() => models, [models]);
+    const capableModules = useMemo(
+        () => manifests.filter((m) => m.model_capable === true),
+        [manifests]
+    );
+    // Personal picker: allowlist + privacy constrained (empty allowlist = all).
+    const personalOptions = useMemo(
+        () => pickerFilter(chatModels, loaded && !pending ? policy : FALLBACK),
+        [chatModels, policy, loaded, pending]
+    );
+
+    const onSave = async () => {
+        if (!draft || busy) return;
+        setBusy(true);
+        try {
+            await save(draft);
+            pushToast(
+                'success',
+                t('模型策略已保存并即时生效', 'Model policy saved and hot-applied')
+            );
+            console.log('[settings] model policy saved');
+        } catch (err) {
+            pushToast('error', (err as Error).message);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const selectCls = 'rounded-md border border-border bg-bg px-2 py-1.5 text-sm text-text-primary';
+
+    return (
+        <div className="mb-6 rounded-card border border-border bg-bg-elevated p-4">
+            <div className="text-sm text-text-primary">{t('模型设置', 'Model settings')}</div>
+            <div className="mt-1 text-xs text-text-muted">
+                {t(
+                    '生效链：模块覆盖 > 个人偏好（允许列表内） > 租户默认 > 网关默认',
+                    'Chain: module override > personal preference (allowlist) > tenant default > gateway default'
+                )}
+            </div>
+
+            {pending ? (
+                <div className="mt-3 text-sm text-text-secondary">
+                    {t(
+                        '网关尚未提供模型策略 API（fusion-gateway#486 待上线）。届时本区块自动可用。',
+                        'The gateway model-policy API is not shipped yet (fusion-gateway#486). This section becomes usable once it lands.'
+                    )}
+                </div>
+            ) : null}
+            {loadError ? <ErrorState message={loadError} onRetry={() => void load()} /> : null}
+
+            {!pending && !loadError ? (
+                <>
+                    {!isAdmin ? (
+                        <div className="mt-3 flex flex-wrap items-center gap-3">
+                            <span className="text-sm text-text-secondary">
+                                {t('个人偏好模型', 'Personal model')}
+                            </span>
+                            <select
+                                value={personalModel}
+                                onChange={(e) => {
+                                    setPersonalModel(e.target.value);
+                                    console.log('[settings] personal model set:', e.target.value);
+                                }}
+                                className={selectCls}
+                            >
+                                <option value="">{t('默认模型', 'Default model')}</option>
+                                {personalModel &&
+                                !personalOptions.some((m) => m.id === personalModel) ? (
+                                    <option value={personalModel}>{personalModel}</option>
+                                ) : null}
+                                {personalOptions.map((m) => (
+                                    <option key={m.id} value={m.id}>
+                                        {friendlyModelName(m.id)}
+                                    </option>
+                                ))}
+                            </select>
+                            {loaded ? (
+                                <span className="text-xs text-text-muted">
+                                    {t('租户默认', 'Tenant default')}:{' '}
+                                    {policy.default_model || t('未设置', 'unset')}
+                                    {' · '}
+                                    {t('隐私模式', 'Privacy')}:{' '}
+                                    {policy.privacy_mode === 'local_only'
+                                        ? t('仅本地模型', 'local-only')
+                                        : t('全部模型', 'all')}
+                                </span>
+                            ) : null}
+                        </div>
+                    ) : null}
+
+                    {isAdmin && draft ? (
+                        <>
+                            <div className="mt-3 flex flex-wrap items-center gap-3">
+                                <span className="text-sm text-text-secondary">
+                                    {t('租户默认模型', 'Tenant default model')}
+                                </span>
+                                <select
+                                    value={draft.default_model}
+                                    onChange={(e) =>
+                                        setDraft({ ...draft, default_model: e.target.value })
+                                    }
+                                    className={selectCls}
+                                >
+                                    <option value="">{t('未设置', 'None')}</option>
+                                    {chatModels.map((m) => (
+                                        <option key={m.id} value={m.id}>
+                                            {friendlyModelName(m.id)}
+                                        </option>
+                                    ))}
+                                </select>
+                                <label className="flex items-center gap-1.5 text-sm text-text-secondary">
+                                    <input
+                                        type="checkbox"
+                                        checked={draft.privacy_mode === 'local_only'}
+                                        onChange={(e) =>
+                                            setDraft({
+                                                ...draft,
+                                                privacy_mode: e.target.checked
+                                                    ? 'local_only'
+                                                    : 'all',
+                                            })
+                                        }
+                                    />
+                                    {t('隐私模式：仅本地模型', 'Privacy mode: local-only')}
+                                </label>
+                            </div>
+
+                            <div className="mt-3">
+                                <div className="text-sm text-text-secondary">
+                                    {t('用户可选列表', 'User allowlist')}
+                                    <span className="ml-2 text-xs text-text-muted">
+                                        {t('不勾选 = 不限制', 'none checked = unrestricted')}
+                                    </span>
+                                </div>
+                                <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                                    {chatModels.map((m) => (
+                                        <label
+                                            key={m.id}
+                                            className="flex items-center gap-1.5 text-xs text-text-secondary"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={draft.user_allowlist.includes(m.id)}
+                                                onChange={(e) =>
+                                                    setDraft({
+                                                        ...draft,
+                                                        user_allowlist: e.target.checked
+                                                            ? [...draft.user_allowlist, m.id]
+                                                            : draft.user_allowlist.filter(
+                                                                  (x) => x !== m.id
+                                                              ),
+                                                    })
+                                                }
+                                            />
+                                            {friendlyModelName(m.id)}
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {capableModules.length > 0 ? (
+                                <div className="mt-3">
+                                    <div className="text-sm text-text-secondary">
+                                        {t('模块覆盖', 'Module overrides')}
+                                    </div>
+                                    {capableModules.map((mod) => (
+                                        <div
+                                            key={mod.id}
+                                            className="mt-1 flex flex-wrap items-center gap-2"
+                                        >
+                                            <span className="min-w-48 text-sm text-text-primary">
+                                                {mod.title}
+                                                <span className="ml-2 font-mono text-xs text-text-muted">
+                                                    {mod.id}
+                                                </span>
+                                            </span>
+                                            <select
+                                                value={draft.module_overrides[mod.id] ?? ''}
+                                                onChange={(e) => {
+                                                    const next = { ...draft.module_overrides };
+                                                    if (e.target.value)
+                                                        next[mod.id] = e.target.value;
+                                                    else delete next[mod.id];
+                                                    setDraft({ ...draft, module_overrides: next });
+                                                }}
+                                                className={selectCls}
+                                            >
+                                                <option value="">{t('继承', 'Inherit')}</option>
+                                                {chatModels.map((m) => (
+                                                    <option key={m.id} value={m.id}>
+                                                        {friendlyModelName(m.id)}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            {mod.suggested_model ? (
+                                                <span className="text-xs text-text-muted">
+                                                    {t('模块建议', 'suggested')}:{' '}
+                                                    {mod.suggested_model}
+                                                </span>
+                                            ) : null}
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : null}
+
+                            <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => void onSave()}
+                                className="mt-4 fs-btn fs-btn-primary disabled:opacity-40"
+                            >
+                                {busy ? t('保存中…', 'Saving…') : t('保存并生效', 'Save & apply')}
+                            </button>
+                        </>
+                    ) : null}
+                </>
+            ) : null}
+        </div>
+    );
+}
+
+/** Neutral policy used for picker filtering while the API is pending. */
+const FALLBACK: ModelPolicy = {
+    default_model: '',
+    module_overrides: {},
+    user_allowlist: [],
+    privacy_mode: 'all',
+};

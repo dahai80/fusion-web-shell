@@ -5,6 +5,7 @@ import { useViewport } from '@/hooks/useViewport';
 import { stampLastSeen } from '@/lib/sidebarTree';
 import { t, useLang } from '@/stores/lang';
 import { iframeAllowPolicy, isReadonlyOnMobile, useManifests } from '@/stores/manifests';
+import { MODEL_POLICY_EVENT, useModelPolicy } from '@/stores/modelPolicy';
 import type { ShellTab } from '@/stores/tabs';
 import { useTabs } from '@/stores/tabs';
 import { useTheme } from '@/stores/theme';
@@ -161,6 +162,8 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
         const setTask = useTabs.getState().setActiveTask;
         const setErr = useTabs.getState().setTransientError;
         const bridge = createHostBridge(tab.id, iframeWindow, {
+            // Issue #114: module model.get resolves through the policy store
+            // (gateway preference endpoint, host token; local chain fallback).
             // Explicit module origin: the bridge is created while the iframe
             // still shows about:blank, so the SDK's origin snapshot resolves
             // to the HOST origin — and every host->module push (theme/lang/
@@ -169,6 +172,7 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
             // resolves to the host origin, dev override to the module origin.
             origin: new URL(tab.src, window.location.origin).origin,
             getToken: () => sessionStorage.getItem('fusion.shell.token') ?? null,
+            getModel: (moduleId) => useModelPolicy.getState().effective(moduleId ?? tab.manifestId),
             onToast: (input) => {
                 const level = (['info', 'success', 'warning', 'error'] as const).includes(
                     input.level as 'info'
@@ -211,6 +215,17 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
             HEARTBEAT_TIMEOUT_MS
         );
 
+        // Issue #114: policy changes hot-apply — push the fresh effective
+        // model for this module so the SDK cache invalidates live.
+        const onModelPolicy = () => {
+            void useModelPolicy
+                .getState()
+                .effective(tab.manifestId)
+                .then((model) => bridge.notifyModelPolicy({ moduleId: tab.manifestId, model }))
+                .catch((err) => console.warn('[tab-view] model policy push failed', err));
+        };
+        window.addEventListener(MODEL_POLICY_EVENT, onModelPolicy);
+
         // Theme / visibility / lang propagation to this tab's module.
         const onTheme = (e: Event) =>
             bridge.notifyTheme((e as CustomEvent<string>).detail as 'dark' | 'light');
@@ -223,12 +238,13 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
         return () => {
             window.removeEventListener('fusion:theme', onTheme);
             window.removeEventListener('fusion:lang', onLang);
+            window.removeEventListener(MODEL_POLICY_EVENT, onModelPolicy);
             document.removeEventListener('visibilitychange', onVis);
             bridge.stopHeartbeat();
             bridge.destroy();
             bridgeRef.current = null;
         };
-    }, [entryOk, tab.src, tab.id, onCrash, pushHostState]);
+    }, [entryOk, tab.src, tab.id, tab.manifestId, onCrash, pushHostState]);
 
     if (!manifest) {
         return (

@@ -70,13 +70,22 @@ export interface FusionShellSdk {
         t(zh: string, en: string): string;
         subscribe(listener: (lang: 'zh' | 'en') => void): () => void;
     };
+    /**
+     * Effective model per the tenant policy chain (issue #114): host resolves
+     * via the gateway preference endpoint (host token). Results are cached;
+     * a host policy-change push invalidates the cache and notifies.
+     */
+    model: {
+        get(moduleId?: string): Promise<string>;
+        subscribe(listener: (model: string) => void): () => void;
+    };
 }
 
 /** Messages sent from module iframe to host. */
 export interface ModuleRequest {
     type: 'request';
     id: string;
-    method: 'http' | 'toast' | 'tab' | 'theme' | 'devices';
+    method: 'http' | 'toast' | 'tab' | 'theme' | 'devices' | 'model';
     payload: unknown;
 }
 
@@ -99,7 +108,7 @@ export interface HostResponse {
 
 export interface HostEvent {
     type: 'event';
-    event: 'theme' | 'visibility' | 'lang';
+    event: 'theme' | 'visibility' | 'lang' | 'model-policy';
     payload: unknown;
 }
 

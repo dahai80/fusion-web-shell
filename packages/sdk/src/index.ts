@@ -193,6 +193,13 @@ function standaloneSdk(log: BridgeDeps['log']): FusionShellSdk {
                 return () => obs.disconnect();
             },
         },
+        // Standalone: no host policy plane — empty model = gateway default.
+        model: {
+            get: async () => '',
+            subscribe() {
+                return () => undefined;
+            },
+        },
     };
 }
 
@@ -256,6 +263,29 @@ export function createShellSdk(options?: ShellSdkOptions): FusionShellSdk {
     bridge.eventListeners.set(
         'visibility',
         new Set([(payload) => visListeners.forEach((fn) => fn(payload as boolean))])
+    );
+
+    // Issue #114: model cache — per moduleId, invalidated by the host's
+    // model-policy push, which also notifies subscribers with the fresh value.
+    const modelCache = new Map<string, string>();
+    const modelListeners = new Set<(model: string) => void>();
+    bridge.eventListeners.set(
+        'model-policy',
+        new Set([
+            (payload) => {
+                const { moduleId, model } = (payload ?? {}) as {
+                    moduleId?: string;
+                    model?: string;
+                };
+                if (typeof moduleId === 'string') {
+                    if (typeof model === 'string') modelCache.set(moduleId, model);
+                    else modelCache.delete(moduleId);
+                } else {
+                    modelCache.clear();
+                }
+                modelListeners.forEach((fn) => fn(modelCache.get('') ?? ''));
+            },
+        ])
     );
 
     // Inbound gate: with the default '*' (cross-origin embedded dev), the
@@ -366,6 +396,19 @@ export function createShellSdk(options?: ShellSdkOptions): FusionShellSdk {
             subscribe(listener) {
                 langListeners.add(listener);
                 return () => langListeners.delete(listener);
+            },
+        },
+        model: {
+            async get(moduleId?: string) {
+                const key = moduleId ?? '';
+                if (modelCache.has(key)) return modelCache.get(key) as string;
+                const model = await bridge.call<string>('model', { moduleId: key });
+                modelCache.set(key, model);
+                return model;
+            },
+            subscribe(listener) {
+                modelListeners.add(listener);
+                return () => modelListeners.delete(listener);
             },
         },
     };

@@ -99,6 +99,17 @@ Since issue #50 the message box is a full composer; since #55 it renders the **s
 - **Usage** — per key: scopes, created/updated dates, quota when configured.
 - **Degradation** — until the gateway ships the session-gated key surface (fusion-gateway#271) the page shows a gateway-pending notice instead of an error wall; it becomes fully usable the moment the endpoint exists.
 
+## Settings: model policy (issue #114)
+
+`/settings` also hosts the model-policy plane (gateway contract: fusion-gateway#486). Approved chain: module override > user preference (allowlist-constrained) > tenant global default > build-time fallback.
+
+- **Admin** (`admin` role or `*` permission): tenant default model, per-module overrides for manifests declaring `model_capable` (with the module's `suggested_model` shown as a hint), user allowlist, and the `privacy_mode` toggle (`all` / `local-only`, which hides cloud models). Saving hot-applies: a shell-level `fusion:model-policy` event is bridged into every open module tab (`model-policy` push), invalidating SDK-side model caches.
+- **Non-admin**: read-only view of the effective policy (tenant default, privacy mode) plus a personal preference picker constrained by the allowlist and privacy mode.
+- **SDK**: `sdk.model.get(moduleId?)` resolves the effective model through the host (gateway preference endpoint with the host token; local chain fallback) with per-module caching invalidated by the policy push; `sdk.model.subscribe(listener)` observes changes.
+- **Manifest schema v3 fields**: `model_capable: bool`, `suggested_model: string` — optional pass-through, older manifests keep working.
+- **Chat**: shell chat resolves its model through the same chain (sync local read; no suspension before abort wiring).
+- **Degradation** — until the gateway ships `GET/PUT /api/v1/model-policy` + `GET /api/v1/model-preference` (fusion-gateway#486) the section shows a gateway-pending notice, pickers stay unconstrained, and resolution falls back to the user preference layer only.
+
 ## Migration E6: platform settings, users & roles, audit (issue #42)
 
 Host pages migrated from f-ecommerce (settings/users/audit) with the same layout and interactions, generalized and rendered with the shell design tokens. Backend contracts live in [`docs/f-ecommerce-migration-e6.md`](docs/f-ecommerce-migration-e6.md); until the gateway ships a surface its section degrades to a gateway-pending notice. Since issue #51 these pages render inside the shell layout (sidebar + tab strip stay; deep links `/settings`, `/users`, `/audit` keep working via SPA pushState — `lib/adminRoute.ts`), and any tab/home interaction leaves the admin view while the KeepAlive tab area stays mounted.

@@ -7,6 +7,7 @@ import {
     executeArtifactTool,
     runChatTurn,
 } from '@/lib/chatTools';
+import { useModelPolicy } from '@/stores/modelPolicy';
 import { usePrefs } from '@/stores/prefs';
 import { create } from 'zustand';
 
@@ -163,13 +164,17 @@ export const useDelegation = create<DelegationState>((set, get) => ({
             // Issue #106: the turn runs through the artifacts tool loop —
             // tool_calls are executed against the gateway module proxy and
             // fed back until the model answers in plain text.
+            // Issue #114: shell chat honors the policy chain — sync local
+            // read so the poster (and its abort wiring) is reached without
+            // an intervening suspension. moduleId '' = shell-level consumer.
+            const effectiveModel = useModelPolicy.getState().effectiveSync('');
             const loop = await runChatTurn(
                 (body) =>
                     chatPoster(
                         { model: body.model, messages: body.messages, stream: false },
                         { signal: chatAbort!.signal }
                     ),
-                { model: usePrefs.getState().model },
+                { model: effectiveModel || usePrefs.getState().model },
                 history,
                 (name, args) => executeArtifactTool(sharedClient(), name, args),
                 { signal: chatAbort.signal }

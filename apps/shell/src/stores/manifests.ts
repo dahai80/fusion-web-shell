@@ -278,6 +278,14 @@ function toManifest(dto: api.ManifestDto): ModuleManifest {
         group_title: sanitizeGroupTitle(dto.group_title),
         group_title_en: sanitizeGroupTitle(dto.group_title_en),
         sort: typeof dto.sort === 'number' && Number.isFinite(dto.sort) ? dto.sort : undefined,
+        // Schema v3 model-policy family (#114): pass-through, sanitized.
+        model_capable: dto.modelCapable === true || dto.model_capable === true ? true : undefined,
+        suggested_model:
+            typeof dto.suggestedModel === 'string'
+                ? dto.suggestedModel
+                : typeof dto.suggested_model === 'string'
+                  ? dto.suggested_model
+                  : undefined,
     };
 }
 

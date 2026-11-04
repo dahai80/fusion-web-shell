@@ -15,6 +15,8 @@ export interface HostBridgeOptions {
         headers?: Record<string, string>;
         body?: unknown;
     }): Promise<{ status: number; data: unknown }>;
+    /** Effective model resolution for module.get (issue #114). */
+    getModel?(moduleId?: string): Promise<string>;
 }
 
 /** Issue #75: handleRequest returns bare strings ('theme'), plain objects
@@ -32,6 +34,8 @@ export interface HostBridgeHandle {
     notifyTheme(mode: ThemeMode): void;
     notifyVisibility(visible: boolean): void;
     notifyLang(lang: string): void;
+    /** Policy change push (#114): invalidate module-side model caches. */
+    notifyModelPolicy(payload: { moduleId: string; model: string } | null): void;
     /** True when the module answered at least one heartbeat (SDK integrated). */
     readonly sdkAlive: boolean;
     startHeartbeat(
@@ -211,6 +215,14 @@ export function createHostBridge(
                 const info: DeviceInfo = { viewport: mobile ? 'mobile' : 'desktop', mode: null };
                 return info;
             }
+            case 'model': {
+                // Issue #114: resolve through the host's policy store (gateway
+                // preference endpoint + local chain); absent handler = no
+                // policy plane, resolve to '' (gateway routing default).
+                const moduleId = (msg.payload as { moduleId?: string } | null)?.moduleId;
+                if (!options.getModel) return '';
+                return options.getModel(moduleId);
+            }
             default:
                 throw new Error(`unknown bridge method: ${(msg as ModuleRequest).method}`);
         }
@@ -286,6 +298,10 @@ export function createHostBridge(
         },
         notifyLang(lang: string) {
             notify({ type: 'event', event: 'lang', payload: lang });
+        },
+        // Issue #114: policy change push; payload {moduleId, model} or null.
+        notifyModelPolicy(payload: { moduleId: string; model: string } | null) {
+            notify({ type: 'event', event: 'model-policy', payload });
         },
         get sdkAlive() {
             return sdkAlive;

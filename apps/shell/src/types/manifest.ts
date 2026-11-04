@@ -58,6 +58,10 @@ export interface ModuleManifest {
     group_title_en?: string;
     /** Ordering hint within the group (issue #71). */
     sort?: number;
+    /** Schema v3 model-policy family (issue #114): module consumes models. */
+    model_capable?: boolean;
+    /** Module-declared domain knowledge; admin governs it in Settings. */
+    suggested_model?: string;
 }
 
 /**
