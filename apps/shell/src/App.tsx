@@ -138,7 +138,11 @@ async function restoreSession(): Promise<void> {
     const code = consumeCodeParam();
     if (code) {
         try {
-            const pair = await exchangeCode(code);
+            // redirect_uri must match the code grant (scheme://host/path,
+            // gateway #506): the current origin + return path, minus the
+            // already-stripped ?code=.
+            const redirectUri = window.location.origin + window.location.pathname;
+            const pair = await exchangeCode(code, redirectUri);
             const token = pair.access_token ?? '';
             if (token) {
                 sessionStorage.setItem('fusion.shell.token', token);

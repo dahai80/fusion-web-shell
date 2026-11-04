@@ -43,9 +43,12 @@ describe('portal handoff (#126)', () => {
         expect(consumeCodeParam()).toBeNull();
     });
 
-    it('redirectToPortal keeps a safe same-origin return path', () => {
+    it('redirectToPortal carries an absolute allowlist-safe redirect URL', () => {
         (window.location as { pathname: string }).pathname = '/users';
+        (window.location as { origin: string }).origin = 'http://127.0.0.1:11430';
         redirectToPortal();
-        expect((window.location as { assigned?: string }).assigned).toBe('/auth/?return=%2Fusers');
+        expect((window.location as { assigned?: string }).assigned).toBe(
+            `/auth/?redirect=${encodeURIComponent('http://127.0.0.1:11430/users')}`
+        );
     });
 });
