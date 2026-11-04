@@ -196,9 +196,11 @@ export function isGatewayPending(err: unknown): boolean {
 
 /**
  * Model-policy plane (issue #114, gateway contract fusion-gateway#486).
- * GET/PUT /api/v1/model-policy is admin-gated; GET /api/v1/model-preference
- * resolves the effective model for any authenticated session. Both quiet:
- * a missing API is a degrade state, not an error wall.
+ * GET/PUT /api/v1/model-policy is admin-gated; preference resolution goes to
+ * the canonical /v1/model-preference (principal-bridge accepts the shell
+ * session; the /api/v1 alias family covers model-policy only — upstream gap
+ * noted in fusion-gateway#504). Both quiet: a missing API is a degrade
+ * state, not an error wall.
  */
 export function fetchModelPolicy(): Promise<unknown> {
     return sharedClient().get('/api/v1/model-policy', { quiet: true });
@@ -211,7 +213,7 @@ export function putModelPolicy(body: unknown): Promise<unknown> {
 export function fetchModelPreference(moduleId: string): Promise<string> {
     return sharedClient()
         .get<{ model?: unknown }>(
-            `/api/v1/model-preference?module_id=${encodeURIComponent(moduleId)}`,
+            `/v1/model-preference?module_id=${encodeURIComponent(moduleId)}`,
             {
                 quiet: true,
             }
