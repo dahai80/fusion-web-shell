@@ -110,6 +110,14 @@ Since issue #50 the message box is a full composer; since #55 it renders the **s
 - **Chat**: shell chat resolves its model through the same chain (sync local read; no suspension before abort wiring).
 - **Degradation** — until the gateway ships `GET/PUT /api/v1/model-policy` + `GET /api/v1/model-preference` (fusion-gateway#486) the section shows a gateway-pending notice, pickers stay unconstrained, and resolution falls back to the user preference layer only.
 
+## Sidebar: three-state product catalog (issue #116)
+
+The sidebar keeps the whole product line browsable (gateway contract: fusion-gateway#488). Each catalog entry resolves to one of three states: **running** (registered + healthy), **stopped** (registered but unreachable) and **not-installed** (catalog-only).
+
+- **Not-installed rows** render dimmed with a dashed border inside their taxonomy section (same four-section layout), sorted after the installed entries; they never render as tabs. Clicking one opens the item panel: bilingual description, footprint, model requirement, dependencies and a copyable `fusion install <id>` handoff command.
+- **Running / stopped** rows stay the manifest-driven entries — the catalog merge never duplicates them.
+- **Degradation** — until the gateway ships `GET /api/v1/catalog` (fusion-gateway#488) the store pins `gatewayPending` and the sidebar renders exactly as before (manifest-only). One-click start for stopped items is blocked on a supervisor HTTP start API; the #112 offline tooltip carries the `fusion-sv` hint meanwhile.
+
 ## Migration E6: platform settings, users & roles, audit (issue #42)
 
 Host pages migrated from f-ecommerce (settings/users/audit) with the same layout and interactions, generalized and rendered with the shell design tokens. Backend contracts live in [`docs/f-ecommerce-migration-e6.md`](docs/f-ecommerce-migration-e6.md); until the gateway ships a surface its section degrades to a gateway-pending notice. Since issue #51 these pages render inside the shell layout (sidebar + tab strip stay; deep links `/settings`, `/users`, `/audit` keep working via SPA pushState — `lib/adminRoute.ts`), and any tab/home interaction leaves the admin view while the KeepAlive tab area stays mounted.
