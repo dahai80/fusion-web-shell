@@ -13,9 +13,27 @@
         "typescript": "^5.6.3",
       },
     },
+    "apps/auth": {
+      "name": "@fusion/auth",
+      "version": "0.1.0",
+      "dependencies": {
+        "react": "^18.3.1",
+        "react-dom": "^18.3.1",
+      },
+      "devDependencies": {
+        "@types/react": "^18.3.12",
+        "@types/react-dom": "^18.3.1",
+        "@vitejs/plugin-react": "^4.3.3",
+        "autoprefixer": "^10.4.20",
+        "postcss": "^8.4.49",
+        "tailwindcss": "^3.4.14",
+        "typescript": "^5.6.3",
+        "vite": "^5.4.10",
+      },
+    },
     "apps/shell": {
       "name": "@fusion/shell",
-      "version": "0.1.0",
+      "version": "0.1.4",
       "dependencies": {
         "@fusion/web-sdk": "workspace:*",
         "@fusion/web-ui": "workspace:*",
@@ -37,7 +55,7 @@
     },
     "packages/design-tokens": {
       "name": "@fusion/design-tokens",
-      "version": "0.1.0",
+      "version": "0.1.4",
       "devDependencies": {
         "tailwindcss": "^3.4.14",
         "typescript": "^5.6.3",
@@ -45,14 +63,14 @@
     },
     "packages/sdk": {
       "name": "@fusion/web-sdk",
-      "version": "0.1.0",
+      "version": "0.1.4",
       "devDependencies": {
         "typescript": "^5.6.3",
       },
     },
     "packages/ui": {
       "name": "@fusion/web-ui",
-      "version": "0.1.0",
+      "version": "0.1.4",
       "dependencies": {
         "@fusion/design-tokens": "workspace:*",
       },
@@ -173,6 +191,8 @@
     "@esbuild/win32-ia32": ["@esbuild/win32-ia32@0.21.5", "https://registry.npmmirror.com/@esbuild/win32-ia32/-/win32-ia32-0.21.5.tgz", { "os": "win32", "cpu": "ia32" }, "sha512-SWXFF1CL2RVNMaVs+BBClwtfZSvDgtL//G/smwAc5oVK/UPu2Gu9tIaRgFmYFFKrmg3SyAjSrElf0TiJ1v8fYA=="],
 
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.21.5", "https://registry.npmmirror.com/@esbuild/win32-x64/-/win32-x64-0.21.5.tgz", { "os": "win32", "cpu": "x64" }, "sha512-tQd/1efJuzPC6rCFwEvLtci/xNFcTZknmXs98FYDfGE4wP9ClFV98nyKrzJKVPMhdDnjzLhdUyMX4PsQAPjwIw=="],
+
+    "@fusion/auth": ["@fusion/auth@workspace:apps/auth"],
 
     "@fusion/design-tokens": ["@fusion/design-tokens@workspace:packages/design-tokens"],
 

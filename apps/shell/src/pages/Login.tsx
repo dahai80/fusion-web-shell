@@ -118,6 +118,31 @@ export function LoginPage({ onAuthed }: { onAuthed(user: api.SessionUser, token:
                           ? t('修改密码并登录', 'Change password & sign in')
                           : t('登录', 'Sign in')}
                 </button>
+                <a
+                    href="/auth/?return=%2F"
+                    className="mt-3 block text-center text-xs text-brand underline"
+                    onClick={(e) => {
+                        // Portal-first (issue #126): probe before navigating —
+                        // until gateway #506 serves /auth the local form stays
+                        // the honest fallback instead of a dead link.
+                        e.preventDefault();
+                        void import('@/lib/portalAuth').then(
+                            ({ portalAvailable, redirectToPortal }) =>
+                                portalAvailable().then((ok) => {
+                                    if (ok) redirectToPortal();
+                                    else
+                                        setError(
+                                            t(
+                                                '统一认证门户尚未上线，请使用本地登录',
+                                                'Auth portal not live yet — use local sign-in'
+                                            )
+                                        );
+                                })
+                        );
+                    }}
+                >
+                    {t('统一账号登录 / 注册', 'Unified account sign-in / register')}
+                </a>
             </div>
         </div>
     );

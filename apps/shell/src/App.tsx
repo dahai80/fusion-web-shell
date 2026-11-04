@@ -2,6 +2,12 @@ import { ApiClient, setSharedClient, sharedClient } from '@/api/client';
 import * as api from '@/api/endpoints';
 import { ToastHost, pushToast } from '@/components/ToastHost';
 import { type AdminPageName, ROUTE_EVENT, adminPageForPath } from '@/lib/adminRoute';
+import {
+    consumeCodeParam,
+    exchangeCode,
+    portalAvailable,
+    redirectToPortal,
+} from '@/lib/portalAuth';
 import { LoginPage } from '@/pages/Login';
 import { MainPage } from '@/pages/Main';
 import { useAuth } from '@/stores/auth';
@@ -108,9 +114,15 @@ export function initApp(): void {
         new ApiClient({
             tokenProvider: () => sessionStorage.getItem('fusion.shell.token'),
             onUnauthorized: () => {
-                console.warn('[app] 401 received, redirecting to login');
+                console.warn('[app] 401 received, checking unified auth portal (#126)');
                 useAuth.getState().clearUser();
                 sessionStorage.clear();
+                // Portal-first: when the gateway serves /auth, land the user
+                // there with a safe return path; pending backend (gateway
+                // #506) falls back to the local login page as today.
+                void portalAvailable().then((ok) => {
+                    if (ok) redirectToPortal();
+                });
             },
             onForbidden: (message) => pushToast('error', message),
         })
@@ -119,6 +131,26 @@ export function initApp(): void {
 }
 
 async function restoreSession(): Promise<void> {
+    // One-time code handoff return (issue #126): the portal bounces back with
+    // ?code= — exchange for the session before any other restore step. The
+    // exchange route is gateway #506 contract; pending → fall through to the
+    // local session restore untouched.
+    const code = consumeCodeParam();
+    if (code) {
+        try {
+            const pair = await exchangeCode(code);
+            const token = pair.access_token ?? '';
+            if (token) {
+                sessionStorage.setItem('fusion.shell.token', token);
+                const me = await api.fetchMe();
+                useAuth.getState().setUser(me, token);
+                console.log('[app] portal handoff complete');
+                return;
+            }
+        } catch (err) {
+            console.warn('[app] portal code exchange failed, falling back to local login', err);
+        }
+    }
     const token = sessionStorage.getItem('fusion.shell.token');
     if (!token) {
         useAuth.getState().clearUser();
