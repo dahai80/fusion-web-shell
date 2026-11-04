@@ -4,6 +4,15 @@ Fusion unified web shell — the host of the fusion-* union web frontend.
 
 Single entry (`fusion-gateway` :11432), unified login + RBAC, per-tab same-origin iframe modules, KeepAlive tabs, hot-pluggable manifest registry, H5 responsive.
 
+## Unified auth portal (issues #125/#126)
+
+Per `architecture/fusion-site-auth-1104.md` decision 4, registration/login is ONE portal app served by the gateway at `/auth` — site and shell redirect to it and return via one-time code handoff; no per-client auth forms.
+
+- **`apps/auth` (`@fusion/auth`)** — the portal: React 18 + Vite + TS + Tailwind, Apple black/white refined tokens (white bg, `#1d1d1f` ink, `#d2d2d7` hairlines, black pill buttons). Four channels on one screen: login, personal signup (A), tenant signup (B, free plan binding note), join tenant (C — invite code redemption or join request per the tenant's `join_policy`). Email verification states (pending / verified / resend) render once a token pair exists. Fully bilingual with a manual toggle.
+- **Handoff**: after a successful auth call the portal mints a one-time code (`POST /api/auth/handoff`, 60s TTL single-use, origin-bound — §8) and redirects to the validated same-origin `return` path.
+- **Shell consumption (#126)**: on 401 the shell probes `HEAD /auth` and redirects there with a safe return path; on return, `?code=` is exchanged (`POST /api/auth/exchange`, gateway #506 contract) for the session before normal restore. The login page links to the portal with a probe — until the backend lands, the local form stays the honest fallback.
+- **Degradation** — the registration endpoints are upstream-pending (fusion-identity #39/#40, gateway auth routing #506): portal API calls that 404/501 show a bilingual backend-pending notice instead of raw errors; the shell keeps the local session flow.
+
 ## Status
 
 Shell host implemented (issues #1-#7 plus PRD/UI-spec gap items):

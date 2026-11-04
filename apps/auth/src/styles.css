@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+    @apply bg-paper font-sans text-ink antialiased;
+}
+
+/* Black pill button — the portal's single primary action style. */
+.pill {
+    @apply inline-flex min-h-[44px] w-full items-center justify-center rounded-pill bg-ink px-5 text-sm font-medium text-paper transition-opacity hover:opacity-85 disabled:opacity-40;
+}
+
+.field {
+    @apply mt-1 w-full rounded-xl border border-hairline bg-paper px-3.5 py-2.5 text-sm text-ink outline-none placeholder:text-subtle/60 focus:border-ink;
+}
+
+.label {
+    @apply block text-xs font-medium text-subtle;
+}
+
+.hair-card {
+    @apply rounded-card border border-hairline bg-paper p-6 shadow-sm;
+}
