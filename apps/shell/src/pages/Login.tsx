@@ -119,7 +119,7 @@ export function LoginPage({ onAuthed }: { onAuthed(user: api.SessionUser, token:
                           : t('登录', 'Sign in')}
                 </button>
                 <a
-                    href="/auth/?return=%2F"
+                    href={`/auth/?redirect=${encodeURIComponent(window.location.origin + '/')}`}
                     className="mt-3 block text-center text-xs text-brand underline"
                     onClick={(e) => {
                         // Portal-first (issue #126): probe before navigating —
