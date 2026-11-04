@@ -5,7 +5,13 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { renderHook, waitFor } from '@testing-library/react';
 import { useAutoRetry } from '../src/components/useAutoRetry';
 
-GlobalRegistrator.register();
+// Guarded like sdk/apps domSetup (issue #122): parallel test files race the
+// global Happy DOM registration — the loser must not fail the file.
+try {
+    GlobalRegistrator.register();
+} catch {
+    console.log('[ui domSetup] happy-dom already registered, skip');
+}
 
 describe('useAutoRetry loading lifecycle (issue #19)', () => {
     it('clears loading on success', async () => {
