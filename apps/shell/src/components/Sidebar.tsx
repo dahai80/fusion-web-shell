@@ -1,5 +1,12 @@
 import { NotificationBell } from '@/components/NotificationBell';
+import { pushToast } from '@/components/ToastHost';
 import { navigateShell, pathForAdminPage } from '@/lib/adminRoute';
+import {
+    type CatalogEntry,
+    catalogRows,
+    groupedCatalogRows,
+    installCommand,
+} from '@/lib/catalogTree';
 import {
     MODULE_STATUS_DOT,
     type ModuleStatus,
@@ -15,12 +22,14 @@ import {
     unreadCountFor,
 } from '@/lib/sidebarTree';
 import { useAuth } from '@/stores/auth';
+import { useCatalog } from '@/stores/catalog';
 import { t, useLang } from '@/stores/lang';
 import {
     groupAllUnreachable,
     groupTitle,
     menuGroups,
     moduleTitle,
+    sectionOfId,
     useManifests,
 } from '@/stores/manifests';
 import { useNotifications } from '@/stores/notifications';
@@ -154,6 +163,31 @@ export function Sidebar({ onOpen, onLogout }: Props) {
     const setExpandedGroups = usePrefs((s) => s.setExpandedGroups);
     const expandedSections = usePrefs((s) => s.expandedSections);
     const toggleExpandedSection = usePrefs((s) => s.toggleExpandedSection);
+    // Issue #116: whole product line stays browsable — not-installed catalog
+    // entries render dimmed inside their section, sorted after installed ones.
+    const catalogEntries = useCatalog((s) => s.entries);
+    const catalogLoaded = useCatalog((s) => s.loaded);
+    const catalogPending = useCatalog((s) => s.gatewayPending);
+    const loadCatalog = useCatalog((s) => s.load);
+    const [catalogItem, setCatalogItem] = useState<CatalogEntry | null>(null);
+
+    useEffect(() => {
+        void loadCatalog();
+    }, [loadCatalog]);
+
+    const notInstalledBySection = new Map(
+        catalogLoaded && !catalogPending && catalogEntries.length > 0
+            ? groupedCatalogRows(
+                  // Not-installed rows only: running/stopped rows are the
+                  // manifest-driven entries above.
+                  catalogRows(catalogEntries, manifests, unreachableIds).filter(
+                      (r) => r.state === 'not_installed'
+                  ),
+                  sectionOfId,
+                  lang
+              ).map((g) => [g.section, g.notInstalled])
+            : []
+    );
 
     useEffect(() => {
         setExpanded((prev) => syncExpandedWithActive(prev, activeManifestId));
@@ -309,6 +343,18 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                                       )
                                   )
                                 : null}
+                            {open
+                                ? (notInstalledBySection.get(sec.section as never) ?? []).map(
+                                      (row) => (
+                                          <NotInstalledRow
+                                              key={`catalog:${row.entry.id}`}
+                                              entry={row.entry}
+                                              lang={lang}
+                                              onShow={() => setCatalogItem(row.entry)}
+                                          />
+                                      )
+                                  )
+                                : null}
                         </div>
                     );
                 })}
@@ -321,8 +367,137 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                     </div>
                 ) : null}
             </nav>
+            {catalogItem ? (
+                <CatalogItemDialog entry={catalogItem} onClose={() => setCatalogItem(null)} />
+            ) : null}
             <UserRow onLogout={onLogout} />
         </aside>
+    );
+}
+
+/**
+ * Not-installed catalog row (issue #116): visually distinct (dashed border,
+ * dimmed) but present — clicking opens the install/details panel instead of
+ * a tab.
+ */
+function NotInstalledRow({
+    entry,
+    lang,
+    onShow,
+}: {
+    entry: CatalogEntry;
+    lang: 'zh' | 'en';
+    onShow(): void;
+}) {
+    const title = lang === 'en' && entry.title_en ? entry.title_en : entry.title;
+    return (
+        <button
+            type="button"
+            onClick={onShow}
+            title={t('未安装 — 查看详情与安装方式', 'Not installed — view details and install')}
+            className="flex h-8 w-full items-center gap-2 rounded-lg border border-dashed border-border px-2 text-left opacity-70 hover:border-brand hover:opacity-100"
+        >
+            <Boxes size={16} strokeWidth={1.75} aria-hidden className="shrink-0 text-text-muted" />
+            <span className={`truncate ${TYPE_SCALE.l1} text-text-muted`}>{title}</span>
+            <span className="ml-auto shrink-0 rounded bg-bg-muted px-1.5 text-[10px] text-text-muted">
+                {t('未安装', 'Not installed')}
+            </span>
+        </button>
+    );
+}
+
+/**
+ * Install/details panel (issue #116): bilingual description, footprint,
+ * model needs, dependencies and the `fusion install <id>` handoff command
+ * with copy. One-click start for installed-stopped items needs a start API
+ * upstream (supervisor HTTP surface); until then the offline tooltip (#112)
+ * carries the fusion-sv hint.
+ */
+function CatalogItemDialog({ entry, onClose }: { entry: CatalogEntry; onClose(): void }) {
+    useLang((l) => l.lang);
+    const [copied, setCopied] = useState(false);
+    const cmd = installCommand(entry);
+    const detail = 'mt-1 text-xs text-text-secondary';
+    return (
+        <div
+            className="fixed inset-0 z-overlay flex items-center justify-center bg-black/50 p-4"
+            onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+        >
+            <div className="fs-elev-2 w-full max-w-md rounded-card border border-border bg-bg-elevated p-4">
+                <div className="flex items-center justify-between">
+                    <div className="text-base text-text-primary">
+                        {entry.title_en ?? entry.title}
+                    </div>
+                    <span className="rounded-full bg-bg-muted px-2 py-0.5 text-xs text-text-muted">
+                        {entry.category || t('产品线', 'product')}
+                    </span>
+                </div>
+                {entry.description || entry.description_en ? (
+                    <div className={detail}>{entry.description_en ?? entry.description}</div>
+                ) : null}
+                <dl className="mt-3 space-y-1.5 text-xs">
+                    {entry.footprint ? (
+                        <div className="flex gap-2">
+                            <dt className="shrink-0 text-text-muted">{t('体积', 'Footprint')}:</dt>
+                            <dd className="text-text-primary">{entry.footprint}</dd>
+                        </div>
+                    ) : null}
+                    {entry.model_requirement ? (
+                        <div className="flex gap-2">
+                            <dt className="shrink-0 text-text-muted">{t('模型需求', 'Models')}:</dt>
+                            <dd className="text-text-primary">{entry.model_requirement}</dd>
+                        </div>
+                    ) : null}
+                    {entry.dependencies.length > 0 ? (
+                        <div className="flex gap-2">
+                            <dt className="shrink-0 text-text-muted">
+                                {t('依赖', 'Dependencies')}:
+                            </dt>
+                            <dd className="flex flex-wrap gap-1">
+                                {entry.dependencies.map((d) => (
+                                    <span
+                                        key={d}
+                                        className="rounded bg-bg-muted px-1.5 font-mono text-text-secondary"
+                                    >
+                                        {d}
+                                    </span>
+                                ))}
+                            </dd>
+                        </div>
+                    ) : null}
+                </dl>
+                <div className="mt-3">
+                    <div className="text-xs text-text-muted">
+                        {t('安装命令', 'Install command')}
+                    </div>
+                    <div className="mt-1 flex items-center gap-2">
+                        <code className="min-w-0 flex-1 overflow-x-auto rounded-md border border-border bg-bg px-2 py-1.5 font-mono text-xs text-text-primary">
+                            {cmd}
+                        </code>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                void navigator.clipboard
+                                    .writeText(cmd)
+                                    .then(() => setCopied(true))
+                                    .catch((err) => {
+                                        console.warn('[sidebar] copy install cmd failed', err);
+                                        pushToast('error', t('复制失败', 'Copy failed'));
+                                    });
+                            }}
+                            className="fs-btn fs-btn-secondary shrink-0 text-xs"
+                        >
+                            {copied ? t('已复制', 'Copied') : t('复制', 'Copy')}
+                        </button>
+                    </div>
+                </div>
+                <div className="mt-4 flex justify-end">
+                    <button type="button" onClick={onClose} className="fs-btn fs-btn-primary">
+                        {t('关闭', 'Close')}
+                    </button>
+                </div>
+            </div>
+        </div>
     );
 }
 

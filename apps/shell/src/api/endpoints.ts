@@ -218,3 +218,12 @@ export function fetchModelPreference(moduleId: string): Promise<string> {
         )
         .then((r) => (typeof r.model === 'string' ? r.model : ''));
 }
+
+/**
+ * Product catalog (issue #116, gateway contract fusion-gateway#488): the
+ * full product line merged with the manifest registry + supervisor health.
+ * Quiet: a missing API is a degrade state, not an error wall.
+ */
+export function fetchProductCatalog(): Promise<unknown> {
+    return sharedClient().get('/api/v1/catalog', { quiet: true });
+}
