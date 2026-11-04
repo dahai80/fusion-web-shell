@@ -125,7 +125,7 @@ The sidebar keeps the whole product line browsable (gateway contract: fusion-gat
 
 - **Not-installed rows** render dimmed with a dashed border inside their taxonomy section (same four-section layout), sorted after the installed entries; they never render as tabs. Clicking one opens the item panel: bilingual description, footprint, model requirement, dependencies and a copyable `fusion install <id>` handoff command.
 - **Running / stopped** rows stay the manifest-driven entries — the catalog merge never duplicates them.
-- **Degradation** — until the gateway ships `GET /api/v1/catalog` (fusion-gateway#488) the store pins `gatewayPending` and the sidebar renders exactly as before (manifest-only). One-click start for stopped items is blocked on a supervisor HTTP start API; the #112 offline tooltip carries the `fusion-sv` hint meanwhile.
+- **Degradation** — if the catalog API is unreachable from the browser session (404/501, or 401/403 while the shell-session alias was pending, fusion-gateway#504) the store pins `gatewayPending` and the sidebar renders exactly as before (manifest-only). One-click start for stopped items is blocked on a supervisor HTTP start API; the #112 offline tooltip carries the `fusion-sv` hint meanwhile. Gateway field mapping: `title_en`/`title_cn`, `description_en`/`description_cn`, `repo` and `model_class` are accepted alongside the shell-native `title`/`description` shapes (zh display falls back title → title_cn → title_en).
 
 ## Migration E6: platform settings, users & roles, audit (issue #42)
 

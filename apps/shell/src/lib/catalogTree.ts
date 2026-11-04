@@ -18,9 +18,12 @@ export interface CatalogEntry {
     id: string;
     title: string;
     title_en?: string;
+    /** Gateway catalog ships title_cn as the zh display string (fusion-gateway#504). */
+    title_cn?: string;
     category: string;
     description?: string;
     description_en?: string;
+    description_cn?: string;
     /** Approx install footprint, human-readable (e.g. "1.2 GB"). */
     footprint?: string;
     /** Model class / suggested model the product needs. */
@@ -29,7 +32,19 @@ export interface CatalogEntry {
     repo_url?: string;
 }
 
-/** Defensive parse of an untrusted catalog payload. */
+/** First non-empty string among the candidates. */
+const pickStr = (...vals: unknown[]): string | undefined => {
+    for (const v of vals) {
+        if (typeof v === 'string' && v.length > 0) return v;
+    }
+    return undefined;
+};
+
+/** Defensive parse of an untrusted catalog payload. Accepts both the
+ * shell-native shape (`title`/`description`) and the gateway catalog shape
+ * (`title_en`/`title_cn`, `description_en`/`description_cn`, `repo`,
+ * `model_class` — fusion-gateway#504): zh display falls back through
+ * title → title_cn → title_en. */
 export function sanitizeCatalog(raw: unknown): CatalogEntry[] {
     if (!raw || typeof raw !== 'object') return [];
     const list = Array.isArray(raw)
@@ -43,22 +58,23 @@ export function sanitizeCatalog(raw: unknown): CatalogEntry[] {
         if (!rec || typeof rec !== 'object' || Array.isArray(rec)) continue;
         const r = rec as Record<string, unknown>;
         const id = typeof r.id === 'string' ? r.id : '';
-        const title = typeof r.title === 'string' ? r.title : '';
+        const title = pickStr(r.title, r.title_cn, r.title_en);
         if (!id || !title) continue;
         out.push({
             id,
             title,
-            title_en: typeof r.title_en === 'string' ? r.title_en : undefined,
+            title_en: pickStr(r.title_en),
+            title_cn: pickStr(r.title_cn),
             category: typeof r.category === 'string' ? r.category : '',
-            description: typeof r.description === 'string' ? r.description : undefined,
-            description_en: typeof r.description_en === 'string' ? r.description_en : undefined,
-            footprint: typeof r.footprint === 'string' ? r.footprint : undefined,
-            model_requirement:
-                typeof r.model_requirement === 'string' ? r.model_requirement : undefined,
+            description: pickStr(r.description, r.description_cn, r.description_en),
+            description_en: pickStr(r.description_en),
+            description_cn: pickStr(r.description_cn),
+            footprint: pickStr(r.footprint),
             dependencies: Array.isArray(r.dependencies)
                 ? r.dependencies.filter((d): d is string => typeof d === 'string' && d.length > 0)
                 : [],
-            repo_url: typeof r.repo_url === 'string' ? r.repo_url : undefined,
+            repo_url: pickStr(r.repo_url, r.repo),
+            model_requirement: pickStr(r.model_requirement, r.model_class),
         });
     }
     return out;
