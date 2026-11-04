@@ -414,7 +414,7 @@ function NotInstalledRow({
  * carries the fusion-sv hint.
  */
 function CatalogItemDialog({ entry, onClose }: { entry: CatalogEntry; onClose(): void }) {
-    useLang((l) => l.lang);
+    const lang = useLang((l) => l.lang);
     const [copied, setCopied] = useState(false);
     const cmd = installCommand(entry);
     const detail = 'mt-1 text-xs text-text-secondary';
@@ -426,14 +426,18 @@ function CatalogItemDialog({ entry, onClose }: { entry: CatalogEntry; onClose():
             <div className="fs-elev-2 w-full max-w-md rounded-card border border-border bg-bg-elevated p-4">
                 <div className="flex items-center justify-between">
                     <div className="text-base text-text-primary">
-                        {entry.title_en ?? entry.title}
+                        {lang === 'en' ? (entry.title_en ?? entry.title) : (entry.title_cn ?? entry.title)}
                     </div>
                     <span className="rounded-full bg-bg-muted px-2 py-0.5 text-xs text-text-muted">
                         {entry.category || t('产品线', 'product')}
                     </span>
                 </div>
                 {entry.description || entry.description_en ? (
-                    <div className={detail}>{entry.description_en ?? entry.description}</div>
+                    <div className={detail}>
+                            {lang === 'en'
+                                ? (entry.description_en ?? entry.description)
+                                : (entry.description_cn ?? entry.description)}
+                        </div>
                 ) : null}
                 <dl className="mt-3 space-y-1.5 text-xs">
                     {entry.footprint ? (
