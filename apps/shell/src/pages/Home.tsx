@@ -2,12 +2,14 @@ import { fetchShellModels } from '@/api/endpoints';
 import { pushToast } from '@/components/ToastHost';
 import { composerCapabilities } from '@/lib/composerCapabilities';
 import { type ShellModel, modelOptions } from '@/lib/modelCatalog';
+import { pickerFilter } from '@/lib/modelPolicy';
 import { relativeTime } from '@/lib/relativeTime';
 import { useAuth } from '@/stores/auth';
 import { logDelegation, routeDelegation, useDelegation } from '@/stores/delegation';
 import { t, useLang } from '@/stores/lang';
 import type { Lang } from '@/stores/lang';
 import { moduleTitle, useManifests } from '@/stores/manifests';
+import { useModelPolicy } from '@/stores/modelPolicy';
 import { type Effort, usePrefs } from '@/stores/prefs';
 import { type ProjectItem, useProjects } from '@/stores/projects';
 import { type ApprovalAction, type TaskItem, taskBucket, useTasks } from '@/stores/tasks';
@@ -434,6 +436,8 @@ export function HomePage({ onOpen }: Props) {
             console.log('[home] shell model catalog:', models.length);
             setShellModels(models);
         });
+        // #114: policy gates the picker (allowlist + privacy) — load once.
+        void useModelPolicy.getState().load();
     }, []);
 
     // Sidebar "new chat" / composer-focus intents (#86/#88): the sidebar
@@ -512,8 +516,15 @@ export function HomePage({ onOpen }: Props) {
     const setModel = usePrefs((s) => s.setModel);
     const effort = usePrefs((s) => s.effort);
     const setEffort = usePrefs((s) => s.setEffort);
-    const modelPickerOptions = modelOptions(shellModels, t('默认模型', 'Default model'));
-    if (model && !shellModels.some((m) => m.id === model)) {
+    // #114: policy-loaded picker — allowlist constrains, local_only hides
+    // cloud. Pending policy leaves the catalog untouched (honest degrade).
+    const policyState = useModelPolicy((s) => s.policy);
+    const policyLoaded = useModelPolicy((s) => s.loaded);
+    const policyPending = useModelPolicy((s) => s.gatewayPending);
+    const visibleModels =
+        policyLoaded && !policyPending ? pickerFilter(shellModels, policyState) : shellModels;
+    const modelPickerOptions = modelOptions(visibleModels, t('默认模型', 'Default model'));
+    if (model && !visibleModels.some((m) => m.id === model)) {
         modelPickerOptions.push({ value: model, label: model, hint: model, curated: false });
     }
 

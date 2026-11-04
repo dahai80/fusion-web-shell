@@ -48,6 +48,12 @@ export interface ManifestDto {
     group_title?: string;
     group_title_en?: string;
     sort?: number;
+    /** Schema v3 model-policy family (issue #114), sanitized by the store. */
+    /** Gateway serves camelCase; older static configs used snake_case. */
+    modelCapable?: boolean;
+    model_capable?: boolean;
+    suggestedModel?: string;
+    suggested_model?: string;
 }
 
 export function login(
@@ -186,4 +192,29 @@ export function saveMenuPermissions(body: unknown): Promise<unknown> {
 export function isGatewayPending(err: unknown): boolean {
     const status = (err as { status?: number })?.status;
     return status === 404 || status === 501;
+}
+
+/**
+ * Model-policy plane (issue #114, gateway contract fusion-gateway#486).
+ * GET/PUT /api/v1/model-policy is admin-gated; GET /api/v1/model-preference
+ * resolves the effective model for any authenticated session. Both quiet:
+ * a missing API is a degrade state, not an error wall.
+ */
+export function fetchModelPolicy(): Promise<unknown> {
+    return sharedClient().get('/api/v1/model-policy', { quiet: true });
+}
+
+export function putModelPolicy(body: unknown): Promise<unknown> {
+    return sharedClient().put('/api/v1/model-policy', body);
+}
+
+export function fetchModelPreference(moduleId: string): Promise<string> {
+    return sharedClient()
+        .get<{ model?: unknown }>(
+            `/api/v1/model-preference?module_id=${encodeURIComponent(moduleId)}`,
+            {
+                quiet: true,
+            }
+        )
+        .then((r) => (typeof r.model === 'string' ? r.model : ''));
 }
