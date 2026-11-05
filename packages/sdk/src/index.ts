@@ -13,7 +13,14 @@ import type {
     ToastInput,
 } from './types';
 
-export { withRetry, withTimeout, isRetryableError, TimeoutError, HttpError } from './retry';
+export {
+    withRetry,
+    withTimeout,
+    isRetryableError,
+    isQuotaExceededError,
+    TimeoutError,
+    HttpError,
+} from './retry';
 export { createThemeState } from './theme';
 export { createPoller, type PollerOptions } from './poll';
 export { createHostBridge, type HostBridgeHandle, type HostBridgeOptions } from './host';
@@ -53,7 +60,9 @@ function createBridge(deps: BridgeDeps, opts: Required<ShellSdkOptions>) {
             else
                 entry.reject(
                     new HttpError(
-                        502,
+                        // #130: host relays the real HTTP status — 429 quota vs
+                        // transient 5xx must be distinguishable module-side.
+                        msg.error?.status ?? 502,
                         msg.error?.code ?? 'bridge_error',
                         msg.error?.message ?? 'bridge request failed'
                     )
@@ -202,6 +211,10 @@ function standaloneSdk(log: BridgeDeps['log']): FusionShellSdk {
                 return () => undefined;
             },
             env: async () => ({ modelCapable: false, allowlist: [] }),
+        },
+        // Standalone: no host session — no identity token to propagate (#130).
+        auth: {
+            identityToken: async () => null,
         },
     };
 }
@@ -426,6 +439,16 @@ export function createShellSdk(options?: ShellSdkOptions): FusionShellSdk {
                 envCache.set(key, info);
                 return info;
             },
+        },
+        // Cloud-try SSO (issue #130): identity JWT from the host session.
+        // Unknown-method (older host) or local-login session = null — callers
+        // skip propagation, never crash.
+        auth: {
+            identityToken: () =>
+                bridge
+                    .call<string | null>('identity-token', null, 5000)
+                    .then((tk) => (typeof tk === 'string' && tk ? tk : null))
+                    .catch(() => null),
         },
     };
 }

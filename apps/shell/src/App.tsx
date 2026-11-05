@@ -8,6 +8,7 @@ import {
     portalAvailable,
     redirectToPortal,
 } from '@/lib/portalAuth';
+import { consumeTicketParam, exchangeTicket } from '@/lib/ssoAuth';
 import { LoginPage } from '@/pages/Login';
 import { MainPage } from '@/pages/Main';
 import { useAuth } from '@/stores/auth';
@@ -153,6 +154,27 @@ async function restoreSession(): Promise<void> {
             }
         } catch (err) {
             console.warn('[app] portal code exchange failed, falling back to local login', err);
+        }
+    }
+    // Cloud-try SSO ticket return (issue #130): fusion-site appends a
+    // one-time identity ticket; exchange for the shell session before any
+    // other restore step. Pending route (404/501) → fall through untouched.
+    const ticket = consumeTicketParam();
+    if (ticket) {
+        try {
+            const session = await exchangeTicket(ticket);
+            if (session) {
+                sessionStorage.setItem('fusion.shell.token', session.token);
+                if (session.identity_token) {
+                    sessionStorage.setItem('fusion.identity.token', session.identity_token);
+                }
+                const me = await api.fetchMe();
+                useAuth.getState().setUser(me, session.token);
+                console.log('[app] sso ticket handoff complete');
+                return;
+            }
+        } catch (err) {
+            console.warn('[app] sso ticket exchange failed, falling back to local login', err);
         }
     }
     const token = sessionStorage.getItem('fusion.shell.token');

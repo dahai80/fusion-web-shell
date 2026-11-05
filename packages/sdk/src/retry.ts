@@ -15,10 +15,29 @@ export class TimeoutError extends Error {
 
 export function isRetryableError(err: unknown): boolean {
     if (err instanceof TimeoutError) return true;
+    if (isQuotaExceededError(err)) return false;
     const status = (err as { status?: number }).status;
     // 4xx are deterministic: retrying will not help.
     if (typeof status === 'number') return status >= 500 || status === 429;
     return true;
+}
+
+/**
+ * Cloud-try daily token quota rejection (issue #130): gateway meter answers
+ * `429 {"detail": "daily token quota exceeded", "quota": {...}}`. Retrying
+ * cannot help — the budget is spent until tomorrow.
+ */
+export function isQuotaExceededError(err: unknown): boolean {
+    if (err === null || typeof err !== 'object') return false;
+    const e = err as { status?: number; code?: string; message?: string; envelope?: unknown };
+    if (e.status !== 429) return false;
+    if (e.code === 'daily_quota_exceeded') return true;
+    const env = e.envelope as { detail?: string; quota?: unknown } | undefined;
+    if (env?.quota !== undefined) return true;
+    return (
+        env?.detail === 'daily token quota exceeded' ||
+        (e.message ?? '').includes('daily token quota exceeded')
+    );
 }
 
 export function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
