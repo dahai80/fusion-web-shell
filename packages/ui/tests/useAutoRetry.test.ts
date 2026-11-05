@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { afterAll, describe, expect, it } from 'bun:test';
 // Issue #19 regression: success path must clear `loading`, else pages gating
 // on `loading` (data ? content : skeleton) sit on the skeleton forever.
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
@@ -7,11 +7,27 @@ import { useAutoRetry } from '../src/components/useAutoRetry';
 
 // Guarded like sdk/apps domSetup (issue #122): parallel test files race the
 // global Happy DOM registration — the loser must not fail the file.
+let registeredHere = false;
 try {
     GlobalRegistrator.register();
+    registeredHere = true;
 } catch {
     console.log('[ui domSetup] happy-dom already registered, skip');
 }
+
+// Issue #131: bun test runs every file in one process — a register without
+// unregister leaks happy-dom globals into consumer suites that vendored this
+// package and install their own fakes afterwards. Tear down only what this
+// file registered.
+afterAll(() => {
+    if (registeredHere) {
+        try {
+            GlobalRegistrator.unregister();
+        } catch (err) {
+            console.warn('[ui domSetup] unregister failed', err);
+        }
+    }
+});
 
 describe('useAutoRetry loading lifecycle (issue #19)', () => {
     it('clears loading on success', async () => {
