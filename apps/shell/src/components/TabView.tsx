@@ -202,6 +202,9 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
                 pushToast(level, input.message, input.durationMs);
             },
             onActiveTask: (_tabId, task) => setTask(tab.id, task !== null),
+            // Cloud-try #130: identity JWT for module LLM calls — gateway
+            // metering keys the daily quota by sub. Absent on local sessions.
+            getIdentityToken: () => sessionStorage.getItem('fusion.identity.token'),
             // Reuse the shared ApiClient: same Bearer injection, 401 session
             // handling and A5 envelope logic as the shell's own calls.
             proxyHttp: async (req) => {

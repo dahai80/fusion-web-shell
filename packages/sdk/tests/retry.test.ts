@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'bun:test';
-import { HttpError, TimeoutError, isRetryableError, withRetry, withTimeout } from '../src/retry';
+import {
+    HttpError,
+    TimeoutError,
+    isQuotaExceededError,
+    isRetryableError,
+    withRetry,
+    withTimeout,
+} from '../src/retry';
 
 describe('isRetryableError', () => {
     it('retries timeouts and 5xx/429, not 4xx', () => {
@@ -60,5 +67,39 @@ describe('withRetry', () => {
             )
         ).rejects.toThrow('always');
         expect(calls).toBe(3);
+    });
+});
+
+// Issue #130: daily token quota 429 is terminal — classify it and never
+// retry it (the budget is spent until tomorrow).
+describe('isQuotaExceededError (#130)', () => {
+    it('matches the meter rejection shapes', () => {
+        expect(isQuotaExceededError(new HttpError(429, 'daily_quota_exceeded', 'x'))).toBe(true);
+        const meter = Object.assign(new Error('daily token quota exceeded'), { status: 429 });
+        expect(isQuotaExceededError(meter)).toBe(true);
+        const envd = Object.assign(new Error('quota'), {
+            status: 429,
+            envelope: { detail: 'daily token quota exceeded', quota: { used: 1 } },
+        });
+        expect(isQuotaExceededError(envd)).toBe(true);
+    });
+    it('does not match other 429s or other statuses', () => {
+        expect(isQuotaExceededError(new HttpError(429, 'x', 'x'))).toBe(false);
+        expect(isQuotaExceededError(new HttpError(500, 'daily_quota_exceeded', 'x'))).toBe(false);
+        expect(isQuotaExceededError(new TimeoutError(10))).toBe(false);
+        expect(isQuotaExceededError(null)).toBe(false);
+    });
+    it('withRetry does not retry quota exhaustion', async () => {
+        let calls = 0;
+        await expect(
+            withRetry(
+                () => {
+                    calls++;
+                    throw new HttpError(429, 'daily_quota_exceeded', 'daily token quota exceeded');
+                },
+                { retries: 3, timeoutMs: 100 }
+            )
+        ).rejects.toThrow('daily token quota exceeded');
+        expect(calls).toBe(1);
     });
 });

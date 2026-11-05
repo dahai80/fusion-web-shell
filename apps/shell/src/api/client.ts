@@ -1,4 +1,5 @@
 import { pushToast } from '@/components/ToastHost';
+import { t } from '@/stores/lang';
 import { useTabs } from '@/stores/tabs';
 
 /** Gateway error envelope (A5): { code, message, module_id, retryable }. */
@@ -7,6 +8,23 @@ export interface ErrorEnvelope {
     message?: string;
     module_id?: string;
     retryable?: boolean;
+    /** Meter quota rejection shape (cloud-try #130): {detail, quota}. */
+    detail?: string;
+    quota?: unknown;
+}
+
+/**
+ * Cloud-try daily token quota rejection (issue #130): gateway meter answers
+ * `429 {"detail": "daily token quota exceeded", "quota": {...}}`. Exported
+ * for tests + module-side classification.
+ */
+export function isQuotaEnvelope(env: ErrorEnvelope | null): boolean {
+    if (!env) return false;
+    if (env.quota !== undefined) return true;
+    return (
+        env.detail === 'daily token quota exceeded' ||
+        (env.message ?? '').includes('daily token quota exceeded')
+    );
 }
 
 /**
@@ -97,7 +115,30 @@ export class ApiClient {
             }
             if (!res.ok) {
                 const env = (await res.json().catch(() => null)) as ErrorEnvelope | null;
-                const message = env?.message ?? `HTTP ${res.status}`;
+                const message = env?.message ?? env?.detail ?? `HTTP ${res.status}`;
+                if (res.status === 429 && isQuotaEnvelope(env)) {
+                    // Cloud-try #130: quota exhaustion is expected, not an
+                    // error to dump raw — friendly bilingual copy, no retry.
+                    const friendly = t(
+                        '今日 Token 额度已用完，明天自动恢复',
+                        'Daily token quota exceeded — resets tomorrow'
+                    );
+                    if (!init.quiet) {
+                        console.warn('[api] daily token quota exceeded');
+                        pushToast('warning', friendly);
+                        const tabsState = useTabs.getState();
+                        const ownerTab = env?.module_id
+                            ? tabsState.tabs.find((tb) => tb.manifestId === env.module_id)?.id
+                            : undefined;
+                        const targetId = ownerTab ?? tabsState.activeTabId;
+                        if (targetId) tabsState.setTransientError(targetId, friendly);
+                    }
+                    throw Object.assign(new Error(friendly), {
+                        status: 429,
+                        code: 'daily_quota_exceeded',
+                        envelope: env,
+                    });
+                }
                 // Background/quiet calls (notification polls, palette search)
                 // never surface host toasts or tab error strips (review fix #2).
                 if (!init.quiet) this.surfaceRetryable(env, message, res.status);

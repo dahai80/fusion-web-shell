@@ -26,6 +26,8 @@ export interface HostBridgeOptions {
     getModel?(moduleId?: string): Promise<string>;
     /** Full model environment for model-env (issue #118). */
     getModelEnv?(moduleId?: string): Promise<ShellModelInfo>;
+    /** Identity JWT for module LLM calls (cloud-try SSO, issue #130). */
+    getIdentityToken?(): string | null;
 }
 
 /** Issue #75: handleRequest returns bare strings ('theme'), plain objects
@@ -239,6 +241,12 @@ export function createHostBridge(
                 if (!options.getModelEnv) return { modelCapable: false, allowlist: [] };
                 return options.getModelEnv(moduleId);
             }
+            case 'identity-token': {
+                // Issue #130: identity JWT for module LLM calls (gateway
+                // metering keys the daily quota by sub). Absent handler or
+                // local-login session = null — modules skip propagation.
+                return options.getIdentityToken?.() ?? null;
+            }
             default:
                 throw new Error(`unknown bridge method: ${(msg as ModuleRequest).method}`);
         }
@@ -264,7 +272,9 @@ export function createHostBridge(
                         type: 'response',
                         id: msg.id,
                         ok: false,
-                        error: { code: e.code, message: e.message },
+                        // #130: real status rides the error — modules branch on
+                        // 429 quota vs transient 5xx without guessing.
+                        error: { code: e.code, message: e.message, status: e.status },
                     });
                 } else {
                     respond({ type: 'response', id: msg.id, ok: true, result });

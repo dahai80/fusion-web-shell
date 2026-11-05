@@ -13,6 +13,15 @@ Per `architecture/fusion-site-auth-1104.md` decision 4, registration/login is ON
 - **Shell consumption (#126)**: on 401 the shell probes `HEAD /auth` and redirects there with a safe return path; on return, `?code=` is exchanged (`POST /api/auth/exchange`, gateway #506 contract) for the session before normal restore. The login page links to the portal with a probe — until the backend lands, the local form stays the honest fallback.
 - **Degradation** — the registration endpoints are upstream-pending (fusion-identity #39/#40, gateway auth routing #506): portal API calls that 404/501 show a bilingual backend-pending notice instead of raw errors; the shell keeps the local session flow.
 
+## Cloud-try real product experience (issue #130, Phase 2)
+
+Per `architecture/fusion-cloud-try-real-product-1104.md`: the cloud experience is real product usage — a user logged in on fusion-site (fusion-identity) reaches the cowork web GUI hosted by this shell without a second login, constrained only by a daily token quota metered at the gateway (gateway #514).
+
+- **SSO ticket handoff** — fusion-site appends a short-lived one-time ticket (issued by fusion-identity) to the workbench URL (`https://<shell>/...?ticket=<one-time>`). The shell consumes and strips `?ticket=`, exchanges it at `POST /api/v1/shell/session/sso` (`{ticket}` → `{token, identity_token?, username?, roles?}`) before normal session restore, and stores the returned identity JWT separately (`sessionStorage['fusion.identity.token']`). Until the gateway ships the route (upstream issue pending), the exchange 404/501-degrades to the existing local/portal login flows.
+- **Identity JWT propagation** — modules read the session's identity JWT via the SDK (`sdk.auth.identityToken()`, bridge method `identity-token`; null on local sessions or older hosts) and attach it to their LLM calls so the gateway metering middleware keys the daily quota by the user's `sub`.
+- **Quota-aware UX** — a module LLM call answered `429 {"detail": "daily token quota exceeded", "quota": {...}}` surfaces as a friendly bilingual notice ("今日 Token 额度已用完，明天自动恢复 / Daily token quota exceeded — resets tomorrow") as a toast + transient tab strip, never a raw error; the SDK classifies it (`isQuotaExceededError`) and never retries it.
+- **VPS deployment profile** — deploy the shell (via gateway :11432) plus cowork web backend on the VPS; modules point their LLM base URL at the gateway metering endpoint (never a direct MLX address, per the ecosystem rule that all downstream traffic crosses the gateway). Bridge http proxying and the 401/403/429 handling above are profile-agnostic — no code switch needed.
+
 ## Status
 
 Shell host implemented (issues #1-#7 plus PRD/UI-spec gap items):

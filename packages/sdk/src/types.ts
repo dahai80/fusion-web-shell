@@ -71,6 +71,16 @@ export interface FusionShellSdk {
         subscribe(listener: (lang: 'zh' | 'en') => void): () => void;
     };
     /**
+     * Session auth material for cloud-try SSO (issue #130): the identity JWT
+     * minted when the shell session was created via ticket exchange. Modules
+     * attach it to their LLM calls so the gateway metering middleware keys
+     * the daily token quota by the user's `sub`. Null when the session was
+     * created by local login or the host predates the bridge method.
+     */
+    auth: {
+        identityToken(): Promise<string | null>;
+    };
+    /**
      * Effective model per the tenant policy chain (issue #114): host resolves
      * via the gateway preference endpoint (host token). Results are cached;
      * a host policy-change push invalidates the cache and notifies.
@@ -105,7 +115,15 @@ export interface ShellModelInfo {
 export interface ModuleRequest {
     type: 'request';
     id: string;
-    method: 'http' | 'toast' | 'tab' | 'theme' | 'devices' | 'model' | 'model-env';
+    method:
+        | 'http'
+        | 'toast'
+        | 'tab'
+        | 'theme'
+        | 'devices'
+        | 'model'
+        | 'model-env'
+        | 'identity-token';
     payload: unknown;
 }
 
@@ -123,7 +141,8 @@ export interface HostResponse {
     id: string;
     ok: boolean;
     result?: unknown;
-    error?: { code: string; message: string };
+    /** status rides the error so modules can branch on 429 quota vs 5xx. */
+    error?: { code: string; message: string; status?: number };
 }
 
 export interface HostEvent {
