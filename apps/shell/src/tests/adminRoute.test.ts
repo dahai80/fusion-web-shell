@@ -1,5 +1,5 @@
 import './setup';
-import { beforeEach, describe, expect, it } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, it } from 'bun:test';
 import { adminPageForPath, navigateShell, pathForAdminPage } from '../lib/adminRoute';
 
 // Minimal window shim (happy-dom's dispatchEvent is broken under bun test):
@@ -13,6 +13,11 @@ class FakeEvent {
         this.type = type;
     }
 }
+
+// Save the real globals: this shim used to leak into later test files in the
+// same bun process (ssoAuth.test.ts saw a history without replaceState).
+const realWindow = (globalThis as Record<string, unknown>).window;
+const realEvent = (globalThis as Record<string, unknown>).Event;
 
 (globalThis as Record<string, unknown>).window = {
     get location() {
@@ -44,6 +49,11 @@ class FakeEvent {
     },
 };
 (globalThis as Record<string, unknown>).Event = FakeEvent;
+
+afterAll(() => {
+    (globalThis as Record<string, unknown>).window = realWindow;
+    (globalThis as Record<string, unknown>).Event = realEvent;
+});
 
 describe('adminPageForPath', () => {
     it('maps the three admin deep-link paths', () => {

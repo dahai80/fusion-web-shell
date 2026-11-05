@@ -10,14 +10,19 @@ import { consumeTicketParam, exchangeTicket } from '@/lib/ssoAuth';
 let query = '';
 
 const stubReplaceState = (): void => {
-    Object.defineProperty(window.history, 'replaceState', {
+    // Own-property override on window itself: robust even if another suite
+    // replaced the global window with a shim whose history getter returns
+    // fresh objects (adminRoute.test.ts used to leak exactly that on CI).
+    Object.defineProperty(window, 'history', {
         configurable: true,
-        value: (_state: unknown, _title: string, url?: string | URL) => {
-            if (typeof url === 'string') {
-                query = url.includes('?') ? `?${url.split('?')[1] ?? ''}` : '';
-                (window.location as { search: string }).search = query;
-                (window.location as { href: string }).href = url;
-            }
+        value: {
+            replaceState: (_state: unknown, _title: string, url?: string | URL) => {
+                if (typeof url === 'string') {
+                    query = url.includes('?') ? `?${url.split('?')[1] ?? ''}` : '';
+                    (window.location as { search: string }).search = query;
+                    (window.location as { href: string }).href = url;
+                }
+            },
         },
     });
 };
