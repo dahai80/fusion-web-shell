@@ -4,33 +4,41 @@ import { consumeTicketParam, exchangeTicket } from '@/lib/ssoAuth';
 
 // Issue #130: cloud-try SSO ticket consumption + honest degradation when
 // the gateway SSO route is not deployed yet. happy-dom's History throws
-// under the global registrator, so replaceState is stubbed like in
-// portalAuth.test.ts.
+// under the global registrator, so replaceState is stubbed via
+// defineProperty (assignment alone proved flaky on CI runners).
 
 let query = '';
 
-beforeEach(() => {
-    query = '';
-    Object.defineProperty(window, 'location', {
+const stubReplaceState = (): void => {
+    Object.defineProperty(window.history, 'replaceState', {
         configurable: true,
-        value: {
-            ...window.location,
-            search: query,
-            href: 'http://127.0.0.1:11430/',
-            pathname: '/',
+        value: (_state: unknown, _title: string, url?: string | URL) => {
+            if (typeof url === 'string') {
+                query = url.includes('?') ? `?${url.split('?')[1] ?? ''}` : '';
+                (window.location as { search: string }).search = query;
+                (window.location as { href: string }).href = url;
+            }
         },
     });
-    window.history.replaceState = ((_state: unknown, _title: string, url?: string | URL) => {
-        if (typeof url === 'string') {
-            query = url.includes('?') ? `?${url.split('?')[1] ?? ''}` : '';
-            (window.location as { search: string }).search = query;
-            (window.location as { href: string }).href = url;
-        }
-    }) as typeof window.history.replaceState;
-});
+};
 
 describe('sso ticket handoff (#130)', () => {
     const realFetch = globalThis.fetch;
+
+    beforeEach(() => {
+        query = '';
+        Object.defineProperty(window, 'location', {
+            configurable: true,
+            value: {
+                ...window.location,
+                search: query,
+                href: 'http://127.0.0.1:11430/',
+                pathname: '/',
+            },
+        });
+        stubReplaceState();
+    });
+
     const stubFetch = (status: number, body: unknown): void => {
         globalThis.fetch = ((): Promise<Response> =>
             Promise.resolve(
