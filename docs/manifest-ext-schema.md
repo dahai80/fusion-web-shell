@@ -1,3 +1,19 @@
+---
+doc_id: fusion-web-shell/guide/manifest-ext-schema
+product: fusion-web-shell
+class: platform
+entry: service
+doc_type: guide
+title: { zh: "Manifest 扩展字段词表", en: "Manifest ext fields vocabulary" }
+audience: engineer
+status: draft
+version: 0.1.4
+updated: 2026-11-07
+owner: @dahai
+source_of_truth:
+    - docs/manifest-ext-schema.md
+---
+
 # Manifest ext fields — schema v1 addendum (PRD §5.1)
 
 Addendum to the module manifest schema for the shell host features shipped in

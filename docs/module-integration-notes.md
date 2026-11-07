@@ -1,3 +1,19 @@
+---
+doc_id: fusion-web-shell/guide/module-integration-notes
+product: fusion-web-shell
+class: platform
+entry: service
+doc_type: guide
+title: { zh: "模块集成答疑", en: "Module integration notes" }
+audience: engineer
+status: draft
+version: 0.1.4
+updated: 2026-11-07
+owner: @dahai
+source_of_truth:
+    - docs/module-integration-notes.md
+---
+
 # Module integration notes — running inside the shell iframe
 
 Answers to the recurring integration questions (collected from issue #67,

@@ -1,3 +1,19 @@
+---
+doc_id: fusion-web-shell/guide/business-apps-integration
+product: fusion-web-shell
+class: platform
+entry: service
+doc_type: guide
+title: { zh: "business 领域应用接入整改指引", en: "Business domain app integration checklist" }
+audience: engineer
+status: draft
+version: 0.1.4
+updated: 2026-11-07
+owner: @dahai
+source_of_truth:
+    - docs/business-apps-shell-integration.md
+---
+
 # business 领域应用接入 Fusion Web Shell 整改指引
 
 > 对象:`~/fusion/business/` 下尚未建 git 仓、需直接集成进 fusion-web-shell 的领域应用。
