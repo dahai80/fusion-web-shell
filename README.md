@@ -1,3 +1,19 @@
+---
+doc_id: fusion-web-shell/readme
+product: fusion-web-shell
+class: platform
+entry: service
+doc_type: readme
+title: { zh: "fusion-web-shell 说明", en: "fusion-web-shell readme" }
+audience: engineer
+status: draft
+version: 0.1.4
+updated: 2026-11-07
+owner: @dahai
+source_of_truth:
+    - README.md
+---
+
 # fusion-web-shell
 
 Fusion unified web shell — the host of the fusion-* union web frontend.
@@ -26,7 +42,7 @@ Per `architecture/fusion-cloud-try-real-product-1104.md`: the cloud experience i
 
 Shell host implemented (issues #1-#7 plus PRD/UI-spec gap items):
 
-- Host bridge wiring (TabView <-> SDK): http proxy with Bearer, toast/tab events, theme/visibility/lang push, 30s heartbeat (liveness enforced only for SDK modules that answered a ping, so non-SDK modules never false-crash)
+- Host bridge wiring (TabView ↔ SDK): http proxy with Bearer, toast/tab events, theme/visibility/lang push, 30s heartbeat (liveness enforced only for SDK modules that answered a ping, so non-SDK modules never false-crash)
 - Refresh restore: persisted tabs rebuild after manifests load; interrupted streaming tasks marked retryable (PRD §6.1)
 - Gateway error envelope `{code,message,module_id,retryable}`: retryable/5xx raises a toast + transient error strip on the active tab (A5)
 - Bilingual chrome (menu/tabs/login) via `t()` with `title_en` support and a language toggle

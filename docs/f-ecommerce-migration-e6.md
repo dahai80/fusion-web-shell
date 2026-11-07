@@ -1,3 +1,19 @@
+---
+doc_id: fusion-web-shell/guide/f-ecommerce-migration-e6
+product: fusion-web-shell
+class: platform
+entry: service
+doc_type: guide
+title: { zh: "Migration E6 管理面契约", en: "Migration E6 admin surfaces contract" }
+audience: engineer
+status: draft
+version: 0.1.4
+updated: 2026-11-07
+owner: @dahai
+source_of_truth:
+    - docs/f-ecommerce-migration-e6.md
+---
+
 # Migration E6 admin surfaces — shell ↔ gateway contract (issue #42)
 
 Source: `~/fusion/business/f-ecommerce` settings.html / audit.html / users.html,

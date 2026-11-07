@@ -1,3 +1,19 @@
+---
+doc_id: fusion-web-shell/guide/claude-md
+product: fusion-web-shell
+class: platform
+entry: service
+doc_type: guide
+title: { zh: "仓库协作指引", en: "Repo working guide" }
+audience: engineer
+status: draft
+version: 0.1.4
+updated: 2026-11-07
+owner: @dahai
+source_of_truth:
+    - CLAUDE.md
+---
+
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.

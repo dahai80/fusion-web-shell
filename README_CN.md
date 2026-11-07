@@ -1,3 +1,19 @@
+---
+doc_id: fusion-web-shell/readme-cn
+product: fusion-web-shell
+class: platform
+entry: service
+doc_type: readme
+title: { zh: "fusion-web-shell 说明（中文）", en: "fusion-web-shell readme (CN)" }
+audience: engineer
+status: draft
+version: 0.1.4
+updated: 2026-11-07
+owner: @dahai
+source_of_truth:
+    - README_CN.md
+---
+
 # fusion-web-shell
 
 Fusion 统一前端宿主（union-web host）—— fusion-* 系列模块的统一 Web 入口。
