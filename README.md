@@ -38,6 +38,14 @@ Per `architecture/fusion-cloud-try-real-product-1104.md`: the cloud experience i
 - **Quota-aware UX** — a module LLM call answered `429 {"detail": "daily token quota exceeded", "quota": {...}}` surfaces as a friendly bilingual notice ("今日 Token 额度已用完，明天自动恢复 / Daily token quota exceeded — resets tomorrow") as a toast + transient tab strip, never a raw error; the SDK classifies it (`isQuotaExceededError`) and never retries it.
 - **VPS deployment profile** — deploy the shell (via gateway :11432) plus cowork web backend on the VPS; modules point their LLM base URL at the gateway metering endpoint (never a direct MLX address, per the ecosystem rule that all downstream traffic crosses the gateway). Bridge http proxying and the 401/403/429 handling above are profile-agnostic — no code switch needed.
 
+## Real-time payload budget (issue #135)
+
+Per the t3code performance pattern (`insight/t3code-analysis-and-fusion-lessons-2026-11-08`): real-time channels get hard payload budgets pinned by constants and tests, so payload growth fails CI instead of silently degrading the shell.
+
+- **SDK `PAYLOAD_BUDGET`** (`@fusion/web-sdk`): `snapshotMaxBytes` 1 MiB (full hydration snapshot), `eventMaxBytes` 48 KiB (single event/frame), `maxPendingUpdates` 512 (bounded coalescing buffer, overflow drops oldest with a surfaced count), `coalesceWindowMs` 50.
+- **Helpers**: `payloadBytes()` (JSON wire size, UTF-8; non-serializable = ∞), `assertPayloadBudget()` (throws `PayloadBudgetExceededError` — use in module tests to pin the cap), `createCoalescer()` (high-frequency log/progress events batch inside the window).
+- **Shell enforcement**: notification sources answering over the snapshot budget are dropped whole (logged); single items over the event budget are skipped while the rest of the batch survives. Task/run-event streams in modules should adopt the same helpers (agent-studio transcript growth flagged in the issue).
+
 ## Status
 
 Shell host implemented (issues #1-#7 plus PRD/UI-spec gap items):

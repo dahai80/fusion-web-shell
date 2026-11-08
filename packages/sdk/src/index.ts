@@ -23,6 +23,15 @@ export {
 } from './retry';
 export { createThemeState } from './theme';
 export { createPoller, type PollerOptions } from './poll';
+export {
+    PAYLOAD_BUDGET,
+    PayloadBudgetExceededError,
+    assertPayloadBudget,
+    createCoalescer,
+    payloadBytes,
+    type CoalescerHandle,
+    type CoalescerOptions,
+} from './budget';
 export { createHostBridge, type HostBridgeHandle, type HostBridgeOptions } from './host';
 export * from './types';
 
