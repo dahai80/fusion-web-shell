@@ -4,6 +4,7 @@ import { useAuth } from '@/stores/auth';
 import { useManifests } from '@/stores/manifests';
 import { useTabs } from '@/stores/tabs';
 import type { NotificationKind } from '@/types/manifest';
+import { PAYLOAD_BUDGET, payloadBytes } from '@fusion/web-sdk';
 import { create } from 'zustand';
 
 /**
@@ -133,11 +134,32 @@ export const useNotifications = create<NotificationsState>((set, get) => ({
                         console.log('[notifications] upstream recovered:', m.id);
                     }
                     const items = Array.isArray(data?.items) ? data.items : [];
+                    // #135: bounded snapshot — an over-budget source payload
+                    // is dropped whole (logged), never merged into the bell.
+                    if (payloadBytes(data) > PAYLOAD_BUDGET.snapshotMaxBytes) {
+                        console.warn(
+                            '[notifications] source over snapshot budget, dropped:',
+                            s.endpoint,
+                            payloadBytes(data),
+                            'bytes'
+                        );
+                        return [];
+                    }
                     return items
                         .slice(0, MAX_ITEMS_PER_SOURCE)
                         .map((raw): NotificationItem | null => {
                             if (!raw || typeof raw !== 'object') return null;
                             const rec = raw as Record<string, unknown>;
+                            // #135: bounded event frame — a single oversized
+                            // item is skipped, the rest of the batch survives.
+                            if (payloadBytes(rec) > PAYLOAD_BUDGET.eventMaxBytes) {
+                                console.warn(
+                                    '[notifications] item over event budget, skipped:',
+                                    m.id,
+                                    String(rec.id ?? '')
+                                );
+                                return null;
+                            }
                             const itemId = typeof rec.id === 'string' ? rec.id.trim() : '';
                             const title = typeof rec.title === 'string' ? rec.title.trim() : '';
                             if (!itemId || !title) return null;

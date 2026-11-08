@@ -9,7 +9,7 @@ audience: engineer
 status: draft
 version: 0.1.4
 updated: 2026-11-07
-owner: @dahai
+owner: "@dahai"
 source_of_truth:
     - README.md
     - docs/manifest-ext-schema.md
