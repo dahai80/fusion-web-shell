@@ -46,6 +46,17 @@ Per the t3code performance pattern (`insight/t3code-analysis-and-fusion-lessons-
 - **Helpers**: `payloadBytes()` (JSON wire size, UTF-8; non-serializable = ∞), `assertPayloadBudget()` (throws `PayloadBudgetExceededError` — use in module tests to pin the cap), `createCoalescer()` (high-frequency log/progress events batch inside the window).
 - **Shell enforcement**: notification sources answering over the snapshot budget are dropped whole (logged); single items over the event budget are skipped while the rest of the batch survives. Task/run-event streams in modules should adopt the same helpers (agent-studio transcript growth flagged in the issue).
 
+## Agent overview dashboard (issue #137)
+
+First-class shell page at `/agents` (sidebar entry gated on `fusion-cowork`/`fusion-agent-studio` access) giving a fleet-level view over cowork workflows and agent-studio seats — zero new backend, all data via the existing `/shell/<module-id>/` gateway proxy with the shell session Bearer:
+
+- **Stats row**: active runs / waiting-for-human / completed today / failed today, derived from the cowork runs list.
+- **HITL banner**: pending approval count from `GET /shell/fusion-cowork/api/permissions/pending`; clicking opens the cowork module tab's approvals surface.
+- **Agent cards grid**: one card per workflow (newest run wins) plus published agent-studio seats as idle rows; status dot pulse taxonomy (run/wait/idle/err); click selects the run.
+- **Live step feed**: SSE subscription to `GET /shell/fusion-cowork/api/runs/{run_id}/events` via a fetch-stream reader (`lib/sseStream.ts` — EventSource cannot send the Bearer header), bounded to 200 lines; card click switches the subscription.
+- **Run pipeline waterfall**: per-node progress bars from the run detail (including n4m historical-match nodes, cowork#422), plus a recent-runs list.
+- RBAC/theme/lang follow the shell; runs re-poll every 5s so a dropped stream self-heals.
+
 ## Status
 
 Shell host implemented (issues #1-#7 plus PRD/UI-spec gap items):
