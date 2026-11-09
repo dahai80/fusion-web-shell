@@ -57,6 +57,15 @@ First-class shell page at `/agents` (sidebar entry gated on `fusion-cowork`/`fus
 - **Run pipeline waterfall**: per-node progress bars from the run detail (including n4m historical-match nodes, cowork#422), plus a recent-runs list.
 - RBAC/theme/lang follow the shell; runs re-poll every 5s so a dropped stream self-heals.
 
+## Login CAPTCHA challenge (issue #139, frontend)
+
+Frontend for a server-generated random-code challenge in front of credential verification (local-first, no external CAPTCHA service):
+
+- `lib/captcha.ts`: probes `GET /api/v1/shell/session/captcha` (single-use, session-bound, ~5 min TTL contract); any failure (route missing / gated / 5xx) disables the CAPTCHA UI — never a login blocker.
+- When live, the login form renders the challenge image (data-URI or wrapped raw SVG) with a click-to-refresh button; the code is sent as `captcha_id` + `captcha_code` on `POST /api/v1/shell/session`.
+- `captcha_*` error rejections rotate the challenge automatically.
+- Bilingual strings, dual-theme tokens; rate limiting/lockout/audit live server-side (tracked in the fusion-gateway upstream issue).
+
 ## Status
 
 Shell host implemented (issues #1-#7 plus PRD/UI-spec gap items):
