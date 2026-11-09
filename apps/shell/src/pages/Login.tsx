@@ -1,7 +1,13 @@
 import * as api from '@/api/endpoints';
+import {
+    type CaptchaChallenge,
+    type LoginCaptchaFields,
+    fetchCaptchaChallenge,
+    isCaptchaError,
+} from '@/lib/captcha';
 import { readToken, useAuth, writeToken } from '@/stores/auth';
 import { t, useLang } from '@/stores/lang';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 /** Unified login (PRD §4.1): mandatory, no anonymous mode. */
 export function LoginPage({ onAuthed }: { onAuthed(user: api.SessionUser, token: string): void }) {
@@ -11,17 +17,39 @@ export function LoginPage({ onAuthed }: { onAuthed(user: api.SessionUser, token:
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
     const [mustChange, setMustChange] = useState(false);
+    // CAPTCHA (issue #139): probe once; off entirely while the gateway
+    // endpoint is missing. Refresh on captcha_* rejections and on demand.
+    const [captcha, setCaptcha] = useState<CaptchaChallenge | null>(null);
+    const [captchaCode, setCaptchaCode] = useState('');
     useLang((l) => l.lang);
+
+    const loadCaptcha = useCallback(async () => {
+        setCaptchaCode('');
+        const challenge = await fetchCaptchaChallenge();
+        setCaptcha(challenge);
+        return challenge;
+    }, []);
+
+    useEffect(() => {
+        void loadCaptcha();
+    }, [loadCaptcha]);
 
     const submit = async () => {
         if (!username || !password) {
             setError(t('请输入用户名和密码', 'Enter username and password'));
             return;
         }
+        if (captcha && captchaCode.trim() === '') {
+            setError(t('请输入图形验证码', 'Enter the verification code'));
+            return;
+        }
         setBusy(true);
         setError(null);
         try {
-            const res = await api.login(username, password);
+            const captchaFields: LoginCaptchaFields | undefined = captcha
+                ? { captcha_id: captcha.captchaId, captcha_code: captchaCode.trim() }
+                : undefined;
+            const res = await api.login(username, password, captchaFields);
             if (res.must_change_password) {
                 // Keep the token: changePw() needs it to authenticate
                 // POST /api/v1/password before the session is finished.
@@ -34,6 +62,9 @@ export function LoginPage({ onAuthed }: { onAuthed(user: api.SessionUser, token:
         } catch (err) {
             setError((err as Error).message);
             console.warn('[login] failed', err);
+            // A burned/rejected challenge is single-use — rotate it so the
+            // next attempt carries a fresh one (#139).
+            if (isCaptchaError(err)) void loadCaptcha();
         } finally {
             setBusy(false);
         }
@@ -89,6 +120,36 @@ export function LoginPage({ onAuthed }: { onAuthed(user: api.SessionUser, token:
                     onKeyDown={(e) => e.key === 'Enter' && !mustChange && void submit()}
                     className="mt-1 w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-text-primary outline-none focus:border-brand disabled:opacity-50"
                 />
+                {captcha ? (
+                    <>
+                        <label className="mt-3 block text-xs text-text-muted" htmlFor="captcha">
+                            {t('验证码', 'Verification code')}
+                        </label>
+                        <div className="mt-1 flex items-center gap-2">
+                            <input
+                                id="captcha"
+                                value={captchaCode}
+                                autoComplete="off"
+                                maxLength={8}
+                                onChange={(e) => setCaptchaCode(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && !mustChange && void submit()}
+                                className="w-28 rounded-md border border-border bg-bg px-3 py-2 text-sm text-text-primary outline-none focus:border-brand"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => void loadCaptcha()}
+                                title={t('点击刷新验证码', 'Refresh the code')}
+                                className="h-11 flex-1 overflow-hidden rounded-md border border-border bg-bg p-1"
+                            >
+                                <img
+                                    src={captcha.imageDataUri}
+                                    alt={t('验证码图片', 'Verification code image')}
+                                    className="mx-auto h-full"
+                                />
+                            </button>
+                        </div>
+                    </>
+                ) : null}
                 {mustChange ? (
                     <>
                         <label className="mt-3 block text-xs text-warning" htmlFor="newpw">

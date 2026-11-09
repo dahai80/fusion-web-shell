@@ -1,4 +1,5 @@
 /** Gateway API surface (PRD §4/§5). Backend lives in fusion-gateway (R-1). */
+import type { LoginCaptchaFields } from '../lib/captcha';
 import { type ShellModel, uniqueModels } from '../lib/modelCatalog';
 import { sharedClient } from './client';
 
@@ -58,9 +59,14 @@ export interface ManifestDto {
 
 export function login(
     username: string,
-    password: string
+    password: string,
+    captcha?: LoginCaptchaFields
 ): Promise<SessionUser & { token: string }> {
-    return sharedClient().post('/api/v1/shell/session', { username, password });
+    return sharedClient().post('/api/v1/shell/session', {
+        username,
+        password,
+        ...(captcha ? { captcha_id: captcha.captcha_id, captcha_code: captcha.captcha_code } : {}),
+    });
 }
 
 export function logout(): Promise<void> {
