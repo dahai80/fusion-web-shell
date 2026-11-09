@@ -60,3 +60,20 @@ describe('captcha lib (#139)', () => {
         ).toBe(true);
     });
 });
+
+describe('captcha lib — gateway #592 live shape', () => {
+    it('wraps raw SVG delivered in the image field', () => {
+        const c = parseChallenge({
+            captcha_id: 'g1',
+            image: '<svg xmlns="http://www.w3.org/2000/svg">code</svg>',
+            ttl_seconds: 300,
+            enabled: true,
+        });
+        expect(c?.captchaId).toBe('g1');
+        expect(c?.imageDataUri.startsWith('data:image/svg+xml;utf8,%3Csvg')).toBe(true);
+    });
+
+    it('enabled:false without challenge fields parses to null', () => {
+        expect(parseChallenge({ enabled: false })).toBeNull();
+    });
+});

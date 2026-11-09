@@ -42,9 +42,12 @@ export function parseChallenge(raw: unknown): CaptchaChallenge | null {
     const image =
         typeof rec.image === 'string' && rec.image.startsWith('data:image/')
             ? rec.image
-            : typeof rec.image_svg === 'string' && rec.image_svg.startsWith('<svg')
-              ? `data:image/svg+xml;utf8,${encodeURIComponent(rec.image_svg)}`
-              : '';
+            : // Gateway #592 sends the raw SVG markup in `image` — wrap it.
+              typeof rec.image === 'string' && rec.image.startsWith('<svg')
+              ? `data:image/svg+xml;utf8,${encodeURIComponent(rec.image)}`
+              : typeof rec.image_svg === 'string' && rec.image_svg.startsWith('<svg')
+                ? `data:image/svg+xml;utf8,${encodeURIComponent(rec.image_svg)}`
+                : '';
     const ttl = typeof rec.ttl_seconds === 'number' ? rec.ttl_seconds : 300;
     if (!id || !image) return null;
     return { captchaId: id, imageDataUri: image, ttlSeconds: ttl };
