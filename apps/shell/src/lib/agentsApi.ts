@@ -12,11 +12,19 @@ export interface CoworkRun {
     workflow_id?: string;
     workflow_name?: string;
     status: string;
-    created_at?: string;
-    finished_at?: string;
+    /** Live API: epoch seconds (float); some serializers may return ISO. */
+    created_at?: number | string;
+    finished_at?: number | string;
     error?: string | null;
     space_id?: string;
     review?: { status?: string };
+}
+
+/** Run timestamp in epoch ms, accepting epoch seconds and ISO strings. */
+export function runTsMs(v: number | string | undefined): number {
+    if (v === undefined) return 0;
+    const ms = typeof v === 'number' ? (v > 1e12 ? v : v * 1000) : Date.parse(v);
+    return Number.isFinite(ms) ? ms : 0;
 }
 
 export interface CoworkRunDetail {
@@ -35,6 +43,12 @@ export interface CoworkRunStep {
     execution_time?: number;
     summary?: string;
     output_data?: Record<string, unknown>;
+    /** issue #143 per-node LLM usage (None = no LLM call). */
+    tokens?: {
+        prompt_tokens?: number;
+        completion_tokens?: number;
+        total_tokens?: number;
+    } | null;
 }
 
 export interface StudioAgent {
@@ -99,7 +113,7 @@ export interface DerivedAgentCard {
     status: AgentCardStatus;
     runId: string | null;
     workflowName: string;
-    startedAt: string | null;
+    startedAt: number | string | null;
     error: string | null;
 }
 
@@ -176,8 +190,8 @@ export function deriveStats(runs: CoworkRun[], now = Date.now()): AgentsStats {
         if (st === 'wait') waiting += 1;
         if (st === 'err') failed += 1;
         if (run.status === 'success' && run.finished_at) {
-            const ts = Date.parse(run.finished_at);
-            if (Number.isFinite(ts) && now - ts < DAY_MS) completedToday += 1;
+            const ts = runTsMs(run.finished_at);
+            if (ts && now - ts < DAY_MS) completedToday += 1;
         }
     }
     return { activeRuns, waiting, completedToday, failed };
@@ -210,4 +224,59 @@ export function deriveWaterfall(detail: CoworkRunDetail): WaterfallRow[] {
             durationSec: typeof s.execution_time === 'number' ? s.execution_time : null,
         };
     });
+}
+
+/**
+ * Token aggregation (user feedback on #137): per-workflow token consumption
+ * from run details. Steps carry `tokens` (cowork issue #143); None/missing
+ * steps count as zero — upstream may not backfill simple nodes yet.
+ */
+export interface WorkflowTokens {
+    workflow: string;
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    runs: number;
+}
+
+export interface TokensSummary {
+    total: number;
+    workflows: WorkflowTokens[];
+}
+
+export function aggregateTokens(
+    runs: CoworkRun[],
+    detailFor: (runId: string) => CoworkRunDetail | undefined,
+    now = Date.now()
+): TokensSummary {
+    const DAY_MS_LOCAL = 24 * 60 * 60 * 1000;
+    const byWorkflow = new Map<string, WorkflowTokens>();
+    let total = 0;
+    for (const run of runs) {
+        // Only runs active/finished today count toward "today's tokens".
+        const ts = runTsMs(run.created_at);
+        if (!ts || now - ts > DAY_MS_LOCAL) continue;
+        const detail = detailFor(run.run_id);
+        if (!detail) continue;
+        const wf = run.workflow_id || run.workflow_name || 'unknown';
+        let entry = byWorkflow.get(wf);
+        if (!entry) {
+            entry = { workflow: wf, promptTokens: 0, completionTokens: 0, totalTokens: 0, runs: 0 };
+            byWorkflow.set(wf, entry);
+        }
+        entry.runs += 1;
+        for (const step of detail.steps ?? []) {
+            const tk = step.tokens;
+            if (!tk) continue;
+            const pt = tk.prompt_tokens ?? 0;
+            const ct = tk.completion_tokens ?? 0;
+            const tt = tk.total_tokens ?? pt + ct;
+            entry.promptTokens += pt;
+            entry.completionTokens += ct;
+            entry.totalTokens += tt;
+            total += tt;
+        }
+    }
+    const workflows = [...byWorkflow.values()].sort((a, b) => b.totalTokens - a.totalTokens);
+    return { total, workflows };
 }

@@ -50,7 +50,7 @@ Per the t3code performance pattern (`insight/t3code-analysis-and-fusion-lessons-
 
 First-class shell page at `/agents` (sidebar entry gated on `fusion-cowork`/`fusion-agent-studio` access) giving a fleet-level view over cowork workflows and agent-studio seats — zero new backend, all data via the existing `/shell/<module-id>/` gateway proxy with the shell session Bearer:
 
-- **Stats row**: active runs / waiting-for-human / completed today / failed today, derived from the cowork runs list.
+- **Stats row**: active runs / waiting-for-human / completed today / tokens today, derived from the cowork runs list. The token stat is clickable — a dialog breaks consumption down per workflow/agent (prompt/completion/total, from cowork per-node usage stats, cowork#143; nodes without LLM calls report none).
 - **HITL banner**: pending approval count from `GET /shell/fusion-cowork/api/permissions/pending`; clicking opens the cowork module tab's approvals surface.
 - **Agent cards grid**: one card per workflow (newest run wins) plus published agent-studio seats as idle rows; status dot pulse taxonomy (run/wait/idle/err); click selects the run.
 - **Live step feed**: SSE subscription to `GET /shell/fusion-cowork/api/runs/{run_id}/events` via a fetch-stream reader (`lib/sseStream.ts` — EventSource cannot send the Bearer header), bounded to 200 lines; card click switches the subscription.

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import {
     type CoworkRun,
+    aggregateTokens,
     deriveCards,
     deriveStats,
     deriveWaterfall,
@@ -109,5 +110,61 @@ describe('deriveWaterfall (#137)', () => {
 
     it('missing steps array yields empty waterfall', () => {
         expect(deriveWaterfall({ run_id: 'r1', status: 'running' })).toEqual([]);
+    });
+});
+
+describe('aggregateTokens (#137 feedback)', () => {
+    const now = Date.now();
+    const todayRun = (id: string, wf: string): CoworkRun => ({
+        run_id: id,
+        workflow_id: wf,
+        workflow_name: wf,
+        status: 'success',
+        created_at: now / 1000,
+    });
+
+    it('sums per-step tokens per workflow, sorted desc, skips old runs', () => {
+        const runs = [
+            todayRun('r1', 'wf_a'),
+            todayRun('r2', 'wf_a'),
+            todayRun('r3', 'wf_b'),
+            { ...todayRun('r4', 'wf_a'), created_at: (now - 3 * 86_400_000) / 1000 },
+        ];
+        const details: Record<
+            string,
+            Parameters<typeof aggregateTokens>[1] extends (id: string) => infer R ? R : never
+        > = {
+            r1: {
+                run_id: 'r1',
+                status: 'success',
+                steps: [
+                    {
+                        node_id: 'n1',
+                        tokens: { prompt_tokens: 100, completion_tokens: 20, total_tokens: 120 },
+                    },
+                    { node_id: 'n2', tokens: null },
+                ],
+            },
+            r2: {
+                run_id: 'r2',
+                status: 'success',
+                steps: [{ node_id: 'n1', tokens: { prompt_tokens: 50, completion_tokens: 30 } }],
+            },
+            r3: { run_id: 'r3', status: 'success', steps: [] },
+        };
+        const s = aggregateTokens(runs, (id) => details[id]);
+        expect(s.total).toBe(200); // 120 + (50+30)
+        expect(s.workflows).toHaveLength(2);
+        expect(s.workflows[0]?.workflow).toBe('wf_a');
+        expect(s.workflows[0]?.promptTokens).toBe(150);
+        expect(s.workflows[0]?.completionTokens).toBe(50);
+        expect(s.workflows[0]?.runs).toBe(2);
+        expect(s.workflows[1]?.totalTokens).toBe(0);
+    });
+
+    it('missing details contribute nothing', () => {
+        const s = aggregateTokens([todayRun('r9', 'wf_x')], () => undefined);
+        expect(s.total).toBe(0);
+        expect(s.workflows).toEqual([]);
     });
 });

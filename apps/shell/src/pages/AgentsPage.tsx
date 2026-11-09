@@ -1,7 +1,9 @@
 import {
     type AgentCardStatus,
     type CoworkRun,
+    type CoworkRunDetail,
     type DerivedAgentCard,
+    aggregateTokens,
     deriveCards,
     deriveStats,
     deriveWaterfall,
@@ -9,6 +11,7 @@ import {
     fetchRunDetail,
     fetchRuns,
     fetchStudioAgents,
+    runTsMs,
     statusFromRun,
 } from '@/lib/agentsApi';
 import { type SseStreamHandle, openSseStream } from '@/lib/sseStream';
@@ -101,9 +104,12 @@ const LEVEL_MARK: Record<FeedLine['level'], string> = {
     info: '·',
 };
 
-function elapsedLabel(startedAt: string | null): string {
+function elapsedLabel(startedAt: number | string | null): string {
     if (!startedAt) return '—';
-    const ts = Date.parse(startedAt);
+    const ts =
+        typeof startedAt === 'number'
+            ? startedAt * (startedAt > 1e12 ? 1 : 1000)
+            : Date.parse(startedAt);
     if (!Number.isFinite(ts)) return '—';
     const mins = Math.max(0, Math.round((Date.now() - ts) / 60000));
     if (mins < 60) return `${mins}m`;
@@ -177,6 +183,7 @@ export function AgentsPage() {
     const [feed, setFeed] = useState<FeedLine[]>([]);
     const [waterfall, setWaterfall] = useState<ReturnType<typeof deriveWaterfall>>([]);
     const [error, setError] = useState<string | null>(null);
+    const [tokensOpen, setTokensOpen] = useState(false);
     const sseRef = useRef<SseStreamHandle | null>(null);
     const feedBoxRef = useRef<HTMLDivElement | null>(null);
 
@@ -209,6 +216,40 @@ export function AgentsPage() {
             setError((err as Error).message);
         }
     }, []);
+
+    // Token aggregation (user feedback): the runs list carries no usage, so
+    // today's + running run details are fetched alongside the poll. Cached
+    // per run_id — finished runs stop changing, only new ids hit the wire.
+    const [detailsById, setDetailsById] = useState<Record<string, CoworkRunDetail>>({});
+    const detailsRef = useRef<Record<string, CoworkRunDetail>>({});
+    useEffect(() => {
+        if (!token || runs.length === 0) return;
+        const DAY_MS = 24 * 60 * 60 * 1000;
+        const candidates = runs
+            .filter((r) => {
+                const ts = runTsMs(r.created_at);
+                return r.status === 'running' || (ts && Date.now() - ts < DAY_MS);
+            })
+            .slice(0, 20)
+            .filter((r) => detailsRef.current[r.run_id] === undefined);
+        if (candidates.length === 0) return;
+        let alive = true;
+        void Promise.all(
+            candidates.map(async (r) => {
+                try {
+                    const d = await fetchRunDetail(r.run_id);
+                    detailsRef.current[r.run_id] = d;
+                } catch (err) {
+                    console.warn('[agentsPage] token detail failed:', r.run_id, err);
+                }
+            })
+        ).then(() => {
+            if (alive) setDetailsById({ ...detailsRef.current });
+        });
+        return () => {
+            alive = false;
+        };
+    }, [runs, token]);
 
     useEffect(() => {
         if (!token) return;
@@ -283,6 +324,7 @@ export function AgentsPage() {
     }, [feed.length]);
 
     const stats = deriveStats(runs);
+    const tokensSummary = aggregateTokens(runs, (id) => detailsById[id]);
     const selectedCard = cards.find((c) => c.runId === selectedRunId);
     const recentRuns = runs.slice(0, 8);
 
@@ -317,14 +359,116 @@ export function AgentsPage() {
                     [t('活跃 runs', 'Active runs'), String(stats.activeRuns)],
                     [t('等待人工', 'Waiting for human'), String(stats.waiting)],
                     [t('今日完成', 'Completed today'), String(stats.completedToday)],
-                    [t('今日失败', 'Failed today'), String(stats.failed)],
                 ].map(([k, v]) => (
                     <div key={k} className="rounded-xl border border-border bg-bg-elevated p-3.5">
                         <div className="text-xs text-text-muted">{k}</div>
                         <div className="mt-1 text-2xl font-bold text-text-primary">{v}</div>
                     </div>
                 ))}
+                <button
+                    type="button"
+                    onClick={() => setTokensOpen(true)}
+                    className="rounded-xl border border-border bg-bg-elevated p-3.5 text-left hover:border-brand"
+                >
+                    <div className="text-xs text-text-muted">{t('今日 token', 'Tokens today')}</div>
+                    <div className="mt-1 text-2xl font-bold text-text-primary">
+                        {tokensSummary.total.toLocaleString()}
+                    </div>
+                    <div className="mt-0.5 text-[10px] text-text-muted">
+                        {t('点击查看各 agent 明细', 'Click for per-agent breakdown')}
+                    </div>
+                </button>
             </div>
+
+            {tokensOpen ? (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+                    role="dialog"
+                    aria-modal="true"
+                    tabIndex={-1}
+                    onClick={() => setTokensOpen(false)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Escape') setTokensOpen(false);
+                    }}
+                >
+                    <div
+                        className="max-h-[70vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-bg-elevated p-5 shadow-overlay"
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                    >
+                        <div className="mb-1 text-sm font-semibold text-text-primary">
+                            {t('今日 token 消耗明细', 'Token usage today — per agent')}
+                        </div>
+                        <div className="mb-3 text-xs text-text-muted">
+                            {t(
+                                `合计 ${tokensSummary.total.toLocaleString()} tokens · 来自 cowork run 节点统计（issue cowork#143）`,
+                                `${tokensSummary.total.toLocaleString()} tokens total · from cowork run node stats (cowork#143)`
+                            )}
+                        </div>
+                        {tokensSummary.workflows.length === 0 ? (
+                            <div className="rounded-xl border border-border bg-bg-muted p-4 text-sm text-text-muted">
+                                {t(
+                                    '今日暂无 token 数据 — 上游节点可能未回填 usage',
+                                    'No token data today — upstream nodes may not report usage'
+                                )}
+                            </div>
+                        ) : (
+                            <table className="w-full text-xs">
+                                <thead>
+                                    <tr className="border-b border-border text-text-muted">
+                                        <th className="py-1.5 text-left font-normal">
+                                            {t('工作流 / agent', 'Workflow / agent')}
+                                        </th>
+                                        <th className="py-1.5 text-right font-normal">
+                                            {t('输入', 'Prompt')}
+                                        </th>
+                                        <th className="py-1.5 text-right font-normal">
+                                            {t('输出', 'Completion')}
+                                        </th>
+                                        <th className="py-1.5 text-right font-normal">
+                                            {t('合计', 'Total')}
+                                        </th>
+                                        <th className="py-1.5 text-right font-normal">
+                                            {t('runs', 'Runs')}
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {tokensSummary.workflows.map((w) => (
+                                        <tr
+                                            key={w.workflow}
+                                            className="border-b border-dashed border-border"
+                                        >
+                                            <td className="py-1.5 text-text-primary">
+                                                {w.workflow}
+                                            </td>
+                                            <td className="py-1.5 text-right font-mono text-text-secondary">
+                                                {w.promptTokens.toLocaleString()}
+                                            </td>
+                                            <td className="py-1.5 text-right font-mono text-text-secondary">
+                                                {w.completionTokens.toLocaleString()}
+                                            </td>
+                                            <td className="py-1.5 text-right font-mono font-medium text-text-primary">
+                                                {w.totalTokens.toLocaleString()}
+                                            </td>
+                                            <td className="py-1.5 text-right font-mono text-text-muted">
+                                                {w.runs}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => setTokensOpen(false)}
+                            className="mt-4 w-full rounded-lg border border-border px-3 py-1.5 text-sm text-text-secondary hover:text-brand"
+                        >
+                            {t('关闭', 'Close')}
+                        </button>
+                    </div>
+                </div>
+            ) : null}
 
             {pendingCount > 0 ? (
                 <button
