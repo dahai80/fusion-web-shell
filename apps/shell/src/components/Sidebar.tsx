@@ -1,6 +1,6 @@
 import { NotificationBell } from '@/components/NotificationBell';
 import { pushToast } from '@/components/ToastHost';
-import { navigateShell, pathForAdminPage } from '@/lib/adminRoute';
+import { ROUTE_EVENT, navigateShell, pathForAdminPage } from '@/lib/adminRoute';
 import {
     type CatalogEntry,
     catalogRows,
@@ -158,6 +158,19 @@ export function Sidebar({ onOpen, onLogout }: Props) {
     const activeTab = tabs.find((tb) => tb.id === activeTabId) ?? null;
     const activeManifestId = activeTab?.manifestId ?? null;
     const [expanded, setExpanded] = useState<string | null>(null);
+    // Agents overview route highlight (issue #137): tracks in-shell SPA nav.
+    const [agentsActive, setAgentsActive] = useState(
+        () => window.location.pathname === pathForAdminPage('agents')
+    );
+    useEffect(() => {
+        const sync = () => setAgentsActive(window.location.pathname === pathForAdminPage('agents'));
+        window.addEventListener(ROUTE_EVENT, sync);
+        window.addEventListener('popstate', sync);
+        return () => {
+            window.removeEventListener(ROUTE_EVENT, sync);
+            window.removeEventListener('popstate', sync);
+        };
+    }, []);
     const expandedGroups = usePrefs((s) => s.expandedGroups);
     const toggleExpandedGroup = usePrefs((s) => s.toggleExpandedGroup);
     const setExpandedGroups = usePrefs((s) => s.setExpandedGroups);
@@ -262,6 +275,21 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                     <span aria-hidden>⌕</span>
                     {t('搜索… ⌘K', 'Search… ⌘K')}
                 </button>
+                {canView('fusion-cowork') || canView('fusion-agent-studio') ? (
+                    <button
+                        type="button"
+                        onClick={() => navigateShell(pathForAdminPage('agents'))}
+                        aria-current={agentsActive ? 'page' : undefined}
+                        className={`mb-3 flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm ${
+                            agentsActive
+                                ? 'border-brand/40 bg-brand/10 text-brand'
+                                : 'border-border bg-bg-elevated text-text-primary hover:border-brand'
+                        }`}
+                    >
+                        <Bot size={16} aria-hidden />
+                        {t('Agent 总览', 'Agent Overview')}
+                    </button>
+                ) : null}
                 {pendingApprovals > 0 ? (
                     <button
                         type="button"
