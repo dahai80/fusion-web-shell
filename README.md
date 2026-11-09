@@ -66,6 +66,15 @@ Frontend for a server-generated random-code challenge in front of credential ver
 - `captcha_*` error rejections rotate the challenge automatically.
 - Bilingual strings, dual-theme tokens; rate limiting/lockout/audit live server-side (tracked in the fusion-gateway upstream issue).
 
+## Design Hub menu + native-app launcher (issue #143)
+
+One 设计中心 / Design Hub group (manifest schema v2 `group: design-hub`), two paths, not two sibling menus:
+
+- **「AI 帮我画」/ AI Design** — the existing fusion-design web module, entry unchanged, now grouped under the hub.
+- **「我自己画」/ Self-design** — `fusion-desigma` registered as a **native-app module** (pure Rust renderer, no web view): the shell renders a launcher + status tab instead of an iframe (`lib/nativeApps.ts` + `components/DesigmaLauncher.tsx`). Launch opens `desigma://open` with the identity context in the URL fragment (never transmitted) when a cloud-try SSO session exists; local sessions pass no token and say so. Last-launch stamp + install hint included. SSO receive contract tracked upstream: dahai80/fusion-desigma#2.
+
+Native-app tabs carry `src: null` — no preflight, no crash timers, full KeepAlive tab behavior. RBAC per module intact (`canView` gates both entries); bilingual + dual-theme.
+
 ## Status
 
 Shell host implemented (issues #1-#7 plus PRD/UI-spec gap items):

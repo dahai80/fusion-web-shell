@@ -1,3 +1,4 @@
+import { isNativeAppModule } from '@/lib/nativeApps';
 import type { ModuleManifest } from '@/types/manifest';
 import { create } from 'zustand';
 import { useLang } from './lang';
@@ -141,7 +142,7 @@ export function newTab(
         title: tabTitle(manifest, seq, opts?.pageTitle),
         status: 'active',
         seq,
-        src: srcFor(manifest, devModules, opts?.route),
+        src: isNativeAppModule(manifest.id) ? null : srcFor(manifest, devModules, opts?.route),
         route: opts?.route,
         pageTitle: opts?.pageTitle,
         hasActiveTask: false,
@@ -169,7 +170,9 @@ export const useTabs = create<TabsState>((set, get) => ({
             if (existing) {
                 if (existing.status === 'crashed') return get().restoreIframe(manifest);
                 if (opts?.route && existing.src !== null) {
-                    const want = srcFor(manifest, getDevModules(), opts.route);
+                    const want = isNativeAppModule(manifest.id)
+                        ? null
+                        : srcFor(manifest, getDevModules(), opts.route);
                     // Same route: activate only (KeepAlive, no iframe reload);
                     // new route: re-src the tab (deep-link navigation, C8).
                     if (existing.src !== want) {
@@ -324,7 +327,7 @@ export function restorePersistedTabs(
             title: tabTitle(manifest, p.seq, p.pageTitle),
             status: 'active',
             seq: p.seq,
-            src: srcFor(manifest, devModules, p.route),
+            src: isNativeAppModule(manifest.id) ? null : srcFor(manifest, devModules, p.route),
             route: p.route,
             pageTitle: p.pageTitle,
             hasActiveTask: false,

@@ -1,7 +1,9 @@
 import { type ErrorEnvelope, sharedClient } from '@/api/client';
+import { DesigmaLauncher } from '@/components/DesigmaLauncher';
 import { ModuleUnavailablePage } from '@/components/ModuleUnavailable';
 import { pushToast } from '@/components/ToastHost';
 import { useViewport } from '@/hooks/useViewport';
+import { isNativeAppModule } from '@/lib/nativeApps';
 import { stampLastSeen } from '@/lib/sidebarTree';
 import { t, useLang } from '@/stores/lang';
 import { iframeAllowPolicy, isReadonlyOnMobile, useManifests } from '@/stores/manifests';
@@ -273,6 +275,17 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
         return (
             <div className="flex h-full items-center justify-center text-sm text-text-muted">
                 {t('模块未注册', 'Module not registered')}: {tab.manifestId}
+            </div>
+        );
+    }
+
+    // Native-app modules (issue #143): no iframe — launcher + status card.
+    // Rendered inside the KeepAlive visibility wrapper so tab switching
+    // behaves like every other tab.
+    if (isNativeAppModule(manifest.id)) {
+        return (
+            <div className={`h-full ${visible ? '' : 'hidden'}`} data-tab-id={tab.id}>
+                <DesigmaLauncher manifest={manifest} />
             </div>
         );
     }
