@@ -54,6 +54,7 @@ import {
     Settings,
     ShieldCheck,
     Terminal,
+    TrendingUp,
     Waves,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -110,6 +111,7 @@ const NAMED_ICONS: Record<string, LucideIcon> = {
     PenTool,
     MessageSquare,
     Terminal,
+    TrendingUp,
     Package,
     Settings,
     FileText,
