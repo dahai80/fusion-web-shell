@@ -8,6 +8,7 @@ import {
     portalAvailable,
     redirectToPortal,
 } from '@/lib/portalAuth';
+import { safeReturnPath } from '@/lib/returnPath';
 import { consumeTicketParam, exchangeTicket } from '@/lib/ssoAuth';
 import { LoginPage } from '@/pages/Login';
 import { MainPage } from '@/pages/Main';
@@ -90,6 +91,11 @@ export function App() {
         useAuth.getState().setUser(u, token);
         // Manifest loading is owned by MainPage's useAutoRetry (retry UX lives there).
         if (u.must_change_password) pushToast('warning', '请在管理员处修改初始密码');
+        // #451: gateway bounced the anonymous navigation here with
+        // /login?return=<path> — land the user back on the module they asked
+        // for. Same-origin path only; replace() so back-button skips /login.
+        const returnTo = safeReturnPath(window.location.search);
+        if (returnTo) window.location.replace(returnTo);
     };
 
     if (authStatus !== 'authed' || !user) {
