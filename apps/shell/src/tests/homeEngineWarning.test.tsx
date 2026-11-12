@@ -1,6 +1,6 @@
 import './domSetup';
 import { describe, expect, it } from 'bun:test';
-import { computeEngineOffline } from '../pages/Home';
+import { ENGINE_ID, NODE_ID, computeEngineOffline } from '../pages/Home';
 import type { ModuleManifest } from '../types/manifest';
 
 const engine: ModuleManifest = {
@@ -26,5 +26,15 @@ describe('Home engine-offline verdict (issue #93)', () => {
     it('warns on the client-side unreachable mark; healthy engine stays silent', () => {
         expect(computeEngineOffline(engine, new Set(['fusion-mlx']), true)).toBe(true);
         expect(computeEngineOffline(engine, new Set(), true)).toBe(false);
+    });
+});
+
+describe('footer ids match the gateway manifest registry (#147)', () => {
+    it('node id is the registered fusion-multi-nodes (not the old singular form)', () => {
+        expect(NODE_ID).toBe('fusion-multi-nodes');
+    });
+
+    it('engine id stays fusion-mlx', () => {
+        expect(ENGINE_ID).toBe('fusion-mlx');
     });
 });

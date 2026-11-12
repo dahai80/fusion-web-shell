@@ -22,9 +22,11 @@ interface Props {
     onOpen(manifest: ModuleManifest, route?: string, pageTitle?: string): void;
 }
 
-/** Engine / resident-node ids shown in the Home status footer. */
-const ENGINE_ID = 'fusion-mlx';
-const NODE_ID = 'fusion-multi-node';
+/** Engine / resident-node ids shown in the Home status footer. Exported
+ *  for the registry-match test (#147): these must equal the gateway
+ *  manifest ids or the footer renders a false 未注册. */
+export const ENGINE_ID = 'fusion-mlx';
+export const NODE_ID = 'fusion-multi-nodes';
 
 /** Role-flavored suggested chips (issue #32): prefill + jump to the owning module. */
 const STATIC_CHIPS: ReadonlyArray<{
