@@ -291,14 +291,28 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
     }
 
     if (unreachable && !loaded) {
+        // Issue #149: the unavailable page must sit inside the KeepAlive
+        // visibility wrapper — bare renders stack one panel per offline tab
+        // on top of each other in the content area.
         return (
-            <ModuleUnavailablePage manifest={manifest} onProbed={() => setProbeKey((k) => k + 1)} />
+            <div className={`h-full ${visible ? '' : 'hidden'}`} data-tab-id={tab.id}>
+                <ModuleUnavailablePage
+                    manifest={manifest}
+                    onProbed={() => setProbeKey((k) => k + 1)}
+                />
+            </div>
         );
     }
 
     if (!tab.src) {
+        // Issue #149: same visibility-wrapper rule as the unavailable page —
+        // crashed tabs render one card each, hidden unless active, plus a
+        // dismiss control that closes the crashed tab.
         return (
-            <div className="flex h-full flex-col items-center justify-center gap-3 bg-bg">
+            <div
+                className={`flex h-full flex-col items-center justify-center gap-3 bg-bg ${visible ? '' : 'hidden'}`}
+                data-tab-id={tab.id}
+            >
                 <div className="text-sm text-text-secondary">
                     {t('模块', 'Module')}: {manifest.title}
                 </div>
@@ -318,13 +332,22 @@ export function TabView({ tab, manifest, visible, onCrash, onReload }: Props) {
                         ? `crashed at ${new Date(tab.crashedAt).toLocaleTimeString()}`
                         : t('iframe 已释放', 'iframe released')}
                 </div>
-                <button
-                    type="button"
-                    onClick={() => onReload(tab.id)}
-                    className="rounded-md bg-brand px-4 py-2 text-sm text-white"
-                >
-                    {t('重试', 'Retry')}
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={() => onReload(tab.id)}
+                        className="rounded-md bg-brand px-4 py-2 text-sm text-white"
+                    >
+                        {t('重试', 'Retry')}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => useTabs.getState().forceCloseTab(tab.id)}
+                        className="rounded-md border border-border px-4 py-2 text-sm text-text-secondary"
+                    >
+                        {t('关闭', 'Dismiss')}
+                    </button>
+                </div>
             </div>
         );
     }
