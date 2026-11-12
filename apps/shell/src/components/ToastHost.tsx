@@ -40,13 +40,33 @@ function arm(id: number, ms: number): void {
 }
 
 /** Non-blocking toast (PRD §7.2): gateway error envelope shows here, 4s
- *  auto-dismiss (routing-decision toasts pass 3000 — issue #86). */
+ *  auto-dismiss (routing-decision toasts pass 3000 — issue #86).
+ *  #150: an identical (level+message) toast that is still live is NOT
+ *  duplicated — its dismiss timer restarts, so repeated failures (e.g.
+ *  invalid-API-key spam) show one bubble, not a stack. */
 export function pushToast(level: Toast['level'], message: string, durationMs = 4000): void {
+    const existing = toasts.find((x) => x.level === level && x.message === message);
+    if (existing) {
+        const entry = timers.get(existing.id);
+        if (entry) clearTimeout(entry.timer);
+        arm(existing.id, durationMs);
+        console.log(`[toast:${level}] (deduped)`, message);
+        return;
+    }
     const t: Toast = { id: ++seq, level, message };
     toasts.push(t);
     notify();
     arm(t.id, durationMs);
     console.log(`[toast:${level}]`, message);
+}
+
+/** Test/observer seam: subscribe to toast-list snapshots. */
+export function subscribeToasts(fn: (toasts: Toast[]) => void): () => void {
+    listeners.add(fn);
+    fn([...toasts]);
+    return () => {
+        listeners.delete(fn);
+    };
 }
 
 export function pauseToast(id: number): void {
