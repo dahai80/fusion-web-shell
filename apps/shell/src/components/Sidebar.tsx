@@ -38,7 +38,7 @@ import { usePrefs } from '@/stores/prefs';
 import { useTabs } from '@/stores/tabs';
 import { useTasks } from '@/stores/tasks';
 import { useTheme } from '@/stores/theme';
-import type { ModuleManifest } from '@/types/manifest';
+import type { ModuleManifest, ModulePage } from '@/types/manifest';
 import {
     Activity,
     Bot,
@@ -680,6 +680,46 @@ function GroupStatusDot({
     );
 }
 
+/** Issue #153: partition a module's pages into dev and prod layers. Pages
+ *  without a layer tag count as dev — when the serving chain strips `layer`
+ *  the module renders one flat list (honest degradation, upstream gw#660). */
+export function splitPageLayers(pages: ModulePage[]): {
+    dev: ModulePage[];
+    prod: ModulePage[];
+} {
+    return {
+        dev: pages.filter((p) => p.layer !== 'prod'),
+        prod: pages.filter((p) => p.layer === 'prod'),
+    };
+}
+
+/** L2 page row inside a module menu: deep-links `${entry}#${route}` (#24). */
+function PageRow({
+    m,
+    page,
+    lang,
+    activeTab,
+    onOpen,
+}: {
+    m: ModuleManifest;
+    page: { route: string; title: string; title_en?: string };
+    lang: 'zh' | 'en';
+    activeTab: { id: string; manifestId: string; route?: string } | null;
+    onOpen(manifest: ModuleManifest, route?: string, pageTitle?: string): void;
+}) {
+    const pageTitle = lang === 'en' && page.title_en ? page.title_en : page.title;
+    const pageActive = isPageActive(activeTab, m.id, page.route);
+    return (
+        <button
+            type="button"
+            onClick={() => onOpen(m, page.route, pageTitle)}
+            className={`flex h-8 min-w-0 items-center rounded-lg pl-8 pr-2 text-left ${TYPE_SCALE.l2} ${pageActive ? TYPE_SCALE.l2Active : TYPE_SCALE.l2Idle}`}
+        >
+            <span className="truncate">{pageTitle}</span>
+        </button>
+    );
+}
+
 /**
  * One module row (issue #71, retooled by #99/MT-2): 32px row with a 16px
  * lucide icon, three-state status dot and unread count bubble; active =
@@ -721,6 +761,7 @@ function ModuleMenuRow({
     const active = activeManifestId === m.id;
     const alreadyOpen = tabs.some((tb) => tb.manifestId === m.id);
     const pages = m.pages ?? [];
+    const { dev: devPages, prod: prodPages } = splitPageLayers(pages);
     const open = expanded === m.id;
     const unread = unreadCountFor(notifItems, readIds, m.id);
     const Icon = iconFor(m);
@@ -787,22 +828,40 @@ function ModuleMenuRow({
                     </button>
                 ) : null}
             </div>
-            {open
-                ? pages.map((page) => {
-                      const pageTitle = lang === 'en' && page.title_en ? page.title_en : page.title;
-                      const pageActive = isPageActive(activeTab, m.id, page.route);
-                      return (
-                          <button
-                              key={`${m.id}:${page.route}`}
-                              type="button"
-                              onClick={() => onOpen(m, page.route, pageTitle)}
-                              className={`flex h-8 min-w-0 items-center rounded-lg pl-8 pr-2 text-left ${TYPE_SCALE.l2} ${pageActive ? TYPE_SCALE.l2Active : TYPE_SCALE.l2Idle}`}
-                          >
-                              <span className="truncate">{pageTitle}</span>
-                          </button>
-                      );
-                  })
-                : null}
+            {open ? (
+                <>
+                    {devPages.map((page) => (
+                        <PageRow
+                            key={`${m.id}:${page.route}`}
+                            m={m}
+                            page={page}
+                            lang={lang}
+                            activeTab={activeTab}
+                            onOpen={onOpen}
+                        />
+                    ))}
+                    {prodPages.length > 0 ? (
+                        <>
+                            <div
+                                className="flex h-6 items-center pl-8 text-[10px] font-medium uppercase tracking-wider text-text-muted"
+                                aria-hidden
+                            >
+                                {t('生产层', 'Prod layer')}
+                            </div>
+                            {prodPages.map((page) => (
+                                <PageRow
+                                    key={`${m.id}:${page.route}`}
+                                    m={m}
+                                    page={page}
+                                    lang={lang}
+                                    activeTab={activeTab}
+                                    onOpen={onOpen}
+                                />
+                            ))}
+                        </>
+                    ) : null}
+                </>
+            ) : null}
         </div>
     );
 }
