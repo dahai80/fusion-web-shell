@@ -19,6 +19,11 @@ export interface ModulePage {
     route: string;
     title: string;
     title_en?: string;
+    /** Delivery layer (agent-studio E8, issue #153): 'dev' = local daemon
+     *  direct-connect, 'prod' = governance/budget/audit surface. Absent when
+     *  the manifest serving chain strips it — the shell then renders one
+     *  flat page list (honest degradation). */
+    layer?: 'dev' | 'prod';
 }
 
 export type NotificationKind = 'approvals' | 'runs' | 'engine' | 'tasks';
