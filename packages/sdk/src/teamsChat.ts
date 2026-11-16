@@ -151,10 +151,12 @@ export class TeamsChatAdapter implements ChatAdapter {
 
     async members(): Promise<ChatMember[]> {
         const r = await this.rpc('teams.status', { team: this.opts.team });
+        // #726 presence model: lifecycle-derived string per member
+        // (available | paused | offline) — map to the component's boolean.
         return (r.members ?? []).map((m) => ({
             id: String(m.name ?? m.id ?? ''),
             name: String(m.name ?? m.id ?? ''),
-            online: m.online === true,
+            online: m.presence === 'available' || m.online === true,
         }));
     }
 }
