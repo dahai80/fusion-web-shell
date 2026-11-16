@@ -17,6 +17,8 @@ export interface TeamsChatOptions {
     member: string;
     /** Inbox/status poll interval; default 2s. */
     pollMs?: number;
+    /** Recipient for rich direct sends when no reply target is known. */
+    defaultRecipient?: string;
 }
 
 interface RpcResult {
@@ -40,23 +42,26 @@ export class TeamsChatAdapter implements ChatAdapter {
         presence: true,
     };
     private seen = new Set<string>();
+    private replyTargets = new Map<string, string>();
     private timer: ReturnType<typeof setInterval> | null = null;
 
     constructor(private opts: TeamsChatOptions) {}
 
     private async rpc(method: string, params: Record<string, unknown>): Promise<RpcResult> {
-        const res = await fetch(`${this.opts.baseUrl}/rpc`, {
+        // Studio web bridge wire shape: POST /v1/rpc {method, params}. Handlers
+        // return {"status":"error",...} with HTTP 200 — check .status, not 2xx.
+        const res = await fetch(`${this.opts.baseUrl}/v1/rpc`, {
             method: 'POST',
             headers: {
                 'content-type': 'application/json',
                 authorization: `Bearer ${this.opts.token}`,
             },
-            body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method, params }),
+            body: JSON.stringify({ method, params }),
         });
         if (!res.ok) throw new Error(`teams rpc ${method} failed: ${res.status}`);
-        const data = (await res.json()) as { result?: RpcResult; error?: { message: string } };
-        if (data.error) throw new Error(`teams rpc ${method}: ${data.error.message}`);
-        return data.result ?? {};
+        const data = (await res.json()) as RpcResult & { message?: string };
+        if (data.status === 'error') throw new Error(`teams rpc ${method}: ${data.message}`);
+        return data;
     }
 
     private static toMessage(raw: Record<string, unknown>): ChatMessage {
@@ -86,16 +91,37 @@ export class TeamsChatAdapter implements ChatAdapter {
         return { messages: page, hasMore: offset + page.length < all.length };
     }
 
+    /** Rich payloads (attachments/voice/reply) use teams.send — the only
+     *  handler with the full TeamMessage passthrough; broadcast carries
+     *  text + mentions only. `to` = replied-message sender or the adapter's
+     *  defaultRecipient. */
     async send(payload: SendPayload): Promise<{ delivered: boolean; msgId?: string }> {
+        const rich = payload.attachments?.length || payload.audioRef || payload.transcript;
+        if (rich || payload.replyTo) {
+            const to = payload.replyTo
+                ? (this.replyTargets.get(payload.replyTo) ?? this.opts.defaultRecipient ?? '')
+                : (this.opts.defaultRecipient ?? '');
+            const r = await this.rpc('teams.send', {
+                team: this.opts.team,
+                from: this.opts.member,
+                to,
+                body: payload.body,
+                reply_to: payload.replyTo ?? '',
+                mentions: payload.mentions ?? [],
+                attachments: payload.attachments ?? [],
+                audio_ref: payload.audioRef ?? '',
+                transcript: payload.transcript ?? '',
+            });
+            return {
+                delivered: r.delivered === true || r.status === 'ok',
+                msgId: r.msg_id || undefined,
+            };
+        }
         const r = await this.rpc('teams.broadcast', {
             team: this.opts.team,
             from: this.opts.member,
             body: payload.body,
             mentions: payload.mentions ?? [],
-            attachments: payload.attachments ?? [],
-            reply_to: payload.replyTo ?? '',
-            audio_ref: payload.audioRef ?? '',
-            transcript: payload.transcript ?? '',
         });
         return { delivered: r.delivered === true || r.status === 'ok' };
     }
@@ -107,6 +133,7 @@ export class TeamsChatAdapter implements ChatAdapter {
                 for (const m of msgs) {
                     if (m.id && !this.seen.has(m.id)) {
                         this.seen.add(m.id);
+                        this.replyTargets.set(m.id, m.sender);
                         cb(m);
                     }
                 }
