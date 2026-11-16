@@ -17,14 +17,22 @@ export class RagSessionAdapter implements ChatAdapter {
 
     constructor(
         private baseUrl: string,
+        /** Session/Q&A endpoint path, e.g. fusion-rag `/kb/bases/{kb_id}/ask`.
+         *  History endpoints vary per deployment; absent history = fresh
+         *  session (list degrades to an empty page, never throws). */
         private sessionPath = '/api/v1/session'
     ) {}
 
     async list(offset: number): Promise<ListPage> {
-        const res = await fetch(`${this.baseUrl}${this.sessionPath}?offset=${offset}`);
-        if (!res.ok) throw new Error(`rag list failed: ${res.status}`);
-        const data = (await res.json()) as { messages?: ChatMessage[]; hasMore?: boolean };
-        return { messages: data.messages ?? [], hasMore: data.hasMore ?? false };
+        try {
+            const res = await fetch(`${this.baseUrl}${this.sessionPath}?offset=${offset}`);
+            if (!res.ok) throw new Error(String(res.status));
+            const data = (await res.json()) as { messages?: ChatMessage[]; hasMore?: boolean };
+            return { messages: data.messages ?? [], hasMore: data.hasMore ?? false };
+        } catch (err) {
+            console.log('[chat:rag] no server-side history, fresh session', err);
+            return { messages: [], hasMore: false };
+        }
     }
 
     async send(payload: SendPayload): Promise<{ delivered: boolean; msgId?: string }> {
