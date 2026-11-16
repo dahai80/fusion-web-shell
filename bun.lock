@@ -53,6 +53,22 @@
         "vite": "^5.4.10",
       },
     },
+    "packages/chat": {
+      "name": "@fusion/chat",
+      "version": "0.1.0",
+      "dependencies": {
+        "@fusion/design-tokens": "workspace:*",
+        "lucide-react": "^0.462.0",
+      },
+      "devDependencies": {
+        "@types/react": "^18.3.12",
+        "react": "^18.3.1",
+        "typescript": "^5.6.3",
+      },
+      "peerDependencies": {
+        "react": "^18.3.0",
+      },
+    },
     "packages/design-tokens": {
       "name": "@fusion/design-tokens",
       "version": "0.1.4",
@@ -64,6 +80,9 @@
     "packages/sdk": {
       "name": "@fusion/web-sdk",
       "version": "0.1.4",
+      "dependencies": {
+        "@fusion/chat": "workspace:*",
+      },
       "devDependencies": {
         "typescript": "^5.6.3",
       },
@@ -193,6 +212,8 @@
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.21.5", "https://registry.npmmirror.com/@esbuild/win32-x64/-/win32-x64-0.21.5.tgz", { "os": "win32", "cpu": "x64" }, "sha512-tQd/1efJuzPC6rCFwEvLtci/xNFcTZknmXs98FYDfGE4wP9ClFV98nyKrzJKVPMhdDnjzLhdUyMX4PsQAPjwIw=="],
 
     "@fusion/auth": ["@fusion/auth@workspace:apps/auth"],
+
+    "@fusion/chat": ["@fusion/chat@workspace:packages/chat"],
 
     "@fusion/design-tokens": ["@fusion/design-tokens@workspace:packages/design-tokens"],
 

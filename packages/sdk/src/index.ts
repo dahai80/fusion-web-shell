@@ -23,6 +23,7 @@ export {
 } from './retry';
 export { createThemeState } from './theme';
 export { createPoller, type PollerOptions } from './poll';
+export { TeamsChatAdapter, type TeamsChatOptions } from './teamsChat';
 export {
     PAYLOAD_BUDGET,
     PayloadBudgetExceededError,
