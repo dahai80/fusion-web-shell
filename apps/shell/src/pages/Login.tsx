@@ -5,6 +5,7 @@ import {
     fetchCaptchaChallenge,
     isCaptchaError,
 } from '@/lib/captcha';
+import { portalRedirectUri } from '@/lib/ssoRedirect';
 import { readToken, useAuth, writeToken } from '@/stores/auth';
 import { t, useLang } from '@/stores/lang';
 import { useCallback, useEffect, useState } from 'react';
@@ -180,7 +181,7 @@ export function LoginPage({ onAuthed }: { onAuthed(user: api.SessionUser, token:
                           : t('登录', 'Sign in')}
                 </button>
                 <a
-                    href={`/auth/?redirect=${encodeURIComponent(window.location.origin)}`}
+                    href={`/auth/?redirect=${encodeURIComponent(portalRedirectUri(window.location.origin))}`}
                     className="mt-3 block text-center text-xs text-brand underline"
                     onClick={(e) => {
                         // Portal-first (issue #126): probe before navigating —

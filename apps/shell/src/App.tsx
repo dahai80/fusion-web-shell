@@ -4,6 +4,7 @@ import { ToastHost, pushToast } from '@/components/ToastHost';
 import { type AdminPageName, ROUTE_EVENT, adminPageForPath } from '@/lib/adminRoute';
 import {
     consumeCodeParam,
+    consumeStashedReturn,
     exchangeCode,
     portalAvailable,
     redirectToPortal,
@@ -166,6 +167,14 @@ async function restoreSession(): Promise<void> {
                 const me = await api.fetchMe();
                 useAuth.getState().setUser(me, token);
                 console.log('[app] portal handoff complete');
+                // Issue #164: the return intent rode in sessionStorage — the
+                // gateway allowlist strips query params from redirect_uri, so
+                // ?return= cannot survive the portal round-trip.
+                const back = consumeStashedReturn();
+                if (back) {
+                    window.location.replace(back);
+                    return;
+                }
                 return;
             }
         } catch (err) {
