@@ -7,6 +7,7 @@ import {
     groupedCatalogRows,
     installCommand,
 } from '@/lib/catalogTree';
+import { factoryIntakeUrl } from '@/lib/factoryEntry';
 import {
     MODULE_STATUS_DOT,
     type ModuleStatus,
@@ -44,6 +45,7 @@ import {
     Bot,
     Boxes,
     Clapperboard,
+    Factory,
     FileText,
     GraduationCap,
     type LucideIcon,
@@ -294,6 +296,23 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                         {t('Agent 总览', 'Agent Overview')}
                     </button>
                 ) : null}
+                {/* Software factory deep link (issue #161): the factory
+                    intake v2 lives in fusion-site and cannot be iframed yet
+                    (site CSP frame-ancestors + Next asset paths need a
+                    basePath) — hand off in a new tab; the site's transitional
+                    login completes SSO via the gateway portal. */}
+                <button
+                    type="button"
+                    onClick={() => {
+                        const url = factoryIntakeUrl();
+                        console.log('[sidebar] open factory intake', url);
+                        window.open(url, '_blank', 'noopener');
+                    }}
+                    className="mb-3 flex w-full items-center gap-2 rounded-lg border border-border bg-bg-elevated px-3 py-2 text-left text-sm text-text-primary hover:border-brand"
+                >
+                    <Factory size={16} aria-hidden />
+                    {t('软件工厂', 'Software Factory')}
+                </button>
                 {pendingApprovals > 0 ? (
                     <button
                         type="button"
