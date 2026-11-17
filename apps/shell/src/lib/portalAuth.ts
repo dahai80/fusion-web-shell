@@ -1,3 +1,4 @@
+import { safeReturnPath } from './returnPath';
 /**
  * Unified auth portal consumption (issue #126, design doc §6/§7 P2): the
  * shell owns no auth forms long-term — login/register happen in the portal
@@ -13,6 +14,7 @@
  * Transitional honesty: every step probes first and degrades to the
  * existing local session flow instead of stranding the user on a 404.
  */
+import { portalRedirectUri } from './ssoRedirect';
 
 export interface CodeExchange {
     access_token?: string;
@@ -34,10 +36,43 @@ export async function portalAvailable(): Promise<boolean> {
 
 /** Redirect to the portal carrying an absolute, allowlist-safe return URL. */
 export function redirectToPortal(): void {
-    const here = window.location.pathname + window.location.search;
-    const safe = here.startsWith('/') && !here.startsWith('//') ? here : '/';
-    const redirect = `${window.location.origin}${safe}`;
+    stashReturnPath();
+    // Issue #164: the gateway allowlist compares scheme://host/path exact
+    // strings and only the root path is registered for this origin — send
+    // the normalized origin form, never origin+pathname (403
+    // redirect_not_allowed). The return intent rides in sessionStorage.
+    const redirect = portalRedirectUri(window.location.origin);
     window.location.assign(`/auth/?redirect=${encodeURIComponent(redirect)}`);
+}
+
+const SSO_RETURN_KEY = 'fusion.sso.return';
+
+/** Remember where the user was headed before the portal bounce (issue #164):
+ *  /login unwraps its ?return= target; any other path is taken as-is. */
+export function stashReturnPath(): void {
+    const here = window.location.pathname + window.location.search;
+    if (!here.startsWith('/') || here.startsWith('//')) return;
+    let dest = here;
+    if (here === '/login' || here.startsWith('/login?')) {
+        dest = safeReturnPath(window.location.search) ?? '/';
+    }
+    try {
+        sessionStorage.setItem(SSO_RETURN_KEY, dest);
+    } catch (err) {
+        console.warn('[portalAuth] return path stash failed', err);
+    }
+}
+
+/** Read + clear the stashed return destination (null when absent). */
+export function consumeStashedReturn(): string | null {
+    try {
+        const value = sessionStorage.getItem(SSO_RETURN_KEY);
+        sessionStorage.removeItem(SSO_RETURN_KEY);
+        if (value?.startsWith('/') && !value.startsWith('//')) return value;
+    } catch (err) {
+        console.warn('[portalAuth] return path read failed', err);
+    }
+    return null;
 }
 
 /**

@@ -1,6 +1,6 @@
 import './domSetup';
 import { beforeEach, describe, expect, it } from 'bun:test';
-import { consumeCodeParam, redirectToPortal } from '@/lib/portalAuth';
+import { consumeCodeParam, consumeStashedReturn, redirectToPortal } from '@/lib/portalAuth';
 
 // Issue #126: one-time code handoff consumption + safe portal redirect.
 // happy-dom's History throws under the global registrator, so replaceState
@@ -43,12 +43,25 @@ describe('portal handoff (#126)', () => {
         expect(consumeCodeParam()).toBeNull();
     });
 
-    it('redirectToPortal carries an absolute allowlist-safe redirect URL', () => {
+    it('redirectToPortal sends the root-path redirect and stashes the return intent (#164)', () => {
         (window.location as { pathname: string }).pathname = '/users';
         (window.location as { origin: string }).origin = 'http://127.0.0.1:11430';
         redirectToPortal();
         expect((window.location as { assigned?: string }).assigned).toBe(
-            `/auth/?redirect=${encodeURIComponent('http://127.0.0.1:11430/users')}`
+            `/auth/?redirect=${encodeURIComponent('http://127.0.0.1:11430/')}`
         );
+        expect(consumeStashedReturn()).toBe('/users');
+        expect(consumeStashedReturn()).toBeNull();
+    });
+
+    it('stash unwraps the /login ?return= destination (#164)', () => {
+        (window.location as { pathname: string }).pathname = '/login';
+        (window.location as { origin: string }).origin = 'http://127.0.0.1:11432';
+        (window.location as { search: string }).search = '?return=%2Fshell%2F';
+        redirectToPortal();
+        expect((window.location as { assigned?: string }).assigned).toBe(
+            `/auth/?redirect=${encodeURIComponent('http://127.0.0.1:11432/')}`
+        );
+        expect(consumeStashedReturn()).toBe('/shell/');
     });
 });
