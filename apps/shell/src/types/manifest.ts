@@ -63,6 +63,10 @@ export interface ModuleManifest {
     group_title_en?: string;
     /** Ordering hint within the group (issue #71). */
     sort?: number;
+    /** Deep-link routing mode (issue #169): 'hash' (default) appends
+     *  `${entry}#${route}`; 'path' appends the route to the entry path —
+     *  path-router apps (Next.js) cannot see URL fragments. Absent = 'hash'. */
+    router?: 'hash' | 'path';
     /** Schema v3 model-policy family (issue #114): module consumes models. */
     model_capable?: boolean;
     /** Module-declared domain knowledge; admin governs it in Settings. */

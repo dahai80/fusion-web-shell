@@ -9,6 +9,7 @@ import {
     newTab,
     parseDevModules,
     restorePersistedTabs,
+    srcFor,
     useTabs,
 } from '../stores/tabs';
 import type { ModuleManifest } from '../types/manifest';
@@ -218,6 +219,68 @@ describe('tab deep-link routes (issue #24, C8)', () => {
         const after = useTabs.getState().tabs[0]!;
         expect(after.src).toBe(before.src);
         expect(useTabs.getState().activeTabId).toBe(after.id);
+    });
+});
+
+describe('path-form deep-links for path-router modules (issue #169)', () => {
+    beforeEach(() => {
+        localStorage.removeItem('fusion.shell.tabs');
+        useTabs.setState({ tabs: [], activeTabId: null });
+    });
+
+    it('hash-router modules keep the hash form (cowork etc. unaffected)', () => {
+        const m = mk('fusion-cowork');
+        expect(srcFor(m, new Map(), '/runs')).toBe('/shell/fusion-cowork/#/runs');
+    });
+
+    it('fusion-site emits the path form (Next.js ignores fragments)', () => {
+        const m = mk('fusion-site');
+        expect(srcFor(m, new Map(), '/factory/new')).toBe('/shell/fusion-site/factory/new');
+    });
+
+    it('manifest router:"path" opts any module into the path form', () => {
+        const m = { ...mk('fusion-x'), router: 'path' as const };
+        expect(srcFor(m, new Map(), '/runs')).toBe('/shell/fusion-x/runs');
+    });
+
+    it('manifest router:"hash" overrides the fusion-site fallback', () => {
+        const m = { ...mk('fusion-site'), router: 'hash' as const };
+        expect(srcFor(m, new Map(), '/factory/new')).toBe('/shell/fusion-site/#/factory/new');
+    });
+
+    it('dev override inserts the path before ?embedded=1', () => {
+        const m = mk('fusion-site');
+        expect(srcFor(m, parseDevModules('fusion-site:5173'), '/factory/new')).toBe(
+            'http://localhost:5173/factory/new?embedded=1'
+        );
+    });
+
+    it('no route keeps the plain entry for both router modes', () => {
+        expect(srcFor(mk('fusion-site'), new Map())).toBe('/shell/fusion-site/');
+        expect(srcFor(mk('fusion-cowork'), new Map())).toBe('/shell/fusion-cowork/');
+    });
+
+    it('openTab builds a path-form src for fusion-site', () => {
+        const tab = newTab(mk('fusion-site'), new Map(), 1, { route: '/factory/new' });
+        expect(tab.src).toBe('/shell/fusion-site/factory/new');
+        expect(tab.route).toBe('/factory/new');
+    });
+
+    it('restorePersistedTabs re-emits the path form after refresh', () => {
+        localStorage.setItem(
+            'fusion.shell.tabs',
+            JSON.stringify([
+                {
+                    id: 'fusion-site',
+                    manifestId: 'fusion-site',
+                    title: '软件工厂',
+                    seq: 1,
+                    route: '/factory/new',
+                },
+            ])
+        );
+        expect(restorePersistedTabs([mk('fusion-site')], new Map())).toBe(1);
+        expect(useTabs.getState().tabs[0]!.src).toBe('/shell/fusion-site/factory/new');
     });
 });
 

@@ -204,13 +204,33 @@ with second-level items, instead of occupying N flat sidebar slots:
   registry delivers `group` / `group_title` / `group_title_en` / `sort`
   verbatim, so a re-registration is enough to light the menu up.
 
+## router — deep-link routing mode (shell#169)
+
+Declares how the shell appends deep-link routes (the `route` of `pages`,
+home cards and sidebar entries) to the module entry:
+
+```json
+"router": "path"
+```
+
+- `"hash"` (default) — deep link is `${entry}#${route}`; the module reads
+  the URL fragment (hash-router SPAs such as cowork). Absent field = hash.
+- `"path"` — deep link is `${entry}${route}`; for path-router apps
+  (Next.js etc.) where the fragment is invisible to the router and a
+  hash-form link would serve the home page. fusion-site declares `path`.
+- The shell joins path-form routes onto the entry path (trailing slash of
+  the entry is dropped; dev `?embedded=1` overrides keep the query last).
+- Note: path-router modules must serve their assets under the gateway
+  `/shell/<id>/` basePath (see fusion-site#76/#79).
+
 ## Validation (both sides)
 
 Gateway validates at registration (fusion-gateway#252), the shell host
 re-sanitizes on load — modules must satisfy the strictest of the two:
 
 - Endpoints and page routes: gateway-absolute `/...`, no `..` traversal.
-- Page routes and home card routes must not contain `#` (the deep-link form is `#${route}`).
+- Page routes and home card routes must not contain `#` (the deep-link form is `#${route}`,
+  or path-form `${entry}${route}` for `router: "path"` modules).
 - `kind` is restricted to `approvals|runs|engine|tasks`.
 - `permissions_policy` is restricted to `microphone|camera`.
 - `group` is `[A-Za-z0-9._-]` ≤64 chars; group titles ≤64 chars; `sort` must be finite.

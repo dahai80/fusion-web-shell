@@ -25,7 +25,8 @@ export interface ShellTab {
     transientError?: string | null;
 }
 
-/** Deep-link options (issue #24, C8): route becomes `${src}#${route}`. */
+/** Deep-link options (issue #24, C8): route becomes `${src}#${route}`
+ * (hash form) or `${src}${route}` for path-router modules (issue #169). */
 export interface OpenTabOptions {
     multi?: boolean;
     route?: string;
@@ -112,15 +113,40 @@ export function entryFor(manifest: ModuleManifest, devModules: Map<string, strin
     return manifest.entry;
 }
 
-/** Deep-link src (C8 single form): `${entry}#${route}` with the same
- * entry rules (dev override / ?embedded=1) as plain tabs. */
+/**
+ * Path-router modules (issue #169): fusion-site is a Next.js path-router
+ * app — URL fragments are invisible to its router, so hash-form deep-links
+ * serve the home page. Declared here until the gateway passes the manifest
+ * `router` field through (upstream); the manifest field wins once served.
+ */
+const PATH_ROUTER_MODULES = new Set(['fusion-site']);
+
+export function isPathRouter(manifest: ModuleManifest): boolean {
+    if (manifest.router === 'hash') return false;
+    return manifest.router === 'path' || PATH_ROUTER_MODULES.has(manifest.id);
+}
+
+/** Append a deep-link route to an entry in path form: drop trailing
+ * slashes from the path portion (before any query) and append the route. */
+function joinPathRoute(base: string, route: string): string {
+    const qIdx = base.indexOf('?');
+    if (qIdx === -1) return `${base.replace(/\/+$/, '')}${route}`;
+    const pathPart = base.slice(0, qIdx).replace(/\/+$/, '');
+    return `${pathPart}${route}${base.slice(qIdx)}`;
+}
+
+/** Deep-link src (C8): hash form `${entry}#${route}` by default; path form
+ * `${entry}${route}` for path-router modules (issue #169). Same entry rules
+ * (dev override / ?embedded=1) as plain tabs. */
 export function srcFor(
     manifest: ModuleManifest,
     devModules: Map<string, string>,
     route?: string
 ): string {
     const base = entryFor(manifest, devModules);
-    return route ? `${base}#${route}` : base;
+    if (!route) return base;
+    if (isPathRouter(manifest)) return joinPathRoute(base, route);
+    return `${base}#${route}`;
 }
 
 export function tabTitle(manifest: ModuleManifest, seq: number, pageTitle?: string): string {
