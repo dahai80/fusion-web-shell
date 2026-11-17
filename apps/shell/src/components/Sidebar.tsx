@@ -296,16 +296,21 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                         {t('Agent 总览', 'Agent Overview')}
                     </button>
                 ) : null}
-                {/* Software factory deep link (issue #161): the factory
-                    intake v2 lives in fusion-site and cannot be iframed yet
-                    (site CSP frame-ancestors + Next asset paths need a
-                    basePath) — hand off in a new tab; the site's transitional
-                    login completes SSO via the gateway portal. */}
+                {/* Software factory entry (issue #161, #167): fusion-site is
+                    now a hosted module (gateway basePath upstream), so open
+                    the intake as a native tab when its manifest is present;
+                    fall back to the external deep link otherwise. */}
                 <button
                     type="button"
                     onClick={() => {
+                        const site = manifests.find((m) => m.id === 'fusion-site');
+                        if (site) {
+                            console.log('[sidebar] open factory intake (module tab)');
+                            onOpen(site, '/factory/new', 'Factory Intake');
+                            return;
+                        }
                         const url = factoryIntakeUrl();
-                        console.log('[sidebar] open factory intake', url);
+                        console.log('[sidebar] open factory intake (external)', url);
                         window.open(url, '_blank', 'noopener');
                     }}
                     className="mb-3 flex w-full items-center gap-2 rounded-lg border border-border bg-bg-elevated px-3 py-2 text-left text-sm text-text-primary hover:border-brand"
