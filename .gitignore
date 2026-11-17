@@ -6,3 +6,5 @@ dist/
 coverage/
 .env*.local
 *.tsbuildinfo
+
+.run/
