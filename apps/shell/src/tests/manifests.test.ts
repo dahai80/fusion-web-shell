@@ -441,3 +441,33 @@ describe('manifest home projects sources (issue #41)', () => {
         expect(mlx!.homeProjects).toBeUndefined();
     });
 });
+
+describe('manifest router field (issue #169 deep-link mode)', () => {
+    const reset = () => {
+        useManifests.setState({ manifests: [], loaded: false, unreachableIds: new Set() });
+    };
+    const dto = (router: unknown) =>
+        ({
+            id: 'fusion-x',
+            title: 'x',
+            path: '/shell/fusion-x/',
+            entry: '/shell/fusion-x/',
+            devices: ['desktop'],
+            category: 'platform',
+            router,
+        }) as unknown as ManifestDto;
+
+    it('keeps path and hash values, absent stays undefined (default hash)', () => {
+        reset();
+        useManifests.getState().setUpstream([dto('path'), dto('hash')]);
+        const [x, y] = useManifests.getState().manifests;
+        expect(x!.router).toBe('path');
+        expect(y!.router).toBe('hash');
+    });
+
+    it('drops unknown values', () => {
+        reset();
+        useManifests.getState().setUpstream([dto('QUERY'), dto(42), dto(null)]);
+        for (const m of useManifests.getState().manifests) expect(m.router).toBeUndefined();
+    });
+});

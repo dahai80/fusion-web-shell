@@ -49,6 +49,8 @@ export interface ManifestDto {
     group_title?: string;
     group_title_en?: string;
     sort?: number;
+    /** Deep-link routing mode (issue #169), sanitized by the store. */
+    router?: string;
     /** Schema v3 model-policy family (issue #114), sanitized by the store. */
     /** Gateway serves camelCase; older static configs used snake_case. */
     modelCapable?: boolean;
