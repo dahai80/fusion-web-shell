@@ -102,9 +102,6 @@
     "packages/sdk": {
       "name": "@fusion/web-sdk",
       "version": "0.1.4",
-      "dependencies": {
-        "@fusion/chat": "workspace:*",
-      },
       "devDependencies": {
         "typescript": "^5.6.3",
       },

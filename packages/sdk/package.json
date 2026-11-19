@@ -11,9 +11,6 @@
         "./host": "./src/host.ts",
         "./teamsChat": "./src/teamsChat.ts"
     },
-    "dependencies": {
-        "@fusion/chat": "workspace:*"
-    },
     "scripts": {
         "typecheck": "tsc --noEmit",
         "build": "bun run typecheck && bun build src/index.ts --outdir dist --target browser --format esm"
