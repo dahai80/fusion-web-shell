@@ -2,11 +2,7 @@
     "extends": "../../tsconfig.base.json",
     "compilerOptions": {
         "noEmit": true,
-        "types": ["bun"],
-        "baseUrl": ".",
-        "paths": {
-            "@fusion/chat": ["../chat/src/index.ts"]
-        }
+        "types": ["bun"]
     },
     "include": ["src", "tests"]
 }
