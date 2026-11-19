@@ -114,16 +114,14 @@ export function entryFor(manifest: ModuleManifest, devModules: Map<string, strin
 }
 
 /**
- * Path-router modules (issue #169): fusion-site is a Next.js path-router
- * app — URL fragments are invisible to its router, so hash-form deep-links
- * serve the home page. Declared here until the gateway passes the manifest
- * `router` field through (upstream); the manifest field wins once served.
+ * Path-router modules (issue #169): a Next.js path-router app's URL
+ * fragments are invisible to its router, so hash-form deep-links serve the
+ * home page. Declared via the manifest `router` field, passed through by
+ * the gateway (fusion-gateway#675, live-verified); modules registered
+ * before that field exist fall back to hash form (safe default).
  */
-const PATH_ROUTER_MODULES = new Set(['fusion-site']);
-
 export function isPathRouter(manifest: ModuleManifest): boolean {
-    if (manifest.router === 'hash') return false;
-    return manifest.router === 'path' || PATH_ROUTER_MODULES.has(manifest.id);
+    return manifest.router === 'path';
 }
 
 /** Append a deep-link route to an entry in path form: drop trailing
