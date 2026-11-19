@@ -6,7 +6,8 @@
         "types": ["bun", "vite/client", "react"],
         "baseUrl": ".",
         "paths": {
-            "@/*": ["src/*"]
+            "@/*": ["src/*"],
+            "@fusion/chat": ["../../packages/chat/src/index.ts"]
         }
     },
     "include": ["src", "tests", "vite.config.ts", "tailwind.config.ts"]
