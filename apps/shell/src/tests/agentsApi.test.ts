@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'bun:test';
 import {
     type CoworkRun,
+    type CoworkRunDetail,
+    LIFECYCLE_LABEL,
     aggregateTokens,
+    cardStatusFromLifecycle,
     deriveCards,
     deriveStats,
     deriveWaterfall,
+    lifecycleFromCoworkRun,
+    lifecycleFromStudioAgent,
     statusFromRun,
+    tokensFromDetail,
 } from '../lib/agentsApi';
 
 const run = (over: Partial<CoworkRun>): CoworkRun => ({
@@ -166,5 +172,83 @@ describe('aggregateTokens (#137 feedback)', () => {
         const s = aggregateTokens([todayRun('r9', 'wf_x')], () => undefined);
         expect(s.total).toBe(0);
         expect(s.workflows).toEqual([]);
+    });
+});
+
+describe('unified run lifecycle (issue #177 R2)', () => {
+    it('lifecycleFromCoworkRun maps the cowork status space', () => {
+        expect(lifecycleFromCoworkRun(run({ status: 'queued' }))).toBe('queued');
+        expect(lifecycleFromCoworkRun(run({ status: 'pending' }))).toBe('queued');
+        expect(lifecycleFromCoworkRun(run({ status: 'running' }))).toBe('running');
+        expect(
+            lifecycleFromCoworkRun(run({ status: 'running', review: { status: 'pending_review' } }))
+        ).toBe('awaiting_human');
+        expect(lifecycleFromCoworkRun(run({ status: 'paused' }))).toBe('blocked');
+        expect(lifecycleFromCoworkRun(run({ status: 'success' }))).toBe('done');
+        expect(lifecycleFromCoworkRun(run({ status: 'failed' }))).toBe('error');
+        expect(lifecycleFromCoworkRun(run({ status: 'cancelled' }))).toBe('error');
+        expect(lifecycleFromCoworkRun(run({ status: 'who-knows' }))).toBe('queued');
+    });
+    it('lifecycleFromStudioAgent: published seats queue, dead seats error', () => {
+        expect(lifecycleFromStudioAgent({ status: 'published' })).toBe('queued');
+        expect(lifecycleFromStudioAgent({ status: undefined })).toBe('queued');
+        expect(lifecycleFromStudioAgent({ status: 'disabled' })).toBe('error');
+        expect(lifecycleFromStudioAgent({ status: 'archived' })).toBe('error');
+    });
+    it('statusFromRun stays consistent with the lifecycle mapping (one source)', () => {
+        for (const status of ['queued', 'running', 'paused', 'success', 'failed']) {
+            const r = run({ status });
+            expect(statusFromRun(r)).toBe(cardStatusFromLifecycle(lifecycleFromCoworkRun(r)));
+        }
+        const r = run({ status: 'running', review: { status: 'pending_review' } });
+        expect(statusFromRun(r)).toBe('wait');
+    });
+    it('LIFECYCLE_LABEL covers every lifecycle value bilingually', () => {
+        for (const lc of [
+            'queued',
+            'running',
+            'awaiting_human',
+            'blocked',
+            'done',
+            'error',
+        ] as const) {
+            expect(LIFECYCLE_LABEL[lc].zh).toBeTruthy();
+            expect(LIFECYCLE_LABEL[lc].en).toBeTruthy();
+        }
+    });
+});
+
+describe('card token accounting (issue #177 R2)', () => {
+    const detail = (tokens: (Record<string, number> | null)[]): CoworkRunDetail => ({
+        run_id: 'r1',
+        status: 'running',
+        steps: tokens.map((tk, i) => ({ node_id: `n${i}`, tokens: tk as never })),
+    });
+    it('tokensFromDetail sums steps; null when no usage at all', () => {
+        const t = tokensFromDetail(
+            detail([
+                { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+                null,
+                { prompt_tokens: 1, completion_tokens: 1 },
+            ])
+        );
+        expect(t).toEqual({ promptTokens: 11, completionTokens: 6, totalTokens: 17 });
+        expect(tokensFromDetail(detail([null, null]))).toBeNull();
+        expect(tokensFromDetail(undefined)).toBeNull();
+    });
+    it('deriveCards surfaces tokens for cowork cards, null for studio seats', () => {
+        const cards = deriveCards(
+            [run({ run_id: 'r1' })],
+            [{ agent_id: 'a1', name: 'Seat', status: 'published' }],
+            { r1: { promptTokens: 3, completionTokens: 4, totalTokens: 7 } }
+        );
+        expect(cards[0]!.tokens).toEqual({ promptTokens: 3, completionTokens: 4, totalTokens: 7 });
+        expect(cards[0]!.lifecycle).toBe('running');
+        expect(cards[1]!.tokens).toBeNull();
+        expect(cards[1]!.lifecycle).toBe('queued');
+    });
+    it('deriveCards without the token map keeps null tokens (back-compat)', () => {
+        const cards = deriveCards([run({})], []);
+        expect(cards[0]!.tokens).toBeNull();
     });
 });

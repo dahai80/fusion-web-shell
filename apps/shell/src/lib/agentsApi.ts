@@ -65,6 +65,59 @@ export interface PendingApprovals {
 /** Derived card state for one tracked agent (prototype taxonomy). */
 export type AgentCardStatus = 'run' | 'wait' | 'idle' | 'err';
 
+/**
+ * Unified run lifecycle (issue #177 R2): one status vocabulary shared by
+ * cowork runs and agent-studio seats so cards, stats and future factory
+ * cards (R1) read the same enum. Upstream gateway contract may adopt it
+ * later; the mapping below is the single shell-side source of truth.
+ */
+export type RunLifecycle = 'queued' | 'running' | 'awaiting_human' | 'blocked' | 'done' | 'error';
+
+export const LIFECYCLE_LABEL: Record<RunLifecycle, { zh: string; en: string }> = {
+    queued: { zh: '排队中', en: 'Queued' },
+    running: { zh: '运行中', en: 'Running' },
+    awaiting_human: { zh: '等待人工', en: 'Awaiting human' },
+    blocked: { zh: '受阻', en: 'Blocked' },
+    done: { zh: '已完成', en: 'Done' },
+    error: { zh: '出错', en: 'Error' },
+};
+
+/** Cowork run row → lifecycle (pure, single mapping source for the shell). */
+export function lifecycleFromCoworkRun(run: Pick<CoworkRun, 'status' | 'review'>): RunLifecycle {
+    if (run.status === 'failed' || run.status === 'cancelled' || run.status === 'error') {
+        return 'error';
+    }
+    if (run.status === 'running') {
+        if (run.review?.status === 'pending_review') return 'awaiting_human';
+        return 'running';
+    }
+    if (run.status === 'paused' || run.status === 'blocked' || run.status === 'waiting_input') {
+        return 'blocked';
+    }
+    if (run.status === 'success' || run.status === 'completed' || run.status === 'done') {
+        return 'done';
+    }
+    // pending / queued / unknown serializers all count as not yet running.
+    return 'queued';
+}
+
+/** Studio registry seat → lifecycle: no live-run concept upstream, published
+ *  seats are ready-but-idle (queued); disabled/failed map to error. */
+export function lifecycleFromStudioAgent(agent: Pick<StudioAgent, 'status'>): RunLifecycle {
+    if (agent.status === 'disabled' || agent.status === 'archived' || agent.status === 'error') {
+        return 'error';
+    }
+    return 'queued';
+}
+
+/** Lifecycle → 4-state visual card status (dot taxonomy stays as shipped). */
+export function cardStatusFromLifecycle(lifecycle: RunLifecycle): AgentCardStatus {
+    if (lifecycle === 'running') return 'run';
+    if (lifecycle === 'awaiting_human' || lifecycle === 'blocked') return 'wait';
+    if (lifecycle === 'error') return 'err';
+    return 'idle';
+}
+
 const COWORK_PREFIX = '/shell/fusion-cowork/api';
 const STUDIO_PREFIX = '/shell/fusion-agent-studio/api/v1';
 
@@ -93,16 +146,39 @@ export async function fetchStudioAgents(): Promise<StudioAgent[]> {
 }
 
 /**
- * Card status from a run row (pure, test-pinned): running → pulse, a run
- * blocked on human review/waiting → wait, failed/cancelled → err, rest idle.
+ * Card status from a run row (pure, test-pinned): derived through the
+ * unified lifecycle mapping (issue #177 R2) so both vocabularies stay in
+ * sync from one source.
  */
 export function statusFromRun(run: Pick<CoworkRun, 'status' | 'review'>): AgentCardStatus {
-    if (run.status === 'failed' || run.status === 'cancelled') return 'err';
-    if (run.status === 'running') {
-        if (run.review?.status === 'pending_review') return 'wait';
-        return 'run';
+    return cardStatusFromLifecycle(lifecycleFromCoworkRun(run));
+}
+
+/** Per-card token accounting (issue #177 R2): summed from cowork run-detail
+ *  steps; studio seats carry null (registry API exposes no usage). */
+export interface CardTokens {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+}
+
+export function tokensFromDetail(detail: CoworkRunDetail | undefined): CardTokens | null {
+    if (!detail) return null;
+    let prompt = 0;
+    let completion = 0;
+    let total = 0;
+    let any = false;
+    for (const step of detail.steps ?? []) {
+        const tk = step.tokens;
+        if (!tk) continue;
+        any = true;
+        const pt = tk.prompt_tokens ?? 0;
+        const ct = tk.completion_tokens ?? 0;
+        prompt += pt;
+        completion += ct;
+        total += tk.total_tokens ?? pt + ct;
     }
-    return 'idle';
+    return any ? { promptTokens: prompt, completionTokens: completion, totalTokens: total } : null;
 }
 
 export interface DerivedAgentCard {
@@ -111,10 +187,13 @@ export interface DerivedAgentCard {
     roleZh: string;
     roleEn: string;
     status: AgentCardStatus;
+    /** Unified lifecycle (issue #177 R2) — same vocabulary across sources. */
+    lifecycle: RunLifecycle;
     runId: string | null;
     workflowName: string;
     startedAt: number | string | null;
     error: string | null;
+    tokens: CardTokens | null;
 }
 
 const WORKFLOW_ROLE_ZH: Record<string, string> = {
@@ -126,9 +205,15 @@ const WORKFLOW_ROLE_ZH: Record<string, string> = {
 /**
  * Derive one card per cowork workflow seen in recent runs, ordered by the
  * freshest activity. agent-studio registry agents (published, no live run)
- * are appended as idle seats so the grid shows the whole fleet.
+ * are appended as idle seats so the grid shows the whole fleet. Tokens come
+ * from the optional run-detail map (issue #177 R2) — cowork cards carry the
+ * summed step usage, studio seats always null.
  */
-export function deriveCards(runs: CoworkRun[], studioAgents: StudioAgent[]): DerivedAgentCard[] {
+export function deriveCards(
+    runs: CoworkRun[],
+    studioAgents: StudioAgent[],
+    tokensByRun?: Record<string, CardTokens | null>
+): DerivedAgentCard[] {
     const seen = new Map<string, DerivedAgentCard>();
     for (const run of runs) {
         const key = run.workflow_id || run.workflow_name || 'unknown';
@@ -143,26 +228,31 @@ export function deriveCards(runs: CoworkRun[], studioAgents: StudioAgent[]): Der
             roleZh: WORKFLOW_ROLE_ZH[wf] ?? '协作工作流',
             roleEn: WORKFLOW_ROLE_ZH[wf] ?? 'Cowork workflow',
             status: statusFromRun(run),
+            lifecycle: lifecycleFromCoworkRun(run),
             runId: run.run_id,
             workflowName: run.workflow_name ?? wf,
             startedAt: run.created_at ?? null,
             error: run.error ?? null,
+            tokens: tokensByRun?.[run.run_id] ?? null,
         });
     }
     const cards = [...seen.values()];
     for (const agent of studioAgents) {
         const key = `studio:${agent.agent_id}`;
         if (seen.has(key)) continue;
+        const lifecycle = lifecycleFromStudioAgent(agent);
         seen.set(key, {
             agentId: key,
             name: agent.name || agent.agent_id,
             roleZh: '座位 · 已发布待命',
             roleEn: 'Seat · published idle',
-            status: agent.status === 'published' ? 'idle' : 'err',
+            status: cardStatusFromLifecycle(lifecycle),
+            lifecycle,
             runId: null,
             workflowName: agent.model ?? '',
             startedAt: null,
             error: null,
+            tokens: null,
         });
         cards.push(seen.get(key) as DerivedAgentCard);
     }
