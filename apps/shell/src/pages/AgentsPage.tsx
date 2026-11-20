@@ -1,3 +1,4 @@
+import { pushToast } from '@/components/ToastHost';
 import {
     type AgentCardStatus,
     type CardTokens,
@@ -18,6 +19,12 @@ import {
     statusFromRun,
     tokensFromDetail,
 } from '@/lib/agentsApi';
+import {
+    type KernelCardKind,
+    type KernelTypedCard,
+    fetchApprovalCards,
+    respondTyped,
+} from '@/lib/kernelInbox';
 import { type SseStreamHandle, openSseStream } from '@/lib/sseStream';
 import { useAuth } from '@/stores/auth';
 import { t, useLang } from '@/stores/lang';
@@ -55,6 +62,20 @@ const STATUS_LABEL: Record<AgentCardStatus, { zh: string; en: string }> = {
     wait: { zh: '等待审批', en: 'Awaiting approval' },
     idle: { zh: '空闲', en: 'Idle' },
     err: { zh: '异常', en: 'Failed' },
+};
+
+/** Kernel typed card chips (issue #180). */
+const KIND_LABEL: Record<KernelCardKind, { zh: string; en: string; cls: string }> = {
+    plan_approval: {
+        zh: '计划审批',
+        en: 'Plan approval',
+        cls: 'border-brand/40 bg-brand/10 text-brand',
+    },
+    shutdown_request: {
+        zh: '关机请求',
+        en: 'Shutdown request',
+        cls: 'border-warning/50 bg-warning/10 text-warning',
+    },
 };
 
 function parseSseData(data: string): Record<string, unknown> | null {
@@ -200,6 +221,8 @@ export function AgentsPage() {
     const [studioList, setStudioList] = useState<StudioAgent[]>([]);
     const [cards, setCards] = useState<DerivedAgentCard[]>([]);
     const [pendingCount, setPendingCount] = useState(0);
+    const [typedCards, setTypedCards] = useState<KernelTypedCard[]>([]);
+    const [respondingIds, setRespondingIds] = useState<Set<string>>(new Set());
     const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
     const [feed, setFeed] = useState<FeedLine[]>([]);
     const [waterfall, setWaterfall] = useState<ReturnType<typeof deriveWaterfall>>([]);
@@ -221,17 +244,63 @@ export function AgentsPage() {
         useTabs.getState().openTab(manifest, { pageTitle: t('审批', 'Approvals') });
     }, []);
 
+    // Issue #180: respond to a typed kernel card. Optimistic removal first —
+    // a second respond on the same msg_id is rejected server-side (#781) —
+    // restored on failure so the user can retry.
+    const respondCard = useCallback(
+        async (card: KernelTypedCard, decision: 'approve' | 'reject') => {
+            const member = useAuth.getState().user?.user_id ?? '';
+            setRespondingIds((prev) => new Set(prev).add(card.msgId));
+            setTypedCards((prev) => prev.filter((c) => c.msgId !== card.msgId));
+            try {
+                await respondTyped(card.team, member, card.msgId, decision);
+                console.log('[agentsPage] kernel card responded:', card.msgId, decision);
+                pushToast(
+                    'success',
+                    t(
+                        `已${decision === 'approve' ? '批准' : '拒绝'}：${card.body.slice(0, 40)}`,
+                        `${decision === 'approve' ? 'Approved' : 'Rejected'}: ${card.body.slice(0, 40)}`
+                    )
+                );
+            } catch (err) {
+                console.warn('[agentsPage] kernel respond failed:', card.msgId, err);
+                setTypedCards((prev) => [...prev, card]);
+                pushToast(
+                    'error',
+                    t('审批提交失败，请重试', 'Approval submit failed, please retry')
+                );
+            } finally {
+                setRespondingIds((prev) => {
+                    const next = new Set(prev);
+                    next.delete(card.msgId);
+                    return next;
+                });
+            }
+        },
+        []
+    );
+
     const refresh = useCallback(async () => {
         try {
-            const [runList, pending, studio] = await Promise.all([
+            const member = useAuth.getState().user?.user_id ?? '';
+            const [runList, pending, studio, typed] = await Promise.all([
                 fetchRuns(),
                 fetchPending().catch(() => ({ approvals: [] })),
                 fetchStudioAgents().catch(() => []),
+                // Issue #180: kernel typed approval cards (plan_approval /
+                // shutdown_request) from agent-studio team mailboxes.
+                member
+                    ? fetchApprovalCards(member).catch((err: unknown) => {
+                          console.warn('[agentsPage] kernel inbox failed:', err);
+                          return [];
+                      })
+                    : Promise.resolve([]),
             ]);
             setRuns(runList);
             setPendingCount(pending.approvals.length);
             setStudioList(studio);
             setCards(deriveCards(runList, studio).slice(0, MAX_CARDS));
+            setTypedCards(typed);
             setError(null);
         } catch (err) {
             console.warn('[agentsPage] refresh failed:', err);
@@ -519,6 +588,63 @@ export function AgentsPage() {
                     {t('✓ 无等待项', '✓ Nothing waiting')}
                 </div>
             )}
+
+            {typedCards.length > 0 ? (
+                <div className="mb-4 space-y-2">
+                    <div className="text-sm font-medium text-text-primary">
+                        {t('内核审批收件箱', 'Kernel approval inbox')}
+                        <span className="ml-2 text-xs font-normal text-text-muted">
+                            {t(
+                                '来自 agent-studio 团队邮箱的待决卡片',
+                                'Pending cards from agent-studio team mailboxes'
+                            )}
+                        </span>
+                    </div>
+                    {typedCards.map((card) => (
+                        <div
+                            key={card.msgId}
+                            className="rounded-xl border border-border bg-bg-elevated p-3.5 shadow-sm"
+                        >
+                            <div className="mb-1.5 flex items-center gap-2">
+                                <span
+                                    className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
+                                        KIND_LABEL[card.kind].cls
+                                    }`}
+                                >
+                                    {t(KIND_LABEL[card.kind].zh, KIND_LABEL[card.kind].en)}
+                                </span>
+                                <span className="font-mono text-[10px] text-text-muted">
+                                    {card.team} · {card.msgId}
+                                </span>
+                                <span className="ml-auto text-[11px] text-text-muted">
+                                    {t('来自', 'From')} {card.sender}
+                                </span>
+                            </div>
+                            <div className="mb-2.5 rounded-lg border border-border bg-bg-muted px-2.5 py-1.5 text-xs leading-relaxed text-text-secondary">
+                                {card.body || '—'}
+                            </div>
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    disabled={respondingIds.has(card.msgId)}
+                                    onClick={() => void respondCard(card, 'approve')}
+                                    className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-brand/85 disabled:opacity-50"
+                                >
+                                    {t('批准', 'Approve')}
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={respondingIds.has(card.msgId)}
+                                    onClick={() => void respondCard(card, 'reject')}
+                                    className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:border-error/50 hover:text-error disabled:opacity-50"
+                                >
+                                    {t('拒绝', 'Reject')}
+                                </button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            ) : null}
 
             <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
                 {cards.length === 0 ? (

@@ -1,6 +1,8 @@
 import { sharedClient } from '@/api/client';
+import { type KernelTypedCard, fetchApprovalCards } from '@/lib/kernelInbox';
 import { stampLastSeen } from '@/lib/sidebarTree';
 import { useAuth } from '@/stores/auth';
+import { t } from '@/stores/lang';
 import { useManifests } from '@/stores/manifests';
 import { useTabs } from '@/stores/tabs';
 import type { NotificationKind } from '@/types/manifest';
@@ -32,6 +34,15 @@ let fetcher: NotificationFetchFn = (path) => sharedClient().get(path, { quiet: t
 /** Test seam: swap the HTTP layer (production default = sharedClient). */
 export function setFetcher(fn: NotificationFetchFn): void {
     fetcher = fn;
+}
+
+export type KernelCardsFetchFn = (member: string) => Promise<KernelTypedCard[]>;
+
+let kernelCardsFetcher: KernelCardsFetchFn = fetchApprovalCards;
+
+/** Test seam: swap the kernel inbox layer (#180; production default = fetchApprovalCards). */
+export function setKernelCardsFetcher(fn: KernelCardsFetchFn): void {
+    kernelCardsFetcher = fn;
 }
 
 const READ_KEY = 'fusion.shell.notifications.read';
@@ -206,6 +217,30 @@ export const useNotifications = create<NotificationsState>((set, get) => ({
             })
         );
         const merged: NotificationItem[] = settled.flat();
+        // Issue #180 (R3 unification): kernel typed approval cards merge into
+        // the same bell as one synthetic source — each unanswered card becomes
+        // an `approvals` item on the agent-studio module, deep-linking there.
+        const user = useAuth.getState().user;
+        if (user?.user_id) {
+            try {
+                const cards = await kernelCardsFetcher(user.user_id);
+                for (const card of cards.slice(0, MAX_ITEMS_PER_SOURCE)) {
+                    merged.push({
+                        id: `fusion-agent-studio:kernel:${card.msgId}`,
+                        sourceId: 'kernel',
+                        moduleId: 'fusion-agent-studio',
+                        kind: 'approvals',
+                        title:
+                            card.kind === 'plan_approval'
+                                ? t('计划待批准', 'Plan awaiting approval')
+                                : t('关机请求', 'Shutdown request'),
+                        level: card.kind === 'shutdown_request' ? 'warning' : 'info',
+                    });
+                }
+            } catch (err) {
+                console.warn('[notifications] kernel inbox poll failed:', err);
+            }
+        }
         set({ items: merged });
         console.log('[notifications] polled', targets.length, 'sources,', merged.length, 'items');
     },

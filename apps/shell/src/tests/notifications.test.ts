@@ -3,7 +3,12 @@ import './setup';
 import { beforeEach, describe, expect, it } from 'bun:test';
 import { useAuth } from '../stores/auth';
 import { useManifests } from '../stores/manifests';
-import { recheckDeadlines, setFetcher, useNotifications } from '../stores/notifications';
+import {
+    recheckDeadlines,
+    setFetcher,
+    setKernelCardsFetcher,
+    useNotifications,
+} from '../stores/notifications';
 import { useTabs } from '../stores/tabs';
 import type { ModuleManifest } from '../types/manifest';
 
@@ -422,4 +427,70 @@ it('stop cancels polling; no orphan interval after stop→start→stop', async (
     await new Promise((r) => setTimeout(r, 80));
     expect(useNotifications.getState().polling).toBe(false);
     expect(calls).toBe(after);
+});
+
+describe('kernel typed approval unification (issue #180)', () => {
+    beforeEach(() => {
+        localStorage.removeItem('fusion.shell.notifications.read');
+        useNotifications.setState({ items: [], readIds: new Set(), polling: false });
+        useManifests.setState({ manifests: [], loaded: false, unreachableIds: new Set() });
+        setKernelCardsFetcher(async () => []);
+    });
+
+    it('merges unanswered kernel cards as synthetic approvals items', async () => {
+        setupSources([]);
+        setKernelCardsFetcher(async () => [
+            {
+                kind: 'plan_approval',
+                msgId: 'msg_a1',
+                sender: 'kernel-agent',
+                recipient: 'u1',
+                body: 'Plan: ship.',
+                answered: false,
+                team: 'e2e-inbox',
+            },
+            {
+                kind: 'shutdown_request',
+                msgId: 'msg_s1',
+                sender: 'kernel-agent',
+                recipient: 'u1',
+                body: 'Idle.',
+                answered: false,
+                team: 'e2e-inbox',
+            },
+        ]);
+        await useNotifications.getState().pollNow();
+        const items = useNotifications.getState().items;
+        expect(items).toHaveLength(2);
+        expect(items[0]!.id).toBe('fusion-agent-studio:kernel:msg_a1');
+        expect(items[0]!.moduleId).toBe('fusion-agent-studio');
+        expect(items[0]!.kind).toBe('approvals');
+        expect(items[1]!.level).toBe('warning');
+    });
+
+    it('kernel fetcher failure degrades to manifest-only items', async () => {
+        setupSources([
+            mk({
+                id: 'fusion-cowork',
+                notifications: [
+                    {
+                        id: 'approvals',
+                        label: '审批',
+                        endpoint: '/api/cowork/approvals',
+                        kind: 'approvals',
+                    },
+                ],
+            }),
+        ]);
+        setFetcher(async () => ({
+            items: [{ id: 'ap1', title: 'Review pending', level: 'warning' }],
+        }));
+        setKernelCardsFetcher(async () => {
+            throw new Error('daemon down');
+        });
+        await useNotifications.getState().pollNow();
+        const items = useNotifications.getState().items;
+        expect(items).toHaveLength(1);
+        expect(items[0]!.id).toContain('fusion-cowork');
+    });
 });

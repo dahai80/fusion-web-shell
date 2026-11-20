@@ -173,11 +173,16 @@ export class ApiClient {
         return this.request<T>(path, { quiet: opts?.quiet });
     }
 
-    post<T>(path: string, body?: unknown, opts?: { signal?: AbortSignal }): Promise<T> {
+    post<T>(
+        path: string,
+        body?: unknown,
+        opts?: { signal?: AbortSignal; quiet?: boolean }
+    ): Promise<T> {
         return this.request<T>(path, {
             method: 'POST',
             body: body === undefined ? undefined : JSON.stringify(body),
             signal: opts?.signal,
+            quiet: opts?.quiet,
         });
     }
 
