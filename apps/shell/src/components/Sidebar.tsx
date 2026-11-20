@@ -55,6 +55,7 @@ import {
     PenTool,
     Settings,
     ShieldCheck,
+    Store,
     Terminal,
     TrendingUp,
     Waves,
@@ -164,12 +165,11 @@ export function Sidebar({ onOpen, onLogout }: Props) {
     const activeTab = tabs.find((tb) => tb.id === activeTabId) ?? null;
     const activeManifestId = activeTab?.manifestId ?? null;
     const [expanded, setExpanded] = useState<string | null>(null);
-    // Agents overview route highlight (issue #137): tracks in-shell SPA nav.
-    const [agentsActive, setAgentsActive] = useState(
-        () => window.location.pathname === pathForAdminPage('agents')
-    );
+    // In-shell SPA route highlight (issue #137, #174): track the pathname and
+    // derive per-page active states from it.
+    const [adminPath, setAdminPath] = useState(() => window.location.pathname);
     useEffect(() => {
-        const sync = () => setAgentsActive(window.location.pathname === pathForAdminPage('agents'));
+        const sync = () => setAdminPath(window.location.pathname);
         window.addEventListener(ROUTE_EVENT, sync);
         window.addEventListener('popstate', sync);
         return () => {
@@ -177,6 +177,8 @@ export function Sidebar({ onOpen, onLogout }: Props) {
             window.removeEventListener('popstate', sync);
         };
     }, []);
+    const agentsActive = adminPath === pathForAdminPage('agents');
+    const marketplaceActive = adminPath === pathForAdminPage('marketplace');
     const expandedGroups = usePrefs((s) => s.expandedGroups);
     const toggleExpandedGroup = usePrefs((s) => s.toggleExpandedGroup);
     const setExpandedGroups = usePrefs((s) => s.setExpandedGroups);
@@ -317,6 +319,23 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                 >
                     <Factory size={16} aria-hidden />
                     {t('软件工厂', 'Software Factory')}
+                </button>
+                {/* Marketplace entry (issue #174): first-level menu item after
+                    软件工厂 — the live prod manifest registry (verified via
+                    /api/v1/shell/manifests) has no 短剧工厂/开发者 entries, so
+                    the owner's "actual current menu order" lands it here. */}
+                <button
+                    type="button"
+                    onClick={() => navigateShell(pathForAdminPage('marketplace'))}
+                    aria-current={marketplaceActive ? 'page' : undefined}
+                    className={`mb-3 flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm ${
+                        marketplaceActive
+                            ? 'border-brand/40 bg-brand/10 text-brand'
+                            : 'border-border bg-bg-elevated text-text-primary hover:border-brand'
+                    }`}
+                >
+                    <Store size={16} aria-hidden />
+                    {t('插件市场', 'Marketplace')}
                 </button>
                 {pendingApprovals > 0 ? (
                     <button

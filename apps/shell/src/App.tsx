@@ -27,6 +27,9 @@ const AuditPage = lazy(() => import('@/pages/Audit').then((m) => ({ default: m.A
 const AgentsPage = lazy(() =>
     import('@/pages/AgentsPage').then((m) => ({ default: m.AgentsPage }))
 );
+const MarketplacePage = lazy(() =>
+    import('@/pages/Marketplace').then((m) => ({ default: m.MarketplacePage }))
+);
 
 type Route = { name: 'main' } | { name: AdminPageName };
 
@@ -64,6 +67,13 @@ function adminNodeFor(route: Route): ReactNode {
         return (
             <Suspense fallback={null}>
                 <AgentsPage />
+            </Suspense>
+        );
+    }
+    if (route.name === 'marketplace') {
+        return (
+            <Suspense fallback={null}>
+                <MarketplacePage />
             </Suspense>
         );
     }
