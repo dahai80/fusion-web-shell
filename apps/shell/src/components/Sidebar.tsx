@@ -45,6 +45,7 @@ import {
     Bot,
     Boxes,
     Clapperboard,
+    ClipboardList,
     Factory,
     FileText,
     GraduationCap,
@@ -179,6 +180,7 @@ export function Sidebar({ onOpen, onLogout }: Props) {
     }, []);
     const agentsActive = adminPath === pathForAdminPage('agents');
     const marketplaceActive = adminPath === pathForAdminPage('marketplace');
+    const factoryOpsActive = adminPath === pathForAdminPage('factory-ops');
     const expandedGroups = usePrefs((s) => s.expandedGroups);
     const toggleExpandedGroup = usePrefs((s) => s.toggleExpandedGroup);
     const setExpandedGroups = usePrefs((s) => s.setExpandedGroups);
@@ -320,6 +322,23 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                     <Factory size={16} aria-hidden />
                     {t('软件工厂', 'Software Factory')}
                 </button>
+                {/* Factory Ops console (issue #179): operator surface over the
+                    fusion-site factory APIs — order queue, pricing, discounts. */}
+                {canView('fusion-site') ? (
+                    <button
+                        type="button"
+                        onClick={() => navigateShell(pathForAdminPage('factory-ops'))}
+                        aria-current={factoryOpsActive ? 'page' : undefined}
+                        className={`mb-3 flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm ${
+                            factoryOpsActive
+                                ? 'border-brand/40 bg-brand/10 text-brand'
+                                : 'border-border bg-bg-elevated text-text-primary hover:border-brand'
+                        }`}
+                    >
+                        <ClipboardList size={16} aria-hidden />
+                        {t('工厂运营', 'Factory Ops')}
+                    </button>
+                ) : null}
                 {/* Marketplace entry (issue #174): first-level menu item after
                     软件工厂 — the live prod manifest registry (verified via
                     /api/v1/shell/manifests) has no 短剧工厂/开发者 entries, so
