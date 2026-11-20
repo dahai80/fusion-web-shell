@@ -1,8 +1,11 @@
 import {
     type AgentCardStatus,
+    type CardTokens,
     type CoworkRun,
     type CoworkRunDetail,
     type DerivedAgentCard,
+    LIFECYCLE_LABEL,
+    type StudioAgent,
     aggregateTokens,
     deriveCards,
     deriveStats,
@@ -13,6 +16,7 @@ import {
     fetchStudioAgents,
     runTsMs,
     statusFromRun,
+    tokensFromDetail,
 } from '@/lib/agentsApi';
 import { type SseStreamHandle, openSseStream } from '@/lib/sseStream';
 import { useAuth } from '@/stores/auth';
@@ -160,6 +164,12 @@ function AgentCard({
             </div>
             <div className="mt-2 flex flex-wrap gap-2.5 text-[11px] text-text-muted">
                 <span>
+                    {t('状态', 'State')}{' '}
+                    <b className="font-medium text-text-primary">
+                        {t(LIFECYCLE_LABEL[card.lifecycle].zh, LIFECYCLE_LABEL[card.lifecycle].en)}
+                    </b>
+                </span>
+                <span>
                     {t('工作流', 'Workflow')}{' '}
                     <b className="font-medium text-text-primary">{card.workflowName || '—'}</b>
                 </span>
@@ -167,6 +177,16 @@ function AgentCard({
                     {t('耗时', 'Elapsed')}{' '}
                     <b className="font-medium text-text-primary">{elapsedLabel(card.startedAt)}</b>
                 </span>
+                {card.tokens ? (
+                    <span
+                        title={t('本次 run 各步骤 token 合计', 'Per-step token total for this run')}
+                    >
+                        {t('Token', 'Tokens')}{' '}
+                        <b className="font-medium text-text-primary">
+                            {card.tokens.totalTokens.toLocaleString()}
+                        </b>
+                    </span>
+                ) : null}
             </div>
         </button>
     );
@@ -177,6 +197,7 @@ export function AgentsPage() {
     const token = useAuth((s) => s.token);
     const user = useAuth((s) => s.user);
     const [runs, setRuns] = useState<CoworkRun[]>([]);
+    const [studioList, setStudioList] = useState<StudioAgent[]>([]);
     const [cards, setCards] = useState<DerivedAgentCard[]>([]);
     const [pendingCount, setPendingCount] = useState(0);
     const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
@@ -209,6 +230,7 @@ export function AgentsPage() {
             ]);
             setRuns(runList);
             setPendingCount(pending.approvals.length);
+            setStudioList(studio);
             setCards(deriveCards(runList, studio).slice(0, MAX_CARDS));
             setError(null);
         } catch (err) {
@@ -250,6 +272,17 @@ export function AgentsPage() {
             alive = false;
         };
     }, [runs, token]);
+
+    // Issue #177 R2: re-derive cards once run details (per-step tokens) land
+    // so cowork cards surface their token accounting without a re-poll.
+    useEffect(() => {
+        if (Object.keys(detailsById).length === 0) return;
+        const tokensByRun: Record<string, CardTokens | null> = {};
+        for (const [runId, detail] of Object.entries(detailsById)) {
+            tokensByRun[runId] = tokensFromDetail(detail);
+        }
+        setCards(deriveCards(runs, studioList, tokensByRun).slice(0, MAX_CARDS));
+    }, [detailsById, runs, studioList]);
 
     useEffect(() => {
         if (!token) return;
