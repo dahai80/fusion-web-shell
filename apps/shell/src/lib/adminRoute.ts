@@ -5,7 +5,13 @@
  * sidebar/tab strip stay mounted and module tabs keep their KeepAlive state.
  */
 
-export type AdminPageName = 'settings' | 'admin-users' | 'audit' | 'agents' | 'marketplace';
+export type AdminPageName =
+    | 'settings'
+    | 'admin-users'
+    | 'audit'
+    | 'agents'
+    | 'marketplace'
+    | 'factory-ops';
 
 const PATHS: Record<AdminPageName, string> = {
     settings: '/settings',
@@ -13,6 +19,7 @@ const PATHS: Record<AdminPageName, string> = {
     audit: '/audit',
     agents: '/agents',
     marketplace: '/marketplace',
+    'factory-ops': '/factory-ops',
 };
 
 /** Event fired after every in-shell navigation (pushState or re-notify). */

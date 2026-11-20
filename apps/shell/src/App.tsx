@@ -30,6 +30,9 @@ const AgentsPage = lazy(() =>
 const MarketplacePage = lazy(() =>
     import('@/pages/Marketplace').then((m) => ({ default: m.MarketplacePage }))
 );
+const FactoryOpsPage = lazy(() =>
+    import('@/pages/FactoryOps').then((m) => ({ default: m.FactoryOpsPage }))
+);
 
 type Route = { name: 'main' } | { name: AdminPageName };
 
@@ -74,6 +77,13 @@ function adminNodeFor(route: Route): ReactNode {
         return (
             <Suspense fallback={null}>
                 <MarketplacePage />
+            </Suspense>
+        );
+    }
+    if (route.name === 'factory-ops') {
+        return (
+            <Suspense fallback={null}>
+                <FactoryOpsPage />
             </Suspense>
         );
     }
