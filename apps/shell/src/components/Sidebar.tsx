@@ -181,6 +181,7 @@ export function Sidebar({ onOpen, onLogout }: Props) {
     const agentsActive = adminPath === pathForAdminPage('agents');
     const marketplaceActive = adminPath === pathForAdminPage('marketplace');
     const factoryOpsActive = adminPath === pathForAdminPage('factory-ops');
+    const messagesActive = adminPath === pathForAdminPage('messages');
     const expandedGroups = usePrefs((s) => s.expandedGroups);
     const toggleExpandedGroup = usePrefs((s) => s.toggleExpandedGroup);
     const setExpandedGroups = usePrefs((s) => s.setExpandedGroups);
@@ -337,6 +338,24 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                     >
                         <ClipboardList size={16} aria-hidden />
                         {t('工厂运营', 'Factory Ops')}
+                    </button>
+                ) : null}
+                {/* Customer messaging console (issue #186): operator side of
+                    the factory-order ticket threads; server surface pending,
+                    page degrades to a pending notice. */}
+                {canView('fusion-site') ? (
+                    <button
+                        type="button"
+                        onClick={() => navigateShell(pathForAdminPage('messages'))}
+                        aria-current={messagesActive ? 'page' : undefined}
+                        className={`mb-3 flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm ${
+                            messagesActive
+                                ? 'border-brand/40 bg-brand/10 text-brand'
+                                : 'border-border bg-bg-elevated text-text-primary hover:border-brand'
+                        }`}
+                    >
+                        <MessageSquare size={16} aria-hidden />
+                        {t('客户消息', 'Customer Messages')}
                     </button>
                 ) : null}
                 {/* Marketplace entry (issue #174): first-level menu item after

@@ -11,7 +11,8 @@ export type AdminPageName =
     | 'audit'
     | 'agents'
     | 'marketplace'
-    | 'factory-ops';
+    | 'factory-ops'
+    | 'messages';
 
 const PATHS: Record<AdminPageName, string> = {
     settings: '/settings',
@@ -20,6 +21,7 @@ const PATHS: Record<AdminPageName, string> = {
     agents: '/agents',
     marketplace: '/marketplace',
     'factory-ops': '/factory-ops',
+    messages: '/messages',
 };
 
 /** Event fired after every in-shell navigation (pushState or re-notify). */
