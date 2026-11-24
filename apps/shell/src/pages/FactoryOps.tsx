@@ -18,22 +18,32 @@ import {
     splitOrderQueues,
     toggleDiscount,
 } from '@/lib/factoryApi';
+import {
+    FACTORY_STAGES,
+    type FactoryIssue,
+    ISSUE_STATUSES,
+    boardColumns,
+    computeOpsMetrics,
+    isIssueOverdue,
+} from '@/lib/factoryBoard';
 import { t, useLang } from '@/stores/lang';
 import { EmptyState } from '@fusion/web-ui';
-import { ClipboardList, RefreshCw, Tag } from 'lucide-react';
+import { AlertTriangle, ClipboardList, Gauge, RefreshCw, Tag, Users } from 'lucide-react';
 import { Fragment, useCallback, useEffect, useState } from 'react';
 
 /**
- * Factory Ops console (issue #179): operator surface over the live
- * fusion-site factory APIs via the gateway shell proxy. Three tabs —
+ * Factory Ops console (issues #179/#188): operator surface over the live
+ * fusion-site factory APIs via the gateway shell proxy. Seven tabs —
  * order run queue (customer-owed vs operator-owed split, mock payment),
- * versioned price book, discount rules with the stackability matrix.
- * The DAG node graph stays an honest empty state until the build
- * pipeline exposes per-node data (fusion-site#102/#106).
+ * versioned price book, discount rules with the stackability matrix,
+ * S0-S7 kanban board, warranty-issue desk (pending upstream surface),
+ * customer view (pending upstream customer field), and metrics computed
+ * from the order list. The DAG node graph stays an honest empty state
+ * until the build pipeline exposes per-node data (fusion-site#102/#106).
  */
 
 type LoadState = 'loading' | 'ready' | 'error';
-type OpsTab = 'orders' | 'pricing' | 'discounts';
+type OpsTab = 'orders' | 'board' | 'issues' | 'customers' | 'metrics' | 'pricing' | 'discounts';
 
 export function FactoryOpsPage() {
     useLang((l) => l.lang);
@@ -108,6 +118,10 @@ export function FactoryOpsPage() {
                 {(
                     [
                         ['orders', '订单队列', 'Orders'],
+                        ['board', '看板', 'Board'],
+                        ['issues', '工单台', 'Issues'],
+                        ['customers', '客户视图', 'Customers'],
+                        ['metrics', '运营指标', 'Metrics'],
                         ['pricing', '定价配置', 'Pricing'],
                         ['discounts', '折扣规则', 'Discounts'],
                     ] as [OpsTab, string, string][]
@@ -142,8 +156,235 @@ export function FactoryOpsPage() {
                     loading={state === 'loading'}
                 />
             ) : null}
+            {tab === 'board' ? <BoardTab orders={orders} loading={state === 'loading'} /> : null}
+            {tab === 'issues' ? <IssuesTab /> : null}
+            {tab === 'customers' ? <CustomersTab orders={orders} /> : null}
+            {tab === 'metrics' ? <MetricsTab orders={orders} /> : null}
             {tab === 'pricing' ? <PricingTab /> : null}
             {tab === 'discounts' ? <DiscountsTab /> : null}
+        </div>
+    );
+}
+
+function BoardTab({ orders, loading }: { orders: FactoryOrder[]; loading: boolean }) {
+    const cols = boardColumns(orders);
+    return (
+        <div className="space-y-4">
+            {cols.errored.length > 0 ? (
+                <div className="rounded-xl border border-error/30 bg-error/5 p-3 text-sm text-error">
+                    <span className="inline-flex items-center gap-1.5">
+                        <AlertTriangle size={14} aria-hidden />
+                        {t('异常订单', 'Errored orders')}: {cols.errored.length}
+                    </span>
+                </div>
+            ) : null}
+            <p className="text-xs text-text-muted">
+                {t(
+                    '只读聚合：状态真源在 fusion-site 订单生命周期；S7 回款暂无数据源。',
+                    'Read-only aggregation: state truth lives in the fusion-site order lifecycle; S7 settle has no data source yet.'
+                )}
+            </p>
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-8">
+                {FACTORY_STAGES.map((s) => {
+                    const rows = cols[s.id] ?? [];
+                    return (
+                        <section
+                            key={s.id}
+                            aria-label={`${s.id} ${s.en}`}
+                            className="rounded-2xl border border-border bg-bg-elevated p-3 shadow-sm"
+                        >
+                            <h3 className="flex items-baseline justify-between text-xs font-medium text-text-primary">
+                                <span>{s.id}</span>
+                                <span
+                                    className={`rounded-full px-1.5 py-0.5 text-[11px] ${
+                                        rows.length > 0
+                                            ? 'bg-brand/10 text-brand'
+                                            : 'bg-bg-muted text-text-muted'
+                                    }`}
+                                >
+                                    {rows.length}
+                                </span>
+                            </h3>
+                            <p className="mt-0.5 text-[11px] leading-tight text-text-muted">
+                                {t(s.zh, s.en)}
+                            </p>
+                            <ul className="mt-2 space-y-1.5">
+                                {rows.map((o) => (
+                                    <li
+                                        key={o.id}
+                                        className="rounded-lg border border-border bg-bg-muted px-2 py-1.5 text-[11px]"
+                                    >
+                                        <div className="truncate font-medium text-text-primary">
+                                            {o.flow_id.slice(0, 12)}
+                                        </div>
+                                        <div className="text-text-muted">
+                                            ¥{o.price_cny} · {o.created_at.slice(0, 10)}
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                            {s.id === 'S7' && rows.length === 0 ? (
+                                <p className="mt-2 text-[11px] text-text-muted">
+                                    {t('无数据源', 'no data source')}
+                                </p>
+                            ) : null}
+                        </section>
+                    );
+                })}
+            </div>
+            {cols.unknown.length > 0 ? (
+                <p className="text-xs text-text-muted">
+                    {t('未映射订单', 'Unmapped orders')}: {cols.unknown.length}
+                </p>
+            ) : null}
+            {loading && orders.length === 0 ? (
+                <p className="text-xs text-text-muted">{t('加载中…', 'Loading…')}</p>
+            ) : null}
+        </div>
+    );
+}
+
+const ISSUE_SLA_CLS: Record<string, string> = {
+    triaged: 'bg-bg-muted text-text-secondary',
+    'in-progress': 'bg-brand/10 text-brand',
+    fixed: 'bg-success/10 text-success',
+    'awaiting-customer': 'bg-warning/10 text-warning',
+    closed: 'bg-bg-muted text-text-muted',
+};
+
+function IssuesTab() {
+    // No HTTP surface yet: cowork SyncIssuesNode writes order_issues to
+    // SQLite only (fusion-cowork delivery/nodes.py); fusion-site/cowork
+    // expose no read endpoint. Honest pending state until one lands.
+    const issues: FactoryIssue[] = [];
+    const overdue = issues.filter((i) => isIssueOverdue(i));
+    return (
+        <div className="space-y-5">
+            <section className="rounded-2xl border border-dashed border-border p-4">
+                <h2 className="text-sm font-medium text-text-primary">
+                    {t('GitHub 私有仓工单台', 'GitHub private-repo issue desk')}
+                </h2>
+                <EmptyState
+                    title={t('工单数据源未接入', 'Issue data source not wired yet')}
+                    description={t(
+                        'cowork SyncIssuesNode 目前只写本地 SQLite（order_issues），无 HTTP 读取面。接入后此处展示 SLA 状态机与超时告警。',
+                        'cowork SyncIssuesNode writes order_issues to local SQLite only — no HTTP read surface yet. SLA state machine + overdue alerts land once one is exposed.'
+                    )}
+                />
+            </section>
+            <section className="rounded-2xl border border-border bg-bg-elevated p-4 shadow-sm">
+                <h2 className="text-sm font-medium text-text-primary">
+                    {t('SLA 状态机', 'SLA state machine')}
+                </h2>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                    {ISSUE_STATUSES.map((s, i) => (
+                        <Fragment key={s}>
+                            {i > 0 ? <span className="text-text-muted">→</span> : null}
+                            <span
+                                className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                                    ISSUE_SLA_CLS[s]
+                                }`}
+                            >
+                                {s}
+                            </span>
+                        </Fragment>
+                    ))}
+                </div>
+                <p className="mt-2 text-xs text-text-muted">
+                    {t(
+                        '超时判定：未关闭工单 age > sla_hours 即标记超时（SLA 计时器 + 告警）。',
+                        'Overdue rule: a non-closed issue with age > sla_hours is flagged (SLA timer + warning).'
+                    )}
+                </p>
+            </section>
+            {overdue.length > 0 ? (
+                <section className="rounded-xl border border-error/30 bg-error/5 p-3 text-sm text-error">
+                    {t('超时工单', 'Overdue issues')}: {overdue.length}
+                </section>
+            ) : null}
+        </div>
+    );
+}
+
+function CustomersTab({ orders }: { orders: FactoryOrder[] }) {
+    // FactoryOrder carries no customer column (userSub-scoped list, no
+    // customer join exposed) — per-customer grouping is impossible without
+    // lying. Pending an upstream customer surface (fusion-site).
+    return (
+        <section className="rounded-2xl border border-dashed border-border p-4">
+            <h2 className="flex items-center gap-2 text-sm font-medium text-text-primary">
+                <Users size={15} aria-hidden className="text-text-muted" />
+                {t('客户视图', 'Customer view')}
+            </h2>
+            <EmptyState
+                title={t('订单无客户字段', 'Orders carry no customer field')}
+                description={t(
+                    `当前工厂订单列表按下单用户隔离且不含客户标识，无法按客户聚合（共 ${orders.length} 单）。待 fusion-site 暴露客户维度后接入。`,
+                    `The factory order list is user-scoped and carries no customer identifier, so per-customer grouping is impossible (${orders.length} orders total). Lands once fusion-site exposes a customer dimension.`
+                )}
+            />
+        </section>
+    );
+}
+
+function MetricsTab({ orders }: { orders: FactoryOrder[] }) {
+    const m = computeOpsMetrics(orders);
+    const pct = (v: number | null) => (v === null ? '—' : `${(v * 100).toFixed(1)}%`);
+    const cards: [string, string, string, string][] = [
+        [
+            t('订单总数', 'Total orders'),
+            String(m.total),
+            t('来自订单列表', 'from the order list'),
+            'text-text-primary',
+        ],
+        [
+            t('赢单率', 'Win rate'),
+            pct(m.winRate),
+            t('已交付 / (已交付+异常)', 'delivered / (delivered + errored)'),
+            m.winRate === null ? 'text-text-muted' : 'text-success',
+        ],
+        [
+            t('异常率', 'Error rate'),
+            pct(m.errorRate),
+            t('order_error / 总数', 'order_error / total'),
+            m.errorRate === null ? 'text-text-muted' : 'text-error',
+        ],
+        [
+            t('平均交付时长', 'Avg delivery time'),
+            '—',
+            t('缺交付时间戳数据源', 'no delivery-timestamp source yet'),
+            'text-text-muted',
+        ],
+        [
+            t('返工率', 'Rework rate'),
+            '—',
+            t('工单面未接入', 'issue surface not wired yet'),
+            'text-text-muted',
+        ],
+    ];
+    return (
+        <div className="space-y-4">
+            <p className="text-xs text-text-muted">
+                {t(
+                    '全部由订单列表记录计算，无人工输入；标 “—” 的指标缺数据源，如实展示。',
+                    'All computed from order-list records with no manual input; “—” marks metrics whose data source does not exist yet, shown honestly.'
+                )}
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                {cards.map(([label, value, source, cls]) => (
+                    <div
+                        key={label}
+                        className="rounded-2xl border border-border bg-bg-elevated p-4 shadow-sm"
+                    >
+                        <div className="flex items-center gap-1.5 text-xs text-text-muted">
+                            <Gauge size={13} aria-hidden />
+                            {label}
+                        </div>
+                        <div className={`mt-1.5 text-2xl font-semibold ${cls}`}>{value}</div>
+                        <div className="mt-1 text-[11px] text-text-muted">{source}</div>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 }
