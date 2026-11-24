@@ -5,6 +5,7 @@ import { useAuth } from '../stores/auth';
 import { useManifests } from '../stores/manifests';
 import {
     recheckDeadlines,
+    setFactoryCardsFetcher,
     setFetcher,
     setKernelCardsFetcher,
     useNotifications,
@@ -492,5 +493,38 @@ describe('kernel typed approval unification (issue #180)', () => {
         const items = useNotifications.getState().items;
         expect(items).toHaveLength(1);
         expect(items[0]!.id).toContain('fusion-cowork');
+    });
+});
+
+describe('factory card unification (issue #183)', () => {
+    beforeEach(() => {
+        localStorage.removeItem('fusion.shell.notifications.read');
+        useNotifications.setState({ items: [], readIds: new Set(), polling: false });
+        useManifests.setState({ manifests: [], loaded: false, unreachableIds: new Set() });
+        setKernelCardsFetcher(async () => []);
+        setFactoryCardsFetcher(async () => ({ demand: 0, gates: 0 }));
+    });
+
+    it('merges demand + gate counts as synthetic cowork approvals items', async () => {
+        setupSources([]);
+        setFactoryCardsFetcher(async () => ({ demand: 2, gates: 1 }));
+        await useNotifications.getState().pollNow();
+        const items = useNotifications.getState().items;
+        expect(items).toHaveLength(3);
+        expect(items.filter((i) => i.id.startsWith('fusion-cowork:factory:demand-'))).toHaveLength(
+            2
+        );
+        expect(items[2]!.id).toBe('fusion-cowork:factory:gate-0');
+        expect(items[2]!.level).toBe('warning');
+        expect(items.every((i) => i.kind === 'approvals')).toBe(true);
+    });
+
+    it('factory fetcher failure degrades silently to zero items', async () => {
+        setupSources([]);
+        setFactoryCardsFetcher(async () => {
+            throw new Error('cowork down');
+        });
+        await useNotifications.getState().pollNow();
+        expect(useNotifications.getState().items).toHaveLength(0);
     });
 });

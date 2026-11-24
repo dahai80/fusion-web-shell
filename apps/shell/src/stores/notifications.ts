@@ -1,4 +1,5 @@
 import { sharedClient } from '@/api/client';
+import { fetchDeliveryGates, fetchDemandDrafts } from '@/lib/coworkInbox';
 import { type KernelTypedCard, fetchApprovalCards } from '@/lib/kernelInbox';
 import { stampLastSeen } from '@/lib/sidebarTree';
 import { useAuth } from '@/stores/auth';
@@ -43,6 +44,19 @@ let kernelCardsFetcher: KernelCardsFetchFn = fetchApprovalCards;
 /** Test seam: swap the kernel inbox layer (#180; production default = fetchApprovalCards). */
 export function setKernelCardsFetcher(fn: KernelCardsFetchFn): void {
     kernelCardsFetcher = fn;
+}
+
+/** Issue #183: factory card counts (demand drafts + delivery gates) for the bell. */
+export type FactoryCardsFetchFn = () => Promise<{ demand: number; gates: number }>;
+
+let factoryCardsFetcher: FactoryCardsFetchFn = async () => {
+    const [drafts, gates] = await Promise.all([fetchDemandDrafts(), fetchDeliveryGates()]);
+    return { demand: drafts.length, gates: gates.length };
+};
+
+/** Test seam: swap the factory card layer (#183; production default = coworkInbox fetchers). */
+export function setFactoryCardsFetcher(fn: FactoryCardsFetchFn): void {
+    factoryCardsFetcher = fn;
 }
 
 const READ_KEY = 'fusion.shell.notifications.read';
@@ -240,6 +254,34 @@ export const useNotifications = create<NotificationsState>((set, get) => ({
             } catch (err) {
                 console.warn('[notifications] kernel inbox poll failed:', err);
             }
+        }
+        // Issue #183: factory demand drafts + delivery gate cards merge as
+        // synthetic approvals items on the cowork module (bell badge parity
+        // with the Agents overview inbox).
+        try {
+            const counts = await factoryCardsFetcher();
+            for (let i = 0; i < counts.demand; i += 1) {
+                merged.push({
+                    id: `fusion-cowork:factory:demand-${i}`,
+                    sourceId: 'factory',
+                    moduleId: 'fusion-cowork',
+                    kind: 'approvals',
+                    title: t('需求草稿待处理', 'Demand draft awaiting handling'),
+                    level: 'info',
+                });
+            }
+            for (let i = 0; i < counts.gates; i += 1) {
+                merged.push({
+                    id: `fusion-cowork:factory:gate-${i}`,
+                    sourceId: 'factory',
+                    moduleId: 'fusion-cowork',
+                    kind: 'approvals',
+                    title: t('交付闸口待放行', 'Delivery gate pending advance'),
+                    level: 'warning',
+                });
+            }
+        } catch (err) {
+            console.warn('[notifications] factory cards poll failed:', err);
         }
         set({ items: merged });
         console.log('[notifications] polled', targets.length, 'sources,', merged.length, 'items');
