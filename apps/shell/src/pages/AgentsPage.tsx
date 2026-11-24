@@ -20,6 +20,13 @@ import {
     tokensFromDetail,
 } from '@/lib/agentsApi';
 import {
+    type DeliveryGateCard,
+    type DemandDraftCard,
+    approveDeliveryGate,
+    fetchDeliveryGates,
+    fetchDemandDrafts,
+} from '@/lib/coworkInbox';
+import {
     type KernelCardKind,
     type KernelTypedCard,
     fetchApprovalCards,
@@ -222,6 +229,8 @@ export function AgentsPage() {
     const [cards, setCards] = useState<DerivedAgentCard[]>([]);
     const [pendingCount, setPendingCount] = useState(0);
     const [typedCards, setTypedCards] = useState<KernelTypedCard[]>([]);
+    const [demandCards, setDemandCards] = useState<DemandDraftCard[]>([]);
+    const [gateCards, setGateCards] = useState<DeliveryGateCard[]>([]);
     const [respondingIds, setRespondingIds] = useState<Set<string>>(new Set());
     const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
     const [feed, setFeed] = useState<FeedLine[]>([]);
@@ -280,10 +289,49 @@ export function AgentsPage() {
         []
     );
 
+    // Issue #183: resolve a delivery gate card. Optimistic removal first —
+    // the gate advance is a human-only state transition (#597) — restored on
+    // failure so the user can retry.
+    const approveGate = useCallback(async (card: DeliveryGateCard) => {
+        setRespondingIds((prev) => new Set(prev).add(card.orderNo));
+        setGateCards((prev) => prev.filter((c) => c.orderNo !== card.orderNo));
+        try {
+            await approveDeliveryGate(card.orderNo);
+            console.log('[agentsPage] delivery gate approved:', card.orderNo);
+            pushToast(
+                'success',
+                t(`闸口已放行：${card.orderNo}`, `Gate advanced: ${card.orderNo}`)
+            );
+        } catch (err) {
+            console.warn('[agentsPage] gate approve failed:', card.orderNo, err);
+            setGateCards((prev) => [...prev, card]);
+            pushToast('error', t('闸口放行失败，请重试', 'Gate advance failed, please retry'));
+        } finally {
+            setRespondingIds((prev) => {
+                const next = new Set(prev);
+                next.delete(card.orderNo);
+                return next;
+            });
+        }
+    }, []);
+
+    // demand/draft cards resolve in the cowork demand GUI (human send + deal
+    // confirmation live there) — deep-link instead of an in-shell action.
+    const openDemandPage = useCallback(() => {
+        const manifest = useManifests.getState().manifests.find((m) => m.id === 'fusion-cowork');
+        if (!manifest) {
+            console.warn('[agentsPage] cowork manifest missing, cannot open demand page');
+            return;
+        }
+        useTabs
+            .getState()
+            .openTab(manifest, { route: '/demand', pageTitle: t('需求引擎', 'Demand') });
+    }, []);
+
     const refresh = useCallback(async () => {
         try {
             const member = useAuth.getState().user?.user_id ?? '';
-            const [runList, pending, studio, typed] = await Promise.all([
+            const [runList, pending, studio, typed, drafts, gates] = await Promise.all([
                 fetchRuns(),
                 fetchPending().catch(() => ({ approvals: [] })),
                 fetchStudioAgents().catch(() => []),
@@ -295,12 +343,24 @@ export function AgentsPage() {
                           return [];
                       })
                     : Promise.resolve([]),
+                // Issue #183: factory demand drafts + delivery gate cards
+                // from the cowork demand engine / delivery rail.
+                fetchDemandDrafts().catch((err: unknown) => {
+                    console.warn('[agentsPage] demand drafts failed:', err);
+                    return [];
+                }),
+                fetchDeliveryGates().catch((err: unknown) => {
+                    console.warn('[agentsPage] delivery gates failed:', err);
+                    return [];
+                }),
             ]);
             setRuns(runList);
             setPendingCount(pending.approvals.length);
             setStudioList(studio);
             setCards(deriveCards(runList, studio).slice(0, MAX_CARDS));
             setTypedCards(typed);
+            setDemandCards(drafts);
+            setGateCards(gates);
             setError(null);
         } catch (err) {
             console.warn('[agentsPage] refresh failed:', err);
@@ -589,17 +649,80 @@ export function AgentsPage() {
                 </div>
             )}
 
-            {typedCards.length > 0 ? (
+            {typedCards.length > 0 || demandCards.length > 0 || gateCards.length > 0 ? (
                 <div className="mb-4 space-y-2">
                     <div className="text-sm font-medium text-text-primary">
-                        {t('内核审批收件箱', 'Kernel approval inbox')}
+                        {t('统一审批收件箱', 'Unified approval inbox')}
                         <span className="ml-2 text-xs font-normal text-text-muted">
                             {t(
-                                '来自 agent-studio 团队邮箱的待决卡片',
-                                'Pending cards from agent-studio team mailboxes'
+                                '内核卡片 · 工厂需求草稿 · 交付闸口',
+                                'kernel cards · factory demand drafts · delivery gates'
                             )}
                         </span>
                     </div>
+                    {demandCards.map((card) => (
+                        <div
+                            key={`lead-${card.leadId}`}
+                            className="rounded-xl border border-border bg-bg-elevated p-3.5 shadow-sm"
+                        >
+                            <div className="mb-1.5 flex items-center gap-2">
+                                <span className="rounded-full border border-success/50 bg-success/10 px-2 py-0.5 text-[11px] font-semibold text-success">
+                                    {t('需求草稿', 'Demand draft')}
+                                </span>
+                                <span className="font-mono text-[10px] text-text-muted">
+                                    #{card.leadId} · {card.source}
+                                </span>
+                                <span className="ml-auto text-[11px] text-text-muted">
+                                    {t(
+                                        '待人工发送与成交确认',
+                                        'Awaiting human send + deal confirmation'
+                                    )}
+                                </span>
+                            </div>
+                            <div className="mb-2.5 rounded-lg border border-border bg-bg-muted px-2.5 py-1.5 text-xs leading-relaxed text-text-secondary">
+                                {card.title || card.draftFinal.slice(0, 120) || '—'}
+                            </div>
+                            <button
+                                type="button"
+                                onClick={openDemandPage}
+                                className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-brand/85"
+                            >
+                                {t('去需求引擎处理', 'Open demand engine')}
+                            </button>
+                        </div>
+                    ))}
+                    {gateCards.map((card) => (
+                        <div
+                            key={card.orderNo}
+                            className="rounded-xl border border-border bg-bg-elevated p-3.5 shadow-sm"
+                        >
+                            <div className="mb-1.5 flex items-center gap-2">
+                                <span className="rounded-full border border-warning/50 bg-warning/10 px-2 py-0.5 text-[11px] font-semibold text-warning">
+                                    {t('交付闸口', 'Delivery gate')}
+                                </span>
+                                <span className="font-mono text-[10px] text-text-muted">
+                                    {card.orderNo} · {card.stage}
+                                </span>
+                                <span className="ml-auto text-[11px] text-text-muted">
+                                    {card.capability}
+                                    {card.priceCny > 0
+                                        ? ` · ¥${card.priceCny.toLocaleString()}`
+                                        : ''}
+                                </span>
+                            </div>
+                            <div className="mb-2.5 rounded-lg border border-border bg-bg-muted px-2.5 py-1.5 text-xs leading-relaxed text-text-secondary">
+                                {card.title || '—'}
+                            </div>
+                            <button
+                                type="button"
+                                disabled={respondingIds.has(card.orderNo)}
+                                onClick={() => void approveGate(card)}
+                                className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-brand/85 disabled:opacity-50"
+                            >
+                                {t('放行至下一阶段', 'Advance to next stage')}
+                            </button>
+                        </div>
+                    ))}
                     {typedCards.map((card) => (
                         <div
                             key={card.msgId}
