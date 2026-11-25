@@ -24,15 +24,15 @@ import {
     Send,
     Table2,
 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**
- * Agentic Office command center (issue #191, prototype 01). Four zones:
- * command bar (NL task + office-route selector, dispatched through the
- * fusion-site console tasks BFF — no new execution plane), active cowork
- * DAG runs (left), recent artifacts + knowledge QA entry (right), and a
- * service health strip (bottom). Surfaces without a shell-reachable
- * contract degrade visibly instead of faking data.
+ * Agentic Office command center (issue #191, prototype 01). Chat-first
+ * layout (bug3 followup): dispatched tasks and their broker replies render
+ * as a conversation with a bottom composer (Enter sends), route selector
+ * inline. Runs/artifacts/health zones stay per prototype. Dispatch goes
+ * through the fusion-site console tasks BFF — no new execution plane;
+ * errors surface verbatim in the thread, never faked.
  */
 
 const COWORK_RUNS_PATH = '/shell/fusion-cowork/api/runs';
@@ -50,6 +50,17 @@ const EXAMPLES: { zh: string; en: string }[] = [
     { zh: '生成评审 deck', en: 'Generate a review deck' },
     { zh: '合同要点比对', en: 'Compare contract key points' },
 ];
+
+/** One conversation row: the user's dispatched task or the broker's reply. */
+interface ChatMsg {
+    id: number;
+    kind: 'task' | 'system';
+    text: string;
+    route?: OfficeRoute;
+    ok?: boolean;
+    taskId?: string;
+    ts: number;
+}
 
 const RUN_STATUS_CLS: Record<string, string> = {
     success: 'bg-success/10 text-success',
@@ -77,13 +88,14 @@ export function OfficeCenterPage() {
     const [text, setText] = useState('');
     const [route, setRoute] = useState<OfficeRoute>('documents');
     const [dispatching, setDispatching] = useState(false);
-    const [notice, setNotice] = useState<string | null>(null);
-    const [dispatchError, setDispatchError] = useState<string | null>(null);
+    const [msgs, setMsgs] = useState<ChatMsg[]>([]);
     const [runs, setRuns] = useState<ReturnType<typeof parseOfficeRuns>>([]);
     const [runsState, setRunsState] = useState<LoadState>('loading');
     const [artifacts, setArtifacts] = useState<OfficeArtifact[]>([]);
     const [artifactsState, setArtifactsState] = useState<LoadState>('loading');
     const [health, setHealth] = useState<HealthEntry[]>([]);
+    const threadRef = useRef<HTMLDivElement | null>(null);
+    const nextMsgId = useRef(1);
 
     const reloadRuns = useCallback(async () => {
         try {
@@ -135,22 +147,57 @@ export function OfficeCenterPage() {
     };
 
     const submit = async () => {
-        if (!text.trim() || dispatching) return;
+        const prompt = text.trim();
+        if (!prompt || dispatching) return;
+        const taskMsg: ChatMsg = {
+            id: nextMsgId.current++,
+            kind: 'task',
+            text: prompt,
+            route,
+            ts: Date.now(),
+        };
+        setMsgs((m) => [...m, taskMsg]);
+        setText('');
         setDispatching(true);
-        setNotice(null);
-        setDispatchError(null);
         try {
-            const { taskId } = await dispatchOfficeTask(route, text);
+            const { taskId } = await dispatchOfficeTask(route, prompt);
             console.log(`[office-center] dispatched ${taskId} route=${route}`);
-            setNotice(taskId);
-            setText('');
+            setMsgs((m) => [
+                ...m,
+                {
+                    id: nextMsgId.current++,
+                    kind: 'system',
+                    ok: true,
+                    taskId,
+                    text: t('任务已入队', 'Task queued'),
+                    ts: Date.now(),
+                },
+            ]);
         } catch (err) {
-            setDispatchError((err as Error).message);
+            const message = (err as Error).message;
             console.warn('[office-center] dispatch failed', err);
+            setMsgs((m) => [
+                ...m,
+                {
+                    id: nextMsgId.current++,
+                    kind: 'system',
+                    ok: false,
+                    text: `${t('派发失败', 'Dispatch failed')}：${message}`,
+                    ts: Date.now(),
+                },
+            ]);
         } finally {
             setDispatching(false);
         }
     };
+
+    // Keep the thread pinned to the newest row; msgCount changes on every
+    // appended message and on the dispatching indicator toggling.
+    const msgCount = msgs.length + (dispatching ? 1 : 0);
+    useEffect(() => {
+        if (msgCount === 0) return;
+        threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight });
+    }, [msgCount]);
 
     return (
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4">
@@ -164,85 +211,139 @@ export function OfficeCenterPage() {
                 </span>
             </div>
 
-            {/* Zone 1 (top): NL task command bar */}
-            <section className="hair-card p-4">
-                <h2 className="text-sm font-medium text-text-primary">
-                    {t('自然语言发起办公任务', 'Start an office task in natural language')}
-                </h2>
-                <div className="mt-2 flex gap-2">
-                    <textarea
-                        value={text}
-                        onChange={(e) => setText(e.target.value)}
-                        rows={2}
-                        placeholder={t(
-                            '例：把 Q3 华东销售数据做成演示，并给团队建跟进任务…',
-                            'e.g. Turn the Q3 sales sheet into a deck and create follow-up tasks…'
-                        )}
-                        className="field flex-1 resize-none"
-                    />
-                    <button
-                        type="button"
-                        disabled={dispatching || !text.trim()}
-                        onClick={() => void submit()}
-                        className="pill mt-auto flex items-center gap-1"
-                    >
-                        <Send size={14} aria-hidden />
-                        {dispatching ? t('派发中…', 'Dispatching…') : t('执行', 'Run')}
-                    </button>
+            {/* Zone 1 (top): task thread + chat composer (bug3: chat-style,
+                Enter sends, broker replies render inline) */}
+            <section className="hair-card flex flex-col">
+                <div
+                    ref={threadRef}
+                    className="flex max-h-80 min-h-36 flex-col gap-2 overflow-y-auto p-4"
+                    aria-live="polite"
+                >
+                    {msgs.length === 0 ? (
+                        <div className="m-auto text-center text-xs text-text-muted">
+                            {t(
+                                '用自然语言描述办公任务，回车发送；结果以任务回执形式出现在这里。',
+                                'Describe an office task in natural language and press Enter; broker replies land here.'
+                            )}
+                        </div>
+                    ) : (
+                        msgs.map((m) =>
+                            m.kind === 'task' ? (
+                                <div key={m.id} className="flex justify-end">
+                                    <div className="max-w-[80%] rounded-2xl rounded-br-sm bg-brand/10 px-3 py-2 text-sm text-text-primary">
+                                        {m.text}
+                                        <span className="ml-2 text-[11px] text-text-muted">
+                                            {(() => {
+                                                const meta = ROUTE_META[m.route ?? 'documents'];
+                                                return meta ? t(meta.zh, meta.en) : '';
+                                            })()}
+                                        </span>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div key={m.id} className="flex justify-start">
+                                    <div
+                                        role={m.ok ? 'status' : 'alert'}
+                                        className={`max-w-[80%] rounded-2xl rounded-bl-sm border px-3 py-2 text-sm ${
+                                            m.ok
+                                                ? 'border-hairline bg-success/5 text-text-secondary'
+                                                : 'border-hairline bg-error/5 text-error'
+                                        }`}
+                                    >
+                                        {m.text}
+                                        {m.taskId ? (
+                                            <span className="ml-1 font-mono text-[11px] text-text-muted">
+                                                {m.taskId}
+                                            </span>
+                                        ) : null}
+                                        {m.ok ? (
+                                            <div className="mt-0.5 text-[11px] text-text-muted">
+                                                {t(
+                                                    '设备离线时停留在 broker 信箱（TTL 24h），上线后自动领取。',
+                                                    'If the device is offline the task waits in the broker mailbox (TTL 24h).'
+                                                )}
+                                            </div>
+                                        ) : null}
+                                    </div>
+                                </div>
+                            )
+                        )
+                    )}
+                    {dispatching ? (
+                        <div className="flex justify-start">
+                            <div className="rounded-2xl rounded-bl-sm border border-hairline px-3 py-2 text-xs text-text-muted">
+                                {t('派发中…', 'Dispatching…')}
+                            </div>
+                        </div>
+                    ) : null}
                 </div>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                    {OFFICE_ROUTES.map((r) => {
-                        const meta = ROUTE_META[r];
-                        const Icon = meta.icon;
-                        return (
-                            <button
-                                key={r}
-                                type="button"
-                                onClick={() => setRoute(r)}
-                                aria-pressed={route === r}
-                                className={`flex items-center gap-1 rounded-pill px-3 py-1 text-xs ${
-                                    route === r
-                                        ? 'bg-brand/10 text-brand'
-                                        : 'bg-bg-muted text-text-muted hover:text-text-primary'
-                                }`}
-                            >
-                                <Icon size={13} aria-hidden />
-                                {t(meta.zh, meta.en)}
-                            </button>
-                        );
-                    })}
-                    <span className="mx-1 h-4 w-px bg-border" aria-hidden />
-                    {EXAMPLES.map((ex) => (
+                <div className="border-t border-hairline p-3">
+                    <div className="flex items-end gap-2">
+                        <textarea
+                            value={text}
+                            onChange={(e) => setText(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (
+                                    e.key === 'Enter' &&
+                                    !e.shiftKey &&
+                                    !e.nativeEvent.isComposing
+                                ) {
+                                    e.preventDefault();
+                                    void submit();
+                                }
+                            }}
+                            rows={1}
+                            placeholder={t(
+                                '例：把 Q3 华东销售数据做成演示，并给团队建跟进任务…（回车发送）',
+                                'e.g. Turn the Q3 sales sheet into a deck… (Enter to send)'
+                            )}
+                            className="field max-h-32 min-h-9 flex-1 resize-none py-2"
+                        />
                         <button
-                            key={ex.en}
                             type="button"
-                            onClick={() => setText(ex.zh)}
-                            className="rounded-pill bg-bg-muted px-3 py-1 text-xs text-text-muted hover:text-text-primary"
+                            disabled={dispatching || !text.trim()}
+                            onClick={() => void submit()}
+                            aria-label={t('发送任务', 'Send task')}
+                            className="pill flex items-center gap-1"
                         >
-                            {t(ex.zh, ex.en)}
+                            <Send size={14} aria-hidden />
+                            {t('发送', 'Send')}
                         </button>
-                    ))}
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                        {OFFICE_ROUTES.map((r) => {
+                            const meta = ROUTE_META[r];
+                            const Icon = meta.icon;
+                            return (
+                                <button
+                                    key={r}
+                                    type="button"
+                                    onClick={() => setRoute(r)}
+                                    aria-pressed={route === r}
+                                    className={`flex items-center gap-1 rounded-pill px-3 py-1 text-xs ${
+                                        route === r
+                                            ? 'bg-brand/10 text-brand'
+                                            : 'bg-bg-muted text-text-muted hover:text-text-primary'
+                                    }`}
+                                >
+                                    <Icon size={13} aria-hidden />
+                                    {t(meta.zh, meta.en)}
+                                </button>
+                            );
+                        })}
+                        <span className="mx-1 h-4 w-px bg-border" aria-hidden />
+                        {EXAMPLES.map((ex) => (
+                            <button
+                                key={ex.en}
+                                type="button"
+                                onClick={() => setText(ex.zh)}
+                                className="rounded-pill bg-bg-muted px-3 py-1 text-xs text-text-muted hover:text-text-primary"
+                            >
+                                {t(ex.zh, ex.en)}
+                            </button>
+                        ))}
+                    </div>
                 </div>
-                {notice ? (
-                    <div
-                        role="status"
-                        className="mt-3 rounded-xl border border-hairline bg-success/5 p-3 text-xs text-text-secondary"
-                    >
-                        {t('任务已入队', 'Task queued')}（{notice}）—{' '}
-                        {t(
-                            '设备离线时停留在 broker 信箱（TTL 24h），上线后自动领取。',
-                            'If the device is offline the task waits in the broker mailbox (TTL 24h).'
-                        )}
-                    </div>
-                ) : null}
-                {dispatchError ? (
-                    <div
-                        role="alert"
-                        className="mt-3 rounded-xl border border-hairline bg-error/5 p-3 text-xs text-error"
-                    >
-                        {t('派发失败', 'Dispatch failed')}：{dispatchError}
-                    </div>
-                ) : null}
             </section>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-5">

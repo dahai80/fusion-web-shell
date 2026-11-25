@@ -3,6 +3,7 @@ import {
     OFFICE_ROUTE_TYPE,
     type OfficeRun,
     parseOfficeArtifacts,
+    parseOfficeDevices,
     parseOfficeRuns,
 } from './officeCenter';
 
@@ -51,6 +52,23 @@ describe('office command center parsers (#191)', () => {
         expect(items).toHaveLength(2);
         expect(items[0]).toEqual({ id: 'art_1', name: 'Deck', kind: 'document', version: 3 });
         expect(items[1]).toEqual({ id: 'art_2', name: 'art_2', kind: '', version: 1 });
+    });
+
+    it('parseOfficeDevices keeps rows with a device_id, coerces flags', () => {
+        const devices = parseOfficeDevices({
+            devices: [
+                { device_id: 'dev_a', online: true, is_default_execution: true },
+                { device_id: 'dev_b', online: 'yes' },
+                { online: true },
+                'junk',
+            ],
+        });
+        expect(devices).toEqual([
+            { deviceId: 'dev_a', online: true, isDefault: true },
+            { deviceId: 'dev_b', online: false, isDefault: false },
+        ]);
+        expect(parseOfficeDevices(null)).toEqual([]);
+        expect(parseOfficeDevices({ devices: 5 })).toEqual([]);
     });
 
     it('route → broker type mapping covers every selector route', () => {

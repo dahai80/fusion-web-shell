@@ -11,9 +11,9 @@ import { sharedClient } from '@/api/client';
  *     routes (plan §8.2, FR-8)
  *   - runs: cowork DAG run list (`GET /api/runs`)
  *   - artifacts: fusion-artifacts-engine (`GET /api/v1/artifacts`)
- *   - health: per-module liveness endpoints; office-api has no gateway
- *     route (direct :11492 only) so it renders the honest no-route state
- *     until the console devices surface lands (upstream fusion-site).
+ *   - health: per-module liveness endpoints through the gateway; office-api
+ *     rides an API-only module hop (no sidebar manifest), a missing route
+ *     degrades to the honest no_route state
  */
 
 const SITE_CONSOLE_PREFIX = '/shell/fusion-site/api/console';
@@ -36,13 +36,64 @@ export const OFFICE_ROUTE_TYPE: Record<OfficeRoute, string> = {
 };
 
 /**
- * Target device for dispatch. The broker devices read surface is not
- * exposed to shell sessions yet (fusion-site console BFF is the only
- * reader) so the command bar targets the default-execution device by
- * name; the broker answers 404 E_OFFLINE if it does not know it and the
- * page degrades visibly.
+ * Target device for dispatch. The console devices BFF (fusion-site#166 Gap
+ * 2) exposes the broker device list to shell sessions; dispatch resolves
+ * the default-execution online device through it and only falls back to
+ * this constant when the BFF is unreachable — the broker then answers 404
+ * E_OFFLINE and the page degrades visibly.
  */
 export const OFFICE_DEFAULT_DEVICE = 'default';
+
+/** Sanitized broker device row (console devices BFF). */
+export interface OfficeDevice {
+    deviceId: string;
+    online: boolean;
+    isDefault: boolean;
+}
+
+interface RawDevice {
+    device_id?: unknown;
+    online?: unknown;
+    is_default_execution?: unknown;
+}
+
+/** Defensive parse of GET /shell/fusion-site/api/console/devices. */
+export function parseOfficeDevices(payload: unknown): OfficeDevice[] {
+    const devices =
+        payload &&
+        typeof payload === 'object' &&
+        Array.isArray((payload as { devices?: unknown }).devices)
+            ? ((payload as { devices: unknown[] }).devices as RawDevice[])
+            : [];
+    const out: OfficeDevice[] = [];
+    for (const d of devices) {
+        if (typeof d.device_id !== 'string' || d.device_id === '') continue;
+        out.push({
+            deviceId: d.device_id,
+            online: d.online === true,
+            isDefault: d.is_default_execution === true,
+        });
+    }
+    return out;
+}
+
+/**
+ * Resolve the dispatch target: online default-execution device, else any
+ * online device, else the static fallback. Never throws — a bad resolve
+ * degrades to a broker-side 404 the page shows verbatim.
+ */
+export async function resolveOfficeDevice(): Promise<string> {
+    try {
+        const devices = parseOfficeDevices(
+            await sharedClient().get(`${SITE_CONSOLE_PREFIX}/devices`, { quiet: true })
+        );
+        const pick = devices.find((d) => d.isDefault && d.online) ?? devices.find((d) => d.online);
+        if (pick) return pick.deviceId;
+    } catch (err) {
+        console.warn('[office-center] device resolve failed, using fallback', err);
+    }
+    return OFFICE_DEFAULT_DEVICE;
+}
 
 /** Sanitized row of the cowork DAG run list (left zone). */
 export interface OfficeRun {
@@ -139,10 +190,11 @@ export async function dispatchOfficeTask(
 ): Promise<DispatchResult> {
     const trimmed = text.trim();
     if (!trimmed) throw new Error('empty task text');
+    const deviceId = await resolveOfficeDevice();
     const res = await sharedClient().post<{ task_id?: string; detail?: string }>(
         `${SITE_CONSOLE_PREFIX}/tasks`,
         {
-            device_id: OFFICE_DEFAULT_DEVICE,
+            device_id: deviceId,
             type: OFFICE_ROUTE_TYPE[route],
             params: {
                 route,
@@ -164,14 +216,16 @@ export interface HealthEntry {
     id: string;
     label: string;
     labelEn: string;
-    /** Gateway probe path; null = no route exists (office-api today). */
+    /** Gateway probe path; null = no route exists. */
     probePath: string | null;
     port: number | null;
     state: HealthState;
     detail: string;
 }
 
-/** Bottom strip targets (prototype 01 topbar pills, issue zone 4). */
+/** Bottom strip targets (prototype 01 topbar pills, issue zone 4). office-api
+ * rides an API-only gateway module hop (no manifest entry, no sidebar item);
+ * the null probePath fallback stays for a route that disappears. */
 const HEALTH_TARGETS: Omit<HealthEntry, 'state' | 'detail'>[] = [
     {
         id: 'mlx',
@@ -180,7 +234,13 @@ const HEALTH_TARGETS: Omit<HealthEntry, 'state' | 'detail'>[] = [
         probePath: '/shell/fusion-mlx/health',
         port: 11434,
     },
-    { id: 'office-api', label: 'office-api', labelEn: 'office-api', probePath: null, port: 11492 },
+    {
+        id: 'office-api',
+        label: 'office-api',
+        labelEn: 'office-api',
+        probePath: '/shell/office-api/healthz',
+        port: 11492,
+    },
     {
         id: 'rag',
         label: 'fusion-rag',
