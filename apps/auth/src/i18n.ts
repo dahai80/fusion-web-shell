@@ -83,6 +83,8 @@ const en: Record<string, string> = {
     usernameRules: '3–32 chars, letters/digits/underscore',
     passwordRules: 'At least 8 characters',
     planNote: 'New tenants start on the free plan; quotas bind at provisioning.',
+    inviteNote:
+        'Activate your account with the order invite link; repeat orders with the same email auto-link to the same tenant.',
 };
 
 export const dicts: Record<Lang, Record<string, string>> = { zh, en };

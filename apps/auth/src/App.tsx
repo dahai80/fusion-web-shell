@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react';
-import { ApiPendingError, type TokenPair, api, redirectToClient, safeReturnPath } from './api';
+import {
+    ApiPendingError,
+    type TokenPair,
+    api,
+    inviteRedeemUrl,
+    readInviteToken,
+    redirectToClient,
+    safeReturnPath,
+} from './api';
 import { type Lang, detectLang, t } from './i18n';
 
 type Channel = 'login' | 'personal' | 'tenant' | 'join';
@@ -62,6 +70,16 @@ export function App() {
 
     useEffect(() => {
         setLang(detectLang());
+        const invite = readInviteToken(window.location.search);
+        if (invite) {
+            // Issue #184: email invite links land here with ?invite=<token>.
+            // Redemption is owned by the fusion-site activation page (BFF
+            // consumes the cowork invite + registers the identity account);
+            // the portal hands the token off and does not run a parallel
+            // redemption contract.
+            window.location.assign(inviteRedeemUrl(invite));
+            return;
+        }
         if (!safeReturnPath() && new URLSearchParams(window.location.search).has('return')) {
             setError(t('invalidReturn', detectLang()));
         }
