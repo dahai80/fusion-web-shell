@@ -83,6 +83,28 @@ export function safeReturnPath(): string | null {
     return raw;
 }
 
+/**
+ * Invite-token entry (issue #184): email links land on
+ * /auth/?invite=<token>&return=... — the token rides the URL once, is kept
+ * out of logs by the server (hash-only) and is not echoed back anywhere.
+ */
+export function readInviteToken(search: string): string | null {
+    const raw = new URLSearchParams(search).get('invite');
+    if (!raw || raw.length > 128 || !/^[A-Za-z0-9_-]+$/.test(raw)) return null;
+    return raw;
+}
+
+/**
+ * Redemption happens on the fusion-site activation page (upstream #150):
+ * its BFF consumes the single-use cowork invite (cowork #609 peek/consume,
+ * hashed logging) and registers the identity account + tenant binding in
+ * one call. The portal hands the token off instead of running a parallel
+ * redemption contract that no server implements.
+ */
+export function inviteRedeemUrl(token: string): string {
+    return `/shell/fusion-site/invite/${encodeURIComponent(token)}`;
+}
+
 export function redirectToClient(code: string): void {
     const path = safeReturnPath();
     if (!path) {
