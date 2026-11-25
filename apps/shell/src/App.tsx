@@ -36,6 +36,9 @@ const FactoryOpsPage = lazy(() =>
 const MessagesPage = lazy(() =>
     import('@/pages/MessagesPage').then((m) => ({ default: m.MessagesPage }))
 );
+const OfficeCenterPage = lazy(() =>
+    import('@/pages/OfficeCenter').then((m) => ({ default: m.OfficeCenterPage }))
+);
 
 type Route = { name: 'main' } | { name: AdminPageName };
 
@@ -94,6 +97,13 @@ function adminNodeFor(route: Route): ReactNode {
         return (
             <Suspense fallback={null}>
                 <MessagesPage />
+            </Suspense>
+        );
+    }
+    if (route.name === 'office') {
+        return (
+            <Suspense fallback={null}>
+                <OfficeCenterPage />
             </Suspense>
         );
     }

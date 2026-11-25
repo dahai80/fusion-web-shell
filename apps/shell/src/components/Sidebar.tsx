@@ -49,6 +49,7 @@ import {
     Factory,
     FileText,
     GraduationCap,
+    LayoutDashboard,
     type LucideIcon,
     MessageSquare,
     Package,
@@ -182,6 +183,7 @@ export function Sidebar({ onOpen, onLogout }: Props) {
     const marketplaceActive = adminPath === pathForAdminPage('marketplace');
     const factoryOpsActive = adminPath === pathForAdminPage('factory-ops');
     const messagesActive = adminPath === pathForAdminPage('messages');
+    const officeActive = adminPath === pathForAdminPage('office');
     const expandedGroups = usePrefs((s) => s.expandedGroups);
     const toggleExpandedGroup = usePrefs((s) => s.toggleExpandedGroup);
     const setExpandedGroups = usePrefs((s) => s.setExpandedGroups);
@@ -299,6 +301,23 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                     >
                         <Bot size={16} aria-hidden />
                         {t('Agent 总览', 'Agent Overview')}
+                    </button>
+                ) : null}
+                {/* Office command center (issue #191): NL dispatch + run/
+                    artifact/health cockpit over the existing task planes. */}
+                {canView('fusion-cowork') ? (
+                    <button
+                        type="button"
+                        onClick={() => navigateShell(pathForAdminPage('office'))}
+                        aria-current={officeActive ? 'page' : undefined}
+                        className={`mb-3 flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm ${
+                            officeActive
+                                ? 'border-brand/40 bg-brand/10 text-brand'
+                                : 'border-border bg-bg-elevated text-text-primary hover:border-brand'
+                        }`}
+                    >
+                        <LayoutDashboard size={16} aria-hidden />
+                        {t('办公指挥中心', 'Office Command Center')}
                     </button>
                 ) : null}
                 {/* Software factory entry (issue #161, #167): fusion-site is
