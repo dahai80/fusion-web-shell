@@ -33,6 +33,9 @@ const MarketplacePage = lazy(() =>
 const FactoryOpsPage = lazy(() =>
     import('@/pages/FactoryOps').then((m) => ({ default: m.FactoryOpsPage }))
 );
+const OpsConsolePage = lazy(() =>
+    import('@/pages/OpsConsole').then((m) => ({ default: m.OpsConsolePage }))
+);
 const MessagesPage = lazy(() =>
     import('@/pages/MessagesPage').then((m) => ({ default: m.MessagesPage }))
 );
@@ -90,6 +93,13 @@ function adminNodeFor(route: Route): ReactNode {
         return (
             <Suspense fallback={null}>
                 <FactoryOpsPage />
+            </Suspense>
+        );
+    }
+    if (route.name === 'ops-console') {
+        return (
+            <Suspense fallback={null}>
+                <OpsConsolePage />
             </Suspense>
         );
     }

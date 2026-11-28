@@ -49,6 +49,7 @@ import {
     Factory,
     FileText,
     GraduationCap,
+    Inbox,
     LayoutDashboard,
     type LucideIcon,
     MessageSquare,
@@ -182,6 +183,7 @@ export function Sidebar({ onOpen, onLogout }: Props) {
     const agentsActive = adminPath === pathForAdminPage('agents');
     const marketplaceActive = adminPath === pathForAdminPage('marketplace');
     const factoryOpsActive = adminPath === pathForAdminPage('factory-ops');
+    const opsConsoleActive = adminPath === pathForAdminPage('ops-console');
     const messagesActive = adminPath === pathForAdminPage('messages');
     const officeActive = adminPath === pathForAdminPage('office');
     const expandedGroups = usePrefs((s) => s.expandedGroups);
@@ -357,6 +359,24 @@ export function Sidebar({ onOpen, onLogout }: Props) {
                     >
                         <ClipboardList size={16} aria-hidden />
                         {t('工厂运营', 'Factory Ops')}
+                    </button>
+                ) : null}
+                {/* Software-factory ops console (issue #197, plan §4.3):
+                    demand-engine lead inbox + dual-draft approval + delivery
+                    rail over the cowork module proxy. Admin-role gated. */}
+                {canView('fusion-cowork') ? (
+                    <button
+                        type="button"
+                        onClick={() => navigateShell(pathForAdminPage('ops-console'))}
+                        aria-current={opsConsoleActive ? 'page' : undefined}
+                        className={`mb-3 flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm ${
+                            opsConsoleActive
+                                ? 'border-brand/40 bg-brand/10 text-brand'
+                                : 'border-border bg-bg-elevated text-text-primary hover:border-brand'
+                        }`}
+                    >
+                        <Inbox size={16} aria-hidden />
+                        {t('运营台', 'Ops Console')}
                     </button>
                 ) : null}
                 {/* Customer messaging console (issue #186): operator side of
