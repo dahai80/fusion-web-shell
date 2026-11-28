@@ -1,0 +1,20 @@
+{
+    "name": "@fusion/artifacts-client",
+    "version": "0.7.22",
+    "description": "Vendored copy of the official fusion-artifacts-engine TS client (client-rpc@0.7.22, issue #141). Sync source: fusion-artifacts-engine/client-rpc; drift is caught by the bundled contract/rpc-surface.json assertion.",
+    "license": "Apache-2.0",
+    "type": "module",
+    "main": "src/index.ts",
+    "types": "src/index.ts",
+    "exports": {
+        ".": "./src/index.ts"
+    },
+    "scripts": {
+        "test": "bun test",
+        "typecheck": "tsc --noEmit"
+    },
+    "devDependencies": {
+        "bun-types": "^1.4.3",
+        "typescript": "^5.6.3"
+    }
+}
