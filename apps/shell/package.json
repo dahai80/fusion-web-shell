@@ -10,8 +10,9 @@
         "typecheck": "tsc -b --noEmit"
     },
     "dependencies": {
-        "@fusion/web-ui": "workspace:*",
+        "@fusion/artifacts-client": "workspace:*",
         "@fusion/web-sdk": "workspace:*",
+        "@fusion/web-ui": "workspace:*",
         "lucide-react": "^0.462.0",
         "react": "^18.3.1",
         "react-dom": "^18.3.1",

@@ -13,6 +13,7 @@ export type AdminPageName =
     | 'marketplace'
     | 'factory-ops'
     | 'ops-console'
+    | 'files'
     | 'messages'
     | 'office';
 
@@ -24,6 +25,7 @@ const PATHS: Record<AdminPageName, string> = {
     marketplace: '/marketplace',
     'factory-ops': '/factory-ops',
     'ops-console': '/ops-console',
+    files: '/files',
     messages: '/messages',
     office: '/office',
 };

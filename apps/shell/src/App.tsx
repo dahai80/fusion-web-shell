@@ -36,6 +36,7 @@ const FactoryOpsPage = lazy(() =>
 const OpsConsolePage = lazy(() =>
     import('@/pages/OpsConsole').then((m) => ({ default: m.OpsConsolePage }))
 );
+const FilesPage = lazy(() => import('@/pages/FilesPage').then((m) => ({ default: m.FilesPage })));
 const MessagesPage = lazy(() =>
     import('@/pages/MessagesPage').then((m) => ({ default: m.MessagesPage }))
 );
@@ -100,6 +101,13 @@ function adminNodeFor(route: Route): ReactNode {
         return (
             <Suspense fallback={null}>
                 <OpsConsolePage />
+            </Suspense>
+        );
+    }
+    if (route.name === 'files') {
+        return (
+            <Suspense fallback={null}>
+                <FilesPage />
             </Suspense>
         );
     }
